@@ -417,6 +417,73 @@ def test_cli_recommend_emits_empty_jsonl_when_no_unprotected_skills(tmp_path: Pa
     assert output.read_text(encoding="utf-8") == ""
 
 
+def test_cli_rejects_output_inside_hermes_home(tmp_path: Path) -> None:
+    """PR #973 review (P2): the recommendation surface claims it never
+    writes to ~/.hermes. An --output path inside the resolved home
+    would break that contract. Reject it at the boundary."""
+    from typer.testing import CliRunner
+
+    from autocontext.cli import app
+
+    training = tmp_path / "training.jsonl"
+    training.write_text(
+        "\n".join(json.dumps(_ac705_row(f"t{i}", "consolidated")) for i in range(3)) + "\n",
+        encoding="utf-8",
+    )
+    home = _plant_hermes_home(tmp_path, skills=[{"name": "active", "provenance": "agent-created"}])
+    output_inside = home / "recommendations.jsonl"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "hermes",
+            "recommend",
+            "--home",
+            str(home),
+            "--baseline-from",
+            str(training),
+            "--output",
+            str(output_inside),
+            "--json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert not output_inside.exists()
+
+
+def test_cli_rejects_output_in_nested_dir_under_hermes_home(tmp_path: Path) -> None:
+    """A nested subdir under the home is still under the home; rejection
+    must check resolved containment, not just direct equality."""
+    from typer.testing import CliRunner
+
+    from autocontext.cli import app
+
+    training = tmp_path / "training.jsonl"
+    training.write_text(
+        "\n".join(json.dumps(_ac705_row(f"t{i}", "consolidated")) for i in range(3)) + "\n",
+        encoding="utf-8",
+    )
+    home = _plant_hermes_home(tmp_path, skills=[{"name": "active", "provenance": "agent-created"}])
+    output_inside = home / "exports" / "subdir" / "recommendations.jsonl"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "hermes",
+            "recommend",
+            "--home",
+            str(home),
+            "--baseline-from",
+            str(training),
+            "--output",
+            str(output_inside),
+            "--json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert not output_inside.exists()
+
+
 def test_cli_include_protected_flag_surfaces_pinned_skills(tmp_path: Path) -> None:
     from typer.testing import CliRunner
 
