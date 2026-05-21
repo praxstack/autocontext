@@ -477,3 +477,209 @@ class TestRenderNewHints:
         )
         block = render_hints([hint])
         assert "indexing" in block.lower() or "Z_16" in block
+
+
+# --- AC-773: Lean compile-error router rule -------------------------------
+#
+# Pattern-match common Lean 4 / mathlib compile errors from ``lake env lean``
+# stderr into typed hints. Surfaced by the Erdős #986 (Spencer k=3) campaign
+# (2026-05-21): the existing rules emitted 0 hints across 4 Lean failures
+# because none of them match Lean's error vocabulary.
+
+
+from autocontext.loop.remediation_router import (  # noqa: E402
+    TypeclassSearch,
+    TypeMismatch,
+    UnknownIdentifier,
+    UnsolvedGoals,
+    rule_lean_compile_error,
+)
+
+
+class TestRuleLeanCompileError:
+    def test_unknown_identifier_emits_typed_hint(self) -> None:
+        err = (
+            "MathlibScratch/Erdos986.lean:84:8: error: unknown identifier 'foo_bar'\n"
+            "MathlibScratch/Erdos986.lean:84:14: error: unknown identifier 'baz'\n"
+        )
+        hints = rule_lean_compile_error(_report([err]))
+        kinds = {(type(h).__name__, getattr(h, "name", None)) for h in hints}
+        assert ("UnknownIdentifier", "foo_bar") in kinds
+        assert ("UnknownIdentifier", "baz") in kinds
+
+    def test_unknown_constant_also_routes_to_unknown_identifier(self) -> None:
+        err = "MathlibScratch/Erdos986.lean:84:8: error: unknown constant 'SimpleGraph.Foo'\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, UnknownIdentifier) and h.name == "SimpleGraph.Foo" for h in hints)
+
+    def test_type_mismatch_extracts_expected_and_got(self) -> None:
+        err = (
+            "MathlibScratch/Erdos986.lean:120:4: error: type mismatch\n"
+            "  Finset.card s\n"
+            "has type\n"
+            "  ℕ : Type\n"
+            "but is expected to have type\n"
+            "  Prop : Type\n"
+        )
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, TypeMismatch) for h in hints)
+        tm = next(h for h in hints if isinstance(h, TypeMismatch))
+        assert "ℕ" in tm.got or "Nat" in tm.got
+        assert "Prop" in tm.expected
+
+    def test_function_expected_routes_to_type_mismatch(self) -> None:
+        err = "MathlibScratch/Erdos986.lean:90:8: error: function expected at\n  Foo\nterm has type\n  Nat\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, TypeMismatch) for h in hints)
+
+    def test_unsolved_goals_extracts_goal_text(self) -> None:
+        err = "MathlibScratch/Erdos986.lean:115:4: error: unsolved goals\ncase pos\nn : ℕ\n⊢ ramseyNumber 2 n ≤ n\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, UnsolvedGoals) for h in hints)
+
+    def test_failed_to_synthesize_instance_routes_to_typeclass_search(self) -> None:
+        err = "MathlibScratch/Erdos986.lean:50:0: error: failed to synthesize instance\n  DecidableEq (SimpleGraph (Fin n))\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, TypeclassSearch) for h in hints)
+        ts = next(h for h in hints if isinstance(h, TypeclassSearch))
+        assert "DecidableEq" in ts.typeclass
+
+    def test_no_lean_pattern_no_hint(self) -> None:
+        """Python TypeErrors and other non-Lean errors must not falsely fire."""
+        err = 'Traceback (most recent call last):\n  File "x.py"\nTypeError: foo() missing'
+        assert rule_lean_compile_error(_report([err])) == []
+
+    def test_empty_errors_no_hint(self) -> None:
+        assert rule_lean_compile_error(_report()) == []
+
+    def test_default_rules_includes_lean(self) -> None:
+        assert rule_lean_compile_error in DEFAULT_RULES
+
+    def test_route_remediations_picks_up_lean_errors(self) -> None:
+        """End-to-end: the high-level orchestrator routes Lean errors when
+        rule_lean_compile_error is in DEFAULT_RULES."""
+        err = "MathlibScratch/Erdos986.lean:84:8: error: unknown identifier 'foo'\n"
+        hints = route_remediations(_report([err]))
+        assert any(isinstance(h, UnknownIdentifier) for h in hints)
+
+    # PR #982 review (P2): the original regexes only matched mathlib-style
+    # lowercase forms with single-quoted identifiers and required the
+    # ``failed to synthesize instance`` phrasing. Modern Lean 4 (4.29+)
+    # also emits ``Unknown identifier`` with backticks, ``error(lean.X):``
+    # diagnostic-code prefixes, ``Function expected ... but this term has
+    # type``, and ``type class instance expected``. The reviewer reproduced
+    # these on Lean 4.29.1; without these forms covered the default router
+    # still emits zero hints on real Lean output.
+
+    def test_unknown_identifier_with_diagnostic_code_prefix(self) -> None:
+        """Modern Lean 4 form: ``error(lean.unknownIdentifier): Unknown
+        identifier \\`name\\```."""
+        err = "test.lean:5:0: error(lean.unknownIdentifier): Unknown identifier `unknownFoo`\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, UnknownIdentifier) and h.name == "unknownFoo" for h in hints)
+
+    def test_unknown_identifier_capital_U_form(self) -> None:
+        """Lean 4 emits ``Unknown identifier`` (capital U), the old form
+        used lowercase."""
+        err = "test.lean:5:0: error: Unknown identifier `unknownFoo`\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, UnknownIdentifier) and h.name == "unknownFoo" for h in hints)
+
+    def test_type_mismatch_capital_T_form(self) -> None:
+        """Lean 4 emits ``Type mismatch`` (capital T)."""
+        err = "test.lean:10:0: error: Type mismatch\n  x\nhas type\n  Nat\nbut is expected to have type\n  String\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, TypeMismatch) for h in hints)
+
+    def test_function_expected_but_this_term_form(self) -> None:
+        """Lean 4 actual phrasing: ``Function expected at ... but this term
+        has type ...`` (the old form was ``term has type`` without ``but
+        this``)."""
+        err = "test.lean:15:0: error: Function expected at\n  Foo\nbut this term has type\n  Nat\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, TypeMismatch) for h in hints)
+
+    def test_type_class_instance_expected_form(self) -> None:
+        """Lean 4 emits ``type class instance expected`` for typeclass
+        resolution failures alongside the older ``failed to synthesize
+        instance`` form."""
+        err = "test.lean:20:0: error: type class instance expected\n  DecidableEq Foo\n"
+        hints = rule_lean_compile_error(_report([err]))
+        assert any(isinstance(h, TypeclassSearch) for h in hints)
+        ts = next(h for h in hints if isinstance(h, TypeclassSearch))
+        assert "DecidableEq" in ts.typeclass
+
+    def test_real_combined_stderr_from_reviewer_reproduction(self) -> None:
+        """End-to-end against the reviewer's actual Lean 4.29.1 stderr.
+
+        Catches the failure mode the reviewer found: zero hints emitted for
+        a realistic combined stderr containing all four error classes."""
+        err = (
+            "test.lean:5:0: error(lean.unknownIdentifier): Unknown identifier `unknownFoo`\n"
+            "test.lean:10:0: error: Type mismatch\n"
+            "  x\n"
+            "has type\n"
+            "  Nat\n"
+            "but is expected to have type\n"
+            "  String\n"
+            "test.lean:15:0: error: Function expected at\n"
+            "  Foo\n"
+            "but this term has type\n"
+            "  Nat\n"
+            "test.lean:20:0: error: type class instance expected\n"
+            "  DecidableEq Foo\n"
+        )
+        hints = rule_lean_compile_error(_report([err]))
+        kinds = {type(h).__name__ for h in hints}
+        # All four classes must produce at least one hint.
+        assert "UnknownIdentifier" in kinds
+        assert "TypeMismatch" in kinds
+        assert "TypeclassSearch" in kinds
+
+    def test_adjacent_type_mismatch_and_function_expected_dont_bleed(self) -> None:
+        """PR #982 review (P2): the type-mismatch capture was greedy across
+        blank-line boundaries. Adjacent errors without a blank gap should
+        each yield their own typed hint, and the captured ``expected``
+        must NOT contain the next error preamble."""
+        err = (
+            "test.lean:10:0: error: type mismatch\n"
+            "  x\n"
+            "has type\n"
+            "  Nat\n"
+            "but is expected to have type\n"
+            "  String\n"
+            "test.lean:15:0: error: function expected at\n"
+            "  Foo\n"
+            "term has type\n"
+            "  Nat\n"
+        )
+        hints = rule_lean_compile_error(_report([err]))
+        type_mismatches = [h for h in hints if isinstance(h, TypeMismatch)]
+        # Two TypeMismatches expected (one from type-mismatch, one from
+        # function-expected fallback).
+        assert len(type_mismatches) >= 2
+        # First TypeMismatch's expected must NOT contain the second error's
+        # preamble.
+        first = type_mismatches[0]
+        assert "test.lean" not in first.expected
+        assert "function expected" not in first.expected.lower()
+
+
+class TestRenderLeanHints:
+    def test_render_unknown_identifier(self) -> None:
+        block = render_hints([UnknownIdentifier(name="ramseyNumber", line=84, reason="match 0")])
+        assert "## Suggested next moves" in block
+        assert "ramseyNumber" in block
+
+    def test_render_type_mismatch(self) -> None:
+        block = render_hints([TypeMismatch(expected="Prop", got="ℕ", line=120, reason="match 0")])
+        assert "Prop" in block and "ℕ" in block
+
+    def test_render_unsolved_goals(self) -> None:
+        block = render_hints([UnsolvedGoals(goals=["⊢ ramseyNumber 2 n ≤ n"], line=115, reason="match 0")])
+        assert "ramseyNumber 2 n" in block
+
+    def test_render_typeclass_search(self) -> None:
+        block = render_hints([TypeclassSearch(typeclass="DecidableEq", context="SimpleGraph", line=50, reason="match 0")])
+        assert "DecidableEq" in block
+        assert "SimpleGraph" in block

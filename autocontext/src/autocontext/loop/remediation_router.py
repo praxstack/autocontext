@@ -90,6 +90,48 @@ class IndexingCheck:
     reason: str
 
 
+# AC-773: typed hints for Lean 4 / mathlib ``lake env lean`` compile errors.
+
+
+@dataclass(frozen=True, slots=True)
+class UnknownIdentifier:
+    """``unknown identifier '<name>'`` or ``unknown constant '<Name>'``."""
+
+    name: str
+    line: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class TypeMismatch:
+    """``type mismatch`` or ``function expected, term has type ...``."""
+
+    expected: str
+    got: str
+    line: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class UnsolvedGoals:
+    """``unsolved goals`` — proof structurally complete but doesn't close
+    the remaining proof obligations."""
+
+    goals: tuple[str, ...]
+    line: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class TypeclassSearch:
+    """``failed to synthesize instance ...`` — typeclass resolution gap."""
+
+    typeclass: str
+    context: str
+    line: int
+    reason: str
+
+
 RemediationHint = (
     RefreshFixture
     | SurfaceSignatures
@@ -97,6 +139,10 @@ RemediationHint = (
     | AssertionMismatch
     | BudgetIncrease
     | IndexingCheck
+    | UnknownIdentifier
+    | TypeMismatch
+    | UnsolvedGoals
+    | TypeclassSearch
 )
 
 
@@ -432,12 +478,137 @@ def rule_indexing_base(
     return hints
 
 
+# --- AC-773: Lean 4 / mathlib compile-error rule --------------------------
+#
+# Surfaced by the Erdős #986 (Spencer k=3) campaign (2026-05-21): the
+# existing rules emitted 0 hints across 4 ``lake env lean`` failures
+# because Python-ecosystem patterns don't match Lean's error vocabulary.
+# Pure regex, pluggable into ``DEFAULT_RULES``.
+
+# Lean errors carry a preamble. Two shapes seen in the wild:
+#   ``<path>:<line>:<col>: error: <body>``                  (classic / mathlib)
+#   ``<path>:<line>:<col>: error(lean.<code>): <body>``     (Lean 4.29+ diagnostic codes)
+# We use this single preamble regex both to extract line numbers and to bound
+# each error body — the next preamble marks where the current error ends.
+
+_LEAN_PREAMBLE = re.compile(
+    r"^[^\s:][^\n:]*:(?P<line>\d+):\d+:\s*error(?:\(lean\.\w+\))?:\s*(?P<body>.*?)"
+    r"(?=^[^\s:][^\n:]*:\d+:\d+:\s*error(?:\(lean\.\w+\))?:|\Z)",
+    re.DOTALL | re.MULTILINE,
+)
+
+# Body-level patterns. PR #982 review (P2): broadened to match Lean 4.29+
+# stderr forms (capital initial, backtick-quoted names, ``but this term has
+# type`` phrasing, ``type class instance expected``) alongside the older
+# mathlib forms.
+
+_LEAN_UNKNOWN_IDENT = re.compile(r"[Uu]nknown\s+(?:identifier|constant)\s+[`']?(?P<name>[A-Za-z_][\w.]*)[`']?")
+_LEAN_TYPE_MISMATCH = re.compile(
+    # Capture the subject between the opening line and the ``has type`` divider.
+    r"[Tt]ype\s+mismatch\b.*?\n"
+    r"(?P<subject>.*?)\n"
+    r"(?:has type|term has type)\s*\n"
+    r"(?P<got>.*?)\n"
+    r"(?:but is expected to have type|but this term has type|expected type:?)\s*\n?"
+    r"(?P<expected>.*?)\Z",
+    re.DOTALL,
+)
+_LEAN_FUNCTION_EXPECTED = re.compile(
+    # Accept both ``term has type`` (classic) and ``but this term has type``
+    # (Lean 4.29+).
+    r"[Ff]unction\s+expected(?:\s+at)?\s*\n"
+    r"(?P<subject>.*?)\n"
+    r"(?:but this term has type|term has type|has type)\s*\n"
+    r"(?P<got>.*?)\Z",
+    re.DOTALL,
+)
+_LEAN_UNSOLVED_GOALS = re.compile(r"[Uu]nsolved\s+goals\s*\n(?P<body>.*?)\Z", re.DOTALL)
+_LEAN_TYPECLASS_FAIL = re.compile(
+    # Old: ``failed to synthesize instance`` — new (Lean 4.29+):
+    # ``type class instance expected``. Both are followed by the unresolved
+    # typeclass on the next indented line.
+    r"(?:failed to synthesize(?: instance)?|type\s*class\s+instance\s+expected)\s*\n"
+    r"\s*(?P<typeclass>\S+)(?:\s+(?P<context>.+?))?(?:\n|\Z)"
+)
+
+
+def rule_lean_compile_error(report: FailureReport, **_: Any) -> list[RemediationHint]:
+    """Pattern-match ``lake env lean`` stderr into typed hints.
+
+    The error string is split into per-error bodies via :data:`_LEAN_PREAMBLE`,
+    so each body's regex captures cannot bleed past the next ``:line:col: error``
+    marker (PR #982 review P2). Each body is then scanned for the four
+    recognised error classes; non-Lean errors (Python tracebacks etc.)
+    yield no preamble matches and produce no hints.
+    """
+    hints: list[RemediationHint] = []
+    for diagnosis in report.match_diagnoses:
+        for error in diagnosis.errors:
+            reason = f"match {diagnosis.match_index}"
+
+            # Split into per-error bodies bounded by the next preamble.
+            for pre in _LEAN_PREAMBLE.finditer(error):
+                line = int(pre.group("line"))
+                body = pre.group("body")
+
+                hints.extend(
+                    UnknownIdentifier(name=m.group("name"), line=line, reason=reason) for m in _LEAN_UNKNOWN_IDENT.finditer(body)
+                )
+
+                # Each body usually has at most ONE structural error. We try
+                # type-mismatch first; only fall through to function-expected
+                # if no type-mismatch matched THIS body (anchored dedup, not
+                # the global last-three-hints heuristic the reviewer flagged).
+                tm_match = _LEAN_TYPE_MISMATCH.search(body)
+                if tm_match is not None:
+                    hints.append(
+                        TypeMismatch(
+                            expected=tm_match.group("expected").strip(),
+                            got=tm_match.group("got").strip(),
+                            line=line,
+                            reason=reason,
+                        )
+                    )
+                else:
+                    fe_match = _LEAN_FUNCTION_EXPECTED.search(body)
+                    if fe_match is not None:
+                        hints.append(
+                            TypeMismatch(
+                                expected="<callable>",
+                                got=fe_match.group("got").strip(),
+                                line=line,
+                                reason=reason,
+                            )
+                        )
+
+                ug_match = _LEAN_UNSOLVED_GOALS.search(body)
+                if ug_match is not None:
+                    body_text = ug_match.group("body").strip()
+                    goals = ["⊢ " + part.strip() for part in re.split(r"⊢\s*", body_text) if part.strip()]
+                    if not goals:
+                        goals = [body_text[:200]]
+                    hints.append(UnsolvedGoals(goals=tuple(goals), line=line, reason=reason))
+
+                for m in _LEAN_TYPECLASS_FAIL.finditer(body):
+                    hints.append(
+                        TypeclassSearch(
+                            typeclass=m.group("typeclass").strip(),
+                            context=(m.group("context") or "").strip(),
+                            line=line,
+                            reason=reason,
+                        )
+                    )
+
+    return hints
+
+
 DEFAULT_RULES: list[Rule] = [
     rule_off_by_one,
     rule_positional_typerror,
     rule_stale_fixture,
     rule_threshold_budget,
     rule_invariant_violation,
+    rule_lean_compile_error,
     # PR #979 review (P2): rule_indexing_base is intentionally NOT in
     # the default set. It fires on 0/N failures, which equally describe
     # AC-770 budget problems; mixing both in the default path sends
@@ -493,12 +664,25 @@ def _describe(hint: RemediationHint) -> str:
         return f"invariant `{hint.invariant}` failed; observed `{hint.observed}` ({hint.reason})"
     if isinstance(hint, BudgetIncrease):
         scope = f"`{hint.parameter}`"
-        return (
-            f"increase {scope} budget by {hint.suggested_factor}x "
-            f"(currently {hint.current}; {hint.reason})"
-        )
+        return f"increase {scope} budget by {hint.suggested_factor}x (currently {hint.current}; {hint.reason})"
     if isinstance(hint, IndexingCheck):
         return f"check 0-vs-1 indexing-base ({hint.reason})"
+    if isinstance(hint, UnknownIdentifier):
+        loc = f" at line {hint.line}" if hint.line else ""
+        return f"unknown Lean identifier `{hint.name}`{loc}: check imports / typo ({hint.reason})"
+    if isinstance(hint, TypeMismatch):
+        loc = f" at line {hint.line}" if hint.line else ""
+        return f"Lean type mismatch{loc}: expected `{hint.expected}`, got `{hint.got}` ({hint.reason})"
+    if isinstance(hint, UnsolvedGoals):
+        loc = f" at line {hint.line}" if hint.line else ""
+        goals_str = "; ".join(hint.goals[:3])
+        if len(hint.goals) > 3:
+            goals_str += f"; (+{len(hint.goals) - 3} more)"
+        return f"Lean unsolved goals{loc}: {goals_str} ({hint.reason})"
+    if isinstance(hint, TypeclassSearch):
+        loc = f" at line {hint.line}" if hint.line else ""
+        ctx = f" for `{hint.context}`" if hint.context else ""
+        return f"Lean typeclass search failed{loc}: `{hint.typeclass}`{ctx} ({hint.reason})"
     return repr(hint)  # unreachable
 
 
