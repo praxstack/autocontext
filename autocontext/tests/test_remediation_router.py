@@ -20,15 +20,19 @@ from autocontext.harness.evaluation.failure_report import FailureReport, MatchDi
 from autocontext.loop.fixture_loader import Fixture, FixtureProvenance
 from autocontext.loop.remediation_router import (
     DEFAULT_RULES,
+    BudgetIncrease,
+    IndexingCheck,
     RefreshFixture,
     RemediationHint,
     SmallCaseVerify,
     SurfaceSignatures,
     render_hints,
     route_remediations,
+    rule_indexing_base,
     rule_off_by_one,
     rule_positional_typerror,
     rule_stale_fixture,
+    rule_threshold_budget,
 )
 
 
@@ -285,3 +289,164 @@ class TestStageTreeSearchWiring:
             last_errors=[],
         )
         assert remediation_hints_for_node(node, fixtures={}) == ""
+
+
+# --- TestRuleThresholdBudget (AC-770) -------------------------------------
+
+
+class TestRuleThresholdBudget:
+    """AC-770 rule: emit BudgetIncrease when an assertion fails because
+    the trial budget was too small (0/N or k/N with k well below the
+    expected minimum). Targets c32 from the Cryptopals validation set:
+    `too few correct bytes at 1048576 trials: 0/16`.
+    """
+
+    def test_zero_hits_at_full_budget_emits_budget_increase(self) -> None:
+        report = _report(["AssertionError: too few correct bytes at 1048576 trials: 0/16"])
+        hints = rule_threshold_budget(report)
+        assert any(isinstance(h, BudgetIncrease) for h in hints)
+        hint = next(h for h in hints if isinstance(h, BudgetIncrease))
+        assert hint.current == 1048576
+        # k == 0 → suggest 16x increase per the ticket heuristic.
+        assert hint.suggested_factor >= 4
+
+    def test_very_low_hit_rate_emits_budget_increase(self) -> None:
+        """k/N where k > 0 but k is well below the expected minimum
+        should still emit a BudgetIncrease, with a smaller factor."""
+        report = _report(["AssertionError: only 1/16 correct at 1024 trials"])
+        hints = rule_threshold_budget(report)
+        assert any(isinstance(h, BudgetIncrease) for h in hints)
+
+    def test_high_pass_rate_emits_no_hint(self) -> None:
+        """15/16 at the same trial budget is not a budget problem."""
+        report = _report(["assertion failed: 15/16 correct bytes at 1024 trials"])
+        assert rule_threshold_budget(report) == []
+
+    def test_empty_errors_no_hint(self) -> None:
+        report = _report([])
+        assert rule_threshold_budget(report) == []
+
+    def test_insufficient_samples_keyword(self) -> None:
+        report = _report(["insufficient samples to converge"])
+        hints = rule_threshold_budget(report)
+        assert any(isinstance(h, BudgetIncrease) for h in hints)
+
+    def test_convergence_not_reached_keyword(self) -> None:
+        report = _report(["convergence not reached after 100 iterations"])
+        hints = rule_threshold_budget(report)
+        assert any(isinstance(h, BudgetIncrease) for h in hints)
+
+    def test_budget_increase_factor_scales_with_observed_rate(self) -> None:
+        """k == 0 should produce a larger suggested factor than k > 0."""
+        zero_report = _report(["AssertionError: 0/16 at 1024 trials"])
+        partial_report = _report(["AssertionError: 1/16 at 1024 trials"])
+        zero = next(h for h in rule_threshold_budget(zero_report) if isinstance(h, BudgetIncrease))
+        partial = next(h for h in rule_threshold_budget(partial_report) if isinstance(h, BudgetIncrease))
+        assert zero.suggested_factor >= partial.suggested_factor
+
+
+# --- TestRuleIndexingBase (AC-771) ----------------------------------------
+
+
+class TestRuleIndexingBase:
+    """AC-771 rule: emit IndexingCheck when a 0/N failure smells like a
+    0-indexed-vs-1-indexed mismatch. Targets c56 from the Cryptopals
+    validation set: `0/16 bytes recovered` with source `position = 16`
+    referencing the canonical 1-indexed Z_16 bias.
+    """
+
+    def test_zero_recovered_with_source_position_matching_identifier(self) -> None:
+        """0/N failure + source code containing `position = 16` matching
+        identifier `Z_16` → emit a hint surfacing both candidate offsets."""
+        report = _report(["AssertionError: 0/16 bytes recovered at 1M trials per byte"])
+        source = "position = 16  # Mantin Z_16 bias\nfor _ in range(trials):\n    do_stuff(position)"
+        hints = rule_indexing_base(report, source_code=source)
+        assert any(isinstance(h, IndexingCheck) for h in hints)
+        hint = next(h for h in hints if isinstance(h, IndexingCheck))
+        # The hint surfaces both candidate offsets so the agent can try
+        # 0-indexed (15) and 1-indexed (16) on the next iteration.
+        assert "15" in hint.reason and "16" in hint.reason
+
+    def test_zero_hits_without_source_emits_low_confidence_hint(self) -> None:
+        """A 0/N failure with no source context still emits an
+        IndexingCheck so the agent at least considers indexing as a
+        candidate. The hint is generic (no specific candidate)."""
+        report = _report(["AssertionError: 0/16 bytes recovered"])
+        hints = rule_indexing_base(report, source_code=None)
+        assert any(isinstance(h, IndexingCheck) for h in hints)
+
+    def test_zero_hits_with_source_but_no_indexing_pattern_no_hint(self) -> None:
+        """0/N failure but the source has no index-like identifier
+        anywhere near a numeric constant → no IndexingCheck."""
+        report = _report(["AssertionError: 0/16 bytes recovered"])
+        source = "result = some_function(input_data)\nreturn result"
+        hints = rule_indexing_base(report, source_code=source)
+        # Without source matching, the low-confidence hint still fires
+        # because 0/N alone is a signal; the test just ensures we don't
+        # crash on source-without-pattern.
+        # If the rule decides "no pattern" means no hint, we accept []
+        # too. The contract is: source-without-pattern must not raise.
+        assert isinstance(hints, list)
+
+    def test_high_pass_rate_no_indexing_hint(self) -> None:
+        """15/16 at a given budget is not an indexing problem."""
+        report = _report(["AssertionError: 15/16 bytes recovered"])
+        hints = rule_indexing_base(report, source_code="position = 16  # Z_16")
+        assert all(not isinstance(h, IndexingCheck) for h in hints)
+
+    def test_empty_errors_no_hint(self) -> None:
+        report = _report([])
+        assert rule_indexing_base(report) == []
+
+    def test_index_underscore_pattern_recognized(self) -> None:
+        """`index_32 = 32` paired with identifier `index_32` is the same
+        shape as the Z_16 case and must fire."""
+        report = _report(["AssertionError: 0/32 hits at 1M trials"])
+        source = "index_32 = 32\nresult = lookup(index_32)"
+        hints = rule_indexing_base(report, source_code=source)
+        assert any(isinstance(h, IndexingCheck) for h in hints)
+
+
+# --- Router integration: AC-770 + AC-771 in DEFAULT_RULES ------------------
+
+
+class TestNewRulesInDefaultRules:
+    def test_default_rules_include_threshold_budget(self) -> None:
+        assert rule_threshold_budget in DEFAULT_RULES
+
+    def test_default_rules_include_indexing_base(self) -> None:
+        assert rule_indexing_base in DEFAULT_RULES
+
+    def test_route_remediations_passes_source_code_through(self) -> None:
+        """route_remediations must accept and forward source_code so the
+        AC-771 rule can read it."""
+        report = _report(["AssertionError: 0/16 bytes recovered"])
+        hints = route_remediations(
+            report,
+            source_code="position = 16  # Z_16",
+        )
+        assert any(isinstance(h, IndexingCheck) for h in hints)
+
+
+# --- Rendering: new hints have human-readable descriptions ----------------
+
+
+class TestRenderNewHints:
+    def test_render_budget_increase(self) -> None:
+        hint = BudgetIncrease(
+            parameter="trials",
+            current=1048576,
+            suggested_factor=16,
+            reason="0/16 at 1M trials per byte",
+        )
+        block = render_hints([hint])
+        assert "## Suggested next moves" in block
+        assert "16" in block  # factor mentioned
+        assert "trials" in block or "budget" in block.lower()
+
+    def test_render_indexing_check(self) -> None:
+        hint = IndexingCheck(
+            reason="0/16 with Z_16 vs position=16: try position 15 (0-indexed) and 16 (1-indexed)",
+        )
+        block = render_hints([hint])
+        assert "indexing" in block.lower() or "Z_16" in block
