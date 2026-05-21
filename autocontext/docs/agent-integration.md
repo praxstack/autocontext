@@ -283,6 +283,9 @@ autoctx hermes export-skill \
     --output ~/.hermes/skills/autocontext/SKILL.md \
     --with-references --json
 
+# Or install from the committed snapshot at the repo root (AC-712).
+# See docs/hermes-skill-distribution.md for curl + sparse-clone alternatives.
+
 # Ingest Hermes curator run reports as autocontext ProductionTrace JSONL (AC-704)
 autoctx hermes ingest-curator \
     --home ~/.hermes \
@@ -330,6 +333,10 @@ autoctx hermes recommend \
   --home "$HERMES_HOME" \
   --baseline-from training/hermes-curator-decisions.jsonl \
   --output recommendations.jsonl --json
+
+# Validate the rendered SKILL.md against the AC-711 content rubric
+autoctx hermes validate-skill \
+  --output docs/hermes-skill-validation-report.md --json
 ```
 
 `--with-references` writes one markdown file per reference into a

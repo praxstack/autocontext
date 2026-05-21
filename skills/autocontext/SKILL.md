@@ -1,18 +1,4 @@
-# ruff: noqa: E501
-"""Hermes Agent skill content for Autocontext."""
-
-from __future__ import annotations
-
-AUTOCONTEXT_HERMES_SKILL_NAME = "autocontext"
-
-
-def render_autocontext_skill() -> str:
-    """Return a Hermes-valid SKILL.md that teaches Autocontext usage."""
-
-    return _AUTOCONTEXT_HERMES_SKILL.rstrip() + "\n"
-
-
-_AUTOCONTEXT_HERMES_SKILL = """---
+---
 name: autocontext
 description: Use when a Hermes agent needs to evaluate agent behavior, run Autocontext scenarios, inspect Hermes curator state, export reusable knowledge, or prepare local MLX/CUDA training data through the autoctx CLI.
 version: 1.0.0
@@ -200,4 +186,3 @@ Progressive-disclosure docs available alongside this skill. Load only when relev
 - `references/local-training.md` — How autocontext-exported datasets feed local MLX/CUDA advisor training; what the advisor predicts; expected scope.
 
 Operators can write all references next to this skill via `autoctx hermes export-skill --with-references --output <dir>/SKILL.md`.
-"""
