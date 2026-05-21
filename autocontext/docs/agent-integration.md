@@ -283,6 +283,9 @@ autoctx hermes export-skill \
     --output ~/.hermes/skills/autocontext/SKILL.md \
     --with-references --json
 
+# Or install from the committed snapshot at the repo root (AC-712).
+# See docs/hermes-skill-distribution.md for curl + sparse-clone alternatives.
+
 # Ingest Hermes curator run reports as autocontext ProductionTrace JSONL (AC-704)
 autoctx hermes ingest-curator \
     --home ~/.hermes \

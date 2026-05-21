@@ -39,6 +39,9 @@ knowledge/*
 !knowledge/.gitkeep
 skills/*
 !skills/.gitkeep
+# AC-712: committed Hermes skill snapshot; CI sync invariant pins it.
+!skills/autocontext/
+!skills/autocontext/**
 autocontext/runs/
 autocontext/knowledge/
 
