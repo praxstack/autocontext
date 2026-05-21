@@ -36,6 +36,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from autocontext.hermes.skill import render_autocontext_skill
 
@@ -88,7 +89,7 @@ class ValidationResult:
     matched_behaviors: tuple[str, ...]
     missing_behaviors: tuple[str, ...]
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "prompt_id": self.prompt_id,
             "scenario": self.scenario,
@@ -107,7 +108,7 @@ class ValidationReport:
     passed_count: int
     failed_count: int
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "results": [r.to_dict() for r in self.results],
             "case_count": self.case_count,

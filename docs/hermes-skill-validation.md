@@ -87,9 +87,13 @@ ingest-trajectories` as the affected commands.
   the `--redact off` opt-in marker.
 - Recommends `--dry-run` first when blast radius is unclear.
 
-The committed `skills/autocontext/SKILL.md` snapshot (AC-712) is
-regenerated from the patched renderer so the CI sync invariant
-(`test_hermes_skill_distribution.py`) still passes.
+When the AC-712 distribution PR lands, its committed
+`skills/autocontext/SKILL.md` snapshot will need to be regenerated
+against the patched renderer (`autoctx hermes export-skill
+--with-references --force` from the repo root) so the AC-712 sync
+invariant test stays green. The two PRs touch the skill in
+complementary places, so whichever lands first triggers a rebase
+for the other.
 
 ## Adding a new behavior
 
