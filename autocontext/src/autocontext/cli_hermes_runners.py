@@ -420,6 +420,32 @@ def run_hermes_train_advisor_command(
             console.print(f"[red]{message}[/red]")
         raise typer.Exit(code=1)
 
+    # PR #980 review (P2): the checkpoint path is a separate writable
+    # surface from --output, so it needs its own collision guards.
+    # Writing the trained-advisor checkpoint over --data would clobber
+    # the labeled examples; writing it over --output would clobber the
+    # JSON metrics payload mid-flight. Both fail loud before training
+    # touches disk.
+    if checkpoint is not None and _same_file(data, checkpoint):
+        message = (
+            f"checkpoint {checkpoint!s} resolves to the same file as --data {data!s}; refusing to overwrite the source dataset"
+        )
+        if json_output:
+            write_json_stderr(message)
+        else:
+            console.print(f"[red]{message}[/red]")
+        raise typer.Exit(code=1)
+    if checkpoint is not None and output is not None and _same_file(output, checkpoint):
+        message = (
+            f"checkpoint {checkpoint!s} resolves to the same file as --output {output!s}; "
+            "refusing to overwrite the metrics output"
+        )
+        if json_output:
+            write_json_stderr(message)
+        else:
+            console.print(f"[red]{message}[/red]")
+        raise typer.Exit(code=1)
+
     # AC-708 slice 2a: exactly one backend must be picked. Neither
     # silently falling through to baseline (would hide intent) nor
     # accepting both (ambiguous which to write to --checkpoint).
@@ -536,10 +562,7 @@ def run_hermes_recommend_command(
     input_path = baseline_from if baseline_from is not None else advisor_path
     assert input_path is not None
     if _same_file(input_path, output):
-        message = (
-            f"output {output!s} resolves to the same file as the advisor input "
-            f"{input_path!s}; refusing to overwrite"
-        )
+        message = f"output {output!s} resolves to the same file as the advisor input {input_path!s}; refusing to overwrite"
         if json_output:
             write_json_stderr(message)
         else:

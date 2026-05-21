@@ -245,6 +245,50 @@ def test_load_advisor_rejects_corrupt_json(tmp_path: Path) -> None:
         load_advisor(path)
 
 
+def test_load_advisor_rejects_class_dimension_mismatch(tmp_path: Path) -> None:
+    """PR #980 review (P2): a checkpoint where ``labels`` /
+    ``weights`` / ``intercepts`` disagree on the number of classes
+    must fail at load time, not inside ``predict_proba`` with a
+    confusing ``zip`` traceback far from the malformed file."""
+    path = tmp_path / "advisor.json"
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "logistic_regression",
+                "version": 1,
+                "labels": ["consolidated", "pruned"],
+                "feature_names": ["a", "b"],
+                "weights": [[0.0, 0.0]],
+                "intercepts": [0.0, 0.0],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid advisor checkpoint"):
+        load_advisor(path)
+
+
+def test_load_advisor_rejects_feature_dimension_mismatch(tmp_path: Path) -> None:
+    """PR #980 review (P2): a weights row whose length disagrees with
+    ``feature_names`` is schema-invalid and must fail at load time."""
+    path = tmp_path / "advisor.json"
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "logistic_regression",
+                "version": 1,
+                "labels": ["consolidated", "pruned"],
+                "feature_names": ["a", "b", "c"],
+                "weights": [[0.0, 0.0], [0.0, 0.0]],
+                "intercepts": [0.0, 0.0],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid advisor checkpoint"):
+        load_advisor(path)
+
+
 # --- CLI integration ------------------------------------------------------
 
 
@@ -407,3 +451,68 @@ def test_cli_train_advisor_requires_one_of_baseline_or_logistic(tmp_path: Path) 
         ],
     )
     assert result.exit_code != 0
+
+
+def test_cli_train_advisor_rejects_checkpoint_same_as_data(tmp_path: Path) -> None:
+    """PR #980 review (P2): pointing --checkpoint at the same file as
+    --data would clobber the source dataset mid-training. Refuse
+    before touching disk."""
+    from typer.testing import CliRunner
+
+    from autocontext.cli import app
+
+    src = tmp_path / "shared.jsonl"
+    src.write_text(json.dumps(_ac705_row("s", "consolidated", use_count=1)) + "\n", encoding="utf-8")
+    out = tmp_path / "metrics.json"
+    result = CliRunner().invoke(
+        app,
+        [
+            "hermes",
+            "train-advisor",
+            "--data",
+            str(src),
+            "--logistic",
+            "--output",
+            str(out),
+            "--checkpoint",
+            str(src),
+            "--json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "refusing to overwrite the source dataset" in result.output
+    # The dataset must be untouched (still valid JSONL with one row).
+    rows = [line for line in src.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(rows) == 1
+
+
+def test_cli_train_advisor_rejects_checkpoint_same_as_output(tmp_path: Path) -> None:
+    """PR #980 review (P2): pointing --checkpoint at the same file as
+    --output would clobber the JSON metrics mid-write. Refuse before
+    touching disk."""
+    from typer.testing import CliRunner
+
+    from autocontext.cli import app
+
+    src = tmp_path / "data.jsonl"
+    src.write_text(json.dumps(_ac705_row("s", "consolidated", use_count=1)) + "\n", encoding="utf-8")
+    shared = tmp_path / "shared.json"
+    # Pre-create the shared file so samefile() can resolve both args.
+    shared.write_text("{}", encoding="utf-8")
+    result = CliRunner().invoke(
+        app,
+        [
+            "hermes",
+            "train-advisor",
+            "--data",
+            str(src),
+            "--logistic",
+            "--output",
+            str(shared),
+            "--checkpoint",
+            str(shared),
+            "--json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "refusing to overwrite the metrics output" in result.output

@@ -260,11 +260,32 @@ def load_advisor(path: Path) -> LogisticRegressionAdvisor:
     kind = payload.get("kind")
     if kind != _CHECKPOINT_KIND:
         raise ValueError(f"unknown advisor kind {kind!r} at {path}; expected {_CHECKPOINT_KIND!r}")
+    labels = tuple(payload["labels"])
+    feature_names = tuple(payload["feature_names"])
+    weights = tuple(tuple(row) for row in payload["weights"])
+    intercepts = tuple(payload["intercepts"])
+    # PR #980 review (P2): validate the per-class / per-feature
+    # dimensions before constructing the advisor. Mismatched shapes
+    # would otherwise crash later inside `predict_proba` (zip on
+    # weights[k] vs feature vector) with a confusing error far from
+    # the malformed file.
+    if not (len(labels) == len(weights) == len(intercepts)):
+        raise ValueError(
+            f"invalid advisor checkpoint at {path}: "
+            f"labels={len(labels)}, weights={len(weights)}, intercepts={len(intercepts)} "
+            "must all agree on the number of classes"
+        )
+    if any(len(row) != len(feature_names) for row in weights):
+        bad = next((len(row) for row in weights if len(row) != len(feature_names)), -1)
+        raise ValueError(
+            f"invalid advisor checkpoint at {path}: feature_names has {len(feature_names)} entries "
+            f"but a weights row has {bad} entries"
+        )
     return LogisticRegressionAdvisor(
-        labels=tuple(payload["labels"]),
-        feature_names=tuple(payload["feature_names"]),
-        weights=tuple(tuple(row) for row in payload["weights"]),
-        intercepts=tuple(payload["intercepts"]),
+        labels=labels,
+        feature_names=feature_names,
+        weights=weights,
+        intercepts=intercepts,
         trained_on=int(payload.get("trained_on", 0)),
         seed=int(payload.get("seed", 0)),
         epochs=int(payload.get("epochs", 0)),
