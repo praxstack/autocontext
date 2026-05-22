@@ -25,7 +25,8 @@ export type NoDbCommandName =
   | "blob"
   | "production-traces"
   | "instrument"
-  | "trace-findings";
+  | "trace-findings"
+  | "probes";
 
 export type DbCommandName =
   | "mission"
@@ -353,6 +354,12 @@ const COMMANDS: readonly CommandDescriptor[] = [
     description: "Extract structured findings from a PublicTrace JSON file (AC-679)",
     group: "primary",
     route: { kind: "no-db", command: "trace-findings" },
+  },
+  {
+    name: "probes",
+    description: "Run AC-728 contract probes against observed harness state (subcommand: check)",
+    group: "control-plane",
+    route: { kind: "no-db", command: "probes" },
   },
   {
     name: "ecosystem",
