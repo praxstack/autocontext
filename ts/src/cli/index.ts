@@ -52,6 +52,7 @@ const NO_DB_COMMAND_HANDLERS: Record<NoDbCommandName, () => Promise<void>> = {
   "production-traces": cmdProductionTraces,
   instrument: cmdInstrument,
   "trace-findings": cmdTraceFindings,
+  probes: cmdProbes,
 };
 
 const DB_COMMAND_HANDLERS: Record<DbCommandName, (dbPath: string) => Promise<void>> = {
@@ -3403,6 +3404,15 @@ async function cmdTraceFindings(): Promise<void> {
   const { runTraceFindingsCommand } = await import("./trace-findings-command-workflow.js");
   const subArgs = process.argv.slice(3);
   const result = await runTraceFindingsCommand(subArgs);
+  if (result.stdout) process.stdout.write(result.stdout + "\n");
+  if (result.stderr) process.stderr.write(result.stderr + "\n");
+  process.exit(result.exitCode);
+}
+
+async function cmdProbes(): Promise<void> {
+  const { runProbesCommand } = await import("../control-plane/contract-probes/cli/index.js");
+  const subArgs = process.argv.slice(3);
+  const result = await runProbesCommand(subArgs);
   if (result.stdout) process.stdout.write(result.stdout + "\n");
   if (result.stderr) process.stderr.write(result.stderr + "\n");
   process.exit(result.exitCode);
