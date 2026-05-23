@@ -429,7 +429,7 @@ Minimal trace example:
 Piping `extract` into `check` round-trips a trace to a pass/fail report:
 
 ```bash
-autoctx probes extract --trace trace.json | autoctx probes check --suite /dev/stdin
+autoctx probes extract --trace trace.json | autoctx probes check --suite -
 autoctx probes extract --trace trace.json --output suite.json
 autoctx probes check --suite suite.json --json
 ```

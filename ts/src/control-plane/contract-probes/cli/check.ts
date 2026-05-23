@@ -9,10 +9,15 @@
  */
 
 import { parseArgs } from "node:util";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 
-import { loadContractProbeSuite, runContractProbeSuite } from "../index.js";
-import type { ContractProbeSuiteResult } from "../index.js";
+import {
+  ContractProbeSuiteSchema,
+  loadContractProbeSuite,
+  runContractProbeSuite,
+} from "../index.js";
+import type { ContractProbeSuite, ContractProbeSuiteResult } from "../index.js";
 
 export interface ProbesCheckResult {
   readonly stdout: string;
@@ -24,11 +29,15 @@ export const CHECK_HELP_TEXT = `autoctx probes check -- run a contract-probe sui
 
 Usage:
   autoctx probes check --suite <path> [--json]
+  autoctx probes extract --trace <trace> | autoctx probes check --suite -
   autoctx probes check --help
 
 Options:
   --suite <path>   Path to a JSON probe suite (validated against
-                   ContractProbeSuiteSchema). Required.
+                   ContractProbeSuiteSchema). Use \`-\` to read the suite
+                   from stdin (cross-platform; the documented pipe form
+                   for \`autoctx probes extract | autoctx probes check\`).
+                   Required.
   --json           Emit a structured JSON report instead of human-readable
                    text. The JSON shape is:
                      {
@@ -122,9 +131,21 @@ export async function runCheck(args: readonly string[]): Promise<ProbesCheckResu
     };
   }
 
-  let suite;
+  let suite: ContractProbeSuite;
   try {
-    suite = loadContractProbeSuite(parsed.suitePath);
+    if (parsed.suitePath === "-") {
+      // PR #992 review (P3): the documented `extract | check` pipe pattern
+      // requires reading the suite from stdin. `readFileSync(0, "utf-8")`
+      // works cross-platform (unlike `/dev/stdin`, which is unix-only and
+      // not available on Windows). The runner's schema parses the JSON;
+      // `loadContractProbeSuite` (which always reads from a file path) is
+      // bypassed for this branch.
+      const raw = readFileSync(0, "utf-8");
+      const parsedJson: unknown = JSON.parse(raw);
+      suite = ContractProbeSuiteSchema.parse(parsedJson);
+    } else {
+      suite = loadContractProbeSuite(parsed.suitePath);
+    }
   } catch (err) {
     if (err instanceof z.ZodError) {
       // Surface every Zod issue line by line; the JSON spec failed

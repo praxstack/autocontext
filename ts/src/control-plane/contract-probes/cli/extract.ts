@@ -181,7 +181,68 @@ export const HarnessTraceSchema = z
     observations: HarnessObservationsSchema,
     expectations: HarnessExpectationsSchema.optional(),
   })
-  .strict();
+  .strict()
+  // PR #992 review (P2): every declared expectation must have its matching
+  // observation. Without this guard, an expectation-only section was
+  // silently dropped at extraction time and the resulting suite passed
+  // vacuously -- the same silent-pass class of bug the slice-5
+  // `missing-observation` failure kind was added to close.
+  .superRefine((trace, ctx) => {
+    const obs = trace.observations;
+    const exp = trace.expectations;
+    if (exp === undefined) {
+      return;
+    }
+    if (exp.terminal !== undefined && obs.terminal === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expectations", "terminal"],
+        message:
+          "expectation declared without a matching observation; add `observations.terminal` to record exit code / stdout / stderr",
+      });
+    }
+    if (exp.directory !== undefined && obs.workdir === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expectations", "directory"],
+        message:
+          "expectation declared without a matching observation; add `observations.workdir` to record present files",
+      });
+    }
+    if (exp.services !== undefined && obs.services === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expectations", "services"],
+        message:
+          "expectation declared without a matching observation; add `observations.services` to record observed endpoints",
+      });
+    }
+    if (exp.artifacts !== undefined) {
+      if (obs.artifacts === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["expectations", "artifacts"],
+          message:
+            "per-artifact expectations declared without `observations.artifacts`; add the matching artifact observations",
+        });
+      } else {
+        // Per-artifact: every expectation must reference a path that the
+        // observations actually contain.
+        const observedPaths = new Set(obs.artifacts.map((a) => a.path));
+        exp.artifacts.forEach((artExp, index) => {
+          if (!observedPaths.has(artExp.path)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["expectations", "artifacts", index, "path"],
+              message: `expectation references artifact path ${JSON.stringify(
+                artExp.path,
+              )} but no observation with that path was recorded`,
+            });
+          }
+        });
+      }
+    }
+  });
 
 export type HarnessTrace = z.infer<typeof HarnessTraceSchema>;
 

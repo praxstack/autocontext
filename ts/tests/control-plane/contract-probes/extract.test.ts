@@ -86,6 +86,93 @@ describe("HarnessTraceSchema", () => {
       ).toBe(true);
     }
   });
+
+  // PR #992 review (P2): expectations without their matching observations
+  // were silently dropped at extraction time, so the resulting suite
+  // passed vacuously. The schema now rejects orphan expectations per
+  // section. The reviewer's exact repro was a trace with terminal /
+  // directory / service / artifact expectations and `observations: {}`.
+  test("rejects orphan terminal expectation (no observations.terminal)", () => {
+    const result = HarnessTraceSchema.safeParse({
+      schema_version: 1,
+      observations: {},
+      expectations: { terminal: { expectedExitCode: 0 } },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message).join("|");
+      expect(messages).toMatch(/expectation declared without a matching observation/);
+    }
+  });
+
+  test("rejects orphan directory expectation (no observations.workdir)", () => {
+    const result = HarnessTraceSchema.safeParse({
+      schema_version: 1,
+      observations: {},
+      expectations: { directory: { requiredFiles: ["x"], allowedFiles: ["x"] } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects orphan services expectation (no observations.services)", () => {
+    const result = HarnessTraceSchema.safeParse({
+      schema_version: 1,
+      observations: {},
+      expectations: {
+        services: { required: [{ host: "127.0.0.1", port: 8080 }] },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects orphan artifacts expectation (no observations.artifacts)", () => {
+    const result = HarnessTraceSchema.safeParse({
+      schema_version: 1,
+      observations: {},
+      expectations: {
+        artifacts: [{ path: "manifest.json", requiredJsonFields: ["name"] }],
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects orphan per-artifact expectations (observation list omits the path)", () => {
+    const result = HarnessTraceSchema.safeParse({
+      schema_version: 1,
+      observations: { artifacts: [{ path: "a.txt", content: "" }] },
+      expectations: {
+        artifacts: [{ path: "b.txt", requiredSubstrings: ["x"] }],
+      },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message).join("|");
+      expect(messages).toMatch(/no observation with that path was recorded/);
+    }
+  });
+
+  test("the reviewer's exact repro: all-expectations + empty observations is rejected", () => {
+    // PR #992 review (P2): the exact shape the reviewer reproduced --
+    // every expectation declared, no observations recorded -- must now
+    // surface a Zod issue per orphan section instead of producing an
+    // empty `probes: []` suite that vacuously passes.
+    const result = HarnessTraceSchema.safeParse({
+      schema_version: 1,
+      observations: {},
+      expectations: {
+        terminal: { expectedExitCode: 0 },
+        directory: { requiredFiles: ["x"], allowedFiles: ["x"] },
+        services: { required: [{ host: "127.0.0.1", port: 8080 }] },
+        artifacts: [{ path: "m.json", requiredJsonFields: ["name"] }],
+      },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      // One Zod issue per orphan section; not exactly four guaranteed but
+      // at least four should fire.
+      expect(result.error.issues.length).toBeGreaterThanOrEqual(4);
+    }
+  });
 });
 
 describe("extractContractProbeSuite", () => {
@@ -205,24 +292,33 @@ describe("extractContractProbeSuite", () => {
     expect(manifestProbe.failures[0].path).toBe("version");
   });
 
-  test("emits an artifact probe with no expectations when the trace doesn't list one for that path", () => {
+  test("emits an artifact probe with no expectations when an observation has no matching expectations entry", () => {
+    // An observation without an expectations entry IS permitted (the
+    // operator chose not to declare any requirements about it); the
+    // resulting probe records the artifact's existence and content with
+    // no substring / line-ending / JSON-field assertions. The reverse
+    // case (expectation referencing an unobserved path) is rejected --
+    // see "rejects orphan per-artifact expectations".
     const trace = HarnessTraceSchema.parse({
       schema_version: 1,
       observations: {
-        artifacts: [{ path: "extra.txt", content: "" }],
+        artifacts: [
+          { path: "extra.txt", content: "" },
+          { path: "other.txt", content: "x" },
+        ],
       },
       expectations: {
         artifacts: [{ path: "other.txt", requiredSubstrings: ["x"] }],
       },
     });
     const suite = extractContractProbeSuite(trace);
-    expect(suite.probes).toHaveLength(1);
-    const probe = suite.probes[0];
-    if (probe.kind !== "artifact") {
+    expect(suite.probes).toHaveLength(2);
+    const extraProbe = suite.probes[0];
+    if (extraProbe.kind !== "artifact") {
       throw new Error("expected artifact");
     }
-    expect(probe.inputs.path).toBe("extra.txt");
-    expect(probe.inputs.requiredSubstrings).toBeUndefined();
+    expect(extraProbe.inputs.path).toBe("extra.txt");
+    expect(extraProbe.inputs.requiredSubstrings).toBeUndefined();
   });
 
   test("end-to-end: extracted suite passes ContractProbeSuiteSchema and runs through runner", () => {

@@ -156,4 +156,40 @@ describe("runCheck", () => {
     expect(payload.results[0].label).toBe("after-build");
     expect(payload.results[0].failures[0].kind).toBe("stray-sidecar");
   });
+
+  // PR #992 review (P3): the help text advertises
+  // `autoctx probes extract | autoctx probes check --suite -`, but the
+  // previous version of check.ts called `readFileSync(path)` and treated
+  // `-` as a literal filename (ENOENT). The pipe form now reads from
+  // stdin via `readFileSync(0, "utf-8")`, which works cross-platform
+  // (unlike `/dev/stdin`, which is unix-only).
+  test("the help text documents the --suite - stdin form", () => {
+    expect(CHECK_HELP_TEXT).toContain("--suite -");
+    expect(CHECK_HELP_TEXT).toMatch(/stdin/);
+  });
+
+  test("--suite - reads the suite from stdin end-to-end via a spawned CLI", async () => {
+    // Verify the actual `extract | check` pipe works by spawning the real
+    // TypeScript CLI source. We use tsx via bun's node compat so this
+    // does not require a prior build step. The test is gated on bun
+    // being available in PATH (it always is in this repo's CI).
+    const { spawnSync } = await import("node:child_process");
+    const { resolve } = await import("node:path");
+    const cliEntry = resolve(import.meta.dirname, "..", "..", "..", "src", "cli", "index.ts");
+    const suite = JSON.stringify({
+      schema_version: 1,
+      probes: [
+        {
+          kind: "terminal",
+          inputs: { exitCode: 0, stdout: "ok", stderr: "" },
+        },
+      ],
+    });
+    const result = spawnSync("bun", [cliEntry, "probes", "check", "--suite", "-"], {
+      input: suite,
+      encoding: "utf-8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("probes check: PASS");
+  });
 });
