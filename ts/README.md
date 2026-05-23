@@ -295,6 +295,8 @@ autoctx trace-findings --trace ./trace.json          # Markdown report
 autoctx trace-findings --trace ./trace.json --json   # TraceFindingReport JSON
 autoctx probes check --suite ./suite.json            # AC-728 contract probes (see Contract Probes below)
 autoctx probes check --suite ./suite.json --json     # structured ContractProbeSuiteResult
+autoctx probes extract --trace ./trace.json          # synthesize a probe suite from a harness trace
+autoctx probes extract --trace ./trace.json --output ./suite.json
 autoctx mission create --name "Ship login" --goal "Implement OAuth"
 autoctx mission create --type code --name "Fix login" --goal "Tests pass" --repo-path . --test-command "npm test"
 autoctx mission run --id <mission-id> --max-iterations 3
@@ -394,6 +396,45 @@ Seven probe kinds are supported: `directory`, `terminal`, `service`, `artifact`,
 ```
 
 The `results` field is a discriminated union by `kind`, so TypeScript callers can switch on `kind` and access each probe's typed failure fields (`path`, `rank`, `key`, `endpoint`, etc.) without casting. The library API (`runContractProbeSuite`, `loadContractProbeSuite`, `ContractProbeSuiteSchema`) is exported from the package root for programmatic use.
+
+### Synthesizing a suite from a harness trace
+
+For workflows that record a run and then verify it (rather than hand-authoring a suite), `autoctx probes extract --trace <path>` synthesizes a runnable probe suite from a harness-trace JSON file. The trace bundles both `observations` (what actually happened) and optional `expectations` (what the operator declared should have happened); the extractor joins them.
+
+Minimal trace example:
+
+```json
+{
+  "schema_version": 1,
+  "label": "smoke-run-2026-05-22",
+  "observations": {
+    "terminal": { "exitCode": 0, "stdout": "All checks passed.\n", "stderr": "" },
+    "workdir": { "presentFiles": ["solution.txt", "trace.log"] },
+    "services": [{ "host": "127.0.0.1", "port": 8080, "protocol": "tcp" }],
+    "artifacts": [{ "path": "manifest.json", "content": "{\"name\":\"x\",\"version\":\"1.0\"}" }]
+  },
+  "expectations": {
+    "terminal": { "expectedExitCode": 0, "requiredStdoutPatterns": ["checks passed"] },
+    "directory": {
+      "requiredFiles": ["solution.txt"],
+      "allowedFiles": ["solution.txt"],
+      "ignoredPatterns": ["^trace\\."]
+    },
+    "services": { "required": [{ "host": "127.0.0.1", "port": 8080, "protocol": "tcp" }] },
+    "artifacts": [{ "path": "manifest.json", "requiredJsonFields": ["name", "version"] }]
+  }
+}
+```
+
+Piping `extract` into `check` round-trips a trace to a pass/fail report:
+
+```bash
+autoctx probes extract --trace trace.json | autoctx probes check --suite -
+autoctx probes extract --trace trace.json --output suite.json
+autoctx probes check --suite suite.json --json
+```
+
+Slice 7 supports the four slice-1 probe kinds (terminal, directory, service, artifact); cleanup, media, and distributed extractors land in follow-up slices once their trace formats settle.
 
 ## Provider Configuration
 
