@@ -1,3 +1,20 @@
+// AC-728 contract probes.
+//
+// Missing-observation invariant
+// ------------------------------
+// Every declared expectation must have its matching observation, otherwise
+// the probe must surface a loud failure rather than a silent pass. The
+// three probes shipped with optional observation fields (cleanup symlink
+// target / mtime, media per-field metadata, distributed per-rank
+// observations) emit explicit `missing-observation` failure kinds.
+//
+// The four probes below (directory, terminal, service, artifact) make
+// every observation field non-optional at the TypeScript type level and
+// at the slice-5 `ContractProbeSuiteSchema` Zod layer, so the silent-pass
+// shape simply does not arise. The pinning tests in
+// `tests/control-plane/contract-probes/contract-probes.test.ts` exercise
+// the "expectation + minimum observation -> loud failure" path for each.
+
 export type DirectoryContractFailureKind = "unexpected-file" | "missing-file";
 
 export interface DirectoryContractFailure {
