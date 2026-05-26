@@ -789,3 +789,74 @@ describe("probeMediaContract", () => {
     });
   });
 });
+
+// AC-728 close-out audit: missing-observation pinning tests for the four
+// slice-1 probes (directory, terminal, service, artifact). Unlike the
+// cleanup / media / distributed probes (which gained explicit
+// `missing-observation` failure kinds in PRs #985, #988, #993), these four
+// probes make every observation field non-optional at the TypeScript /
+// Zod layer. The "expectation declared without observation" shape simply
+// cannot be constructed -- the type system rejects it before the runner
+// runs. These tests pin the loud-failure path for each probe so any
+// future refactor that loosens an observation field surfaces here.
+
+describe("AC-728 missing-observation audit: slice-1 probes", () => {
+  test("directory: requiredFiles surfaces a loud failure against an empty workdir", () => {
+    // No way to "forget" presentFiles -- it's a required array. An empty
+    // observation against a non-empty requirement fails as missing-file,
+    // not as a silent pass.
+    const result = probeDirectoryContract({
+      presentFiles: [],
+      requiredFiles: ["solution.txt"],
+      allowedFiles: ["solution.txt"],
+    });
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]).toMatchObject({ kind: "missing-file", path: "solution.txt" });
+  });
+
+  test("terminal: requiredStdoutPatterns surfaces a loud failure against empty stdout", () => {
+    // stdout is required at the type level, so a caller who forgets to
+    // observe stdout can only supply "" -- which fails the pattern check
+    // loudly rather than silently passing.
+    const result = probeTerminalContract({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      requiredStdoutPatterns: [/All checks passed/],
+    });
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]).toMatchObject({ kind: "missing-stdout-pattern" });
+  });
+
+  test("service: required endpoints surface a loud failure against an empty observed list", () => {
+    const result = probeServiceContract({
+      observed: [],
+      required: [{ host: "127.0.0.1", port: 8080, protocol: "tcp" }],
+    });
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]).toMatchObject({ kind: "missing-endpoint" });
+  });
+
+  test("artifact: requiredJsonFields surfaces a loud failure against empty content", () => {
+    // content is required at the type level; an empty content string is
+    // not valid JSON, so requiredJsonFields fails with invalid-json rather
+    // than silently passing on the absent field.
+    const result = probeArtifactContract({
+      path: "manifest.json",
+      content: "",
+      requiredJsonFields: ["name"],
+    });
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]).toMatchObject({ kind: "invalid-json", path: "manifest.json" });
+  });
+
+  test("artifact: requiredSubstrings surfaces a loud failure against empty content", () => {
+    const result = probeArtifactContract({
+      path: "config.txt",
+      content: "",
+      requiredSubstrings: ["log_format detailed"],
+    });
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]).toMatchObject({ kind: "missing-substring" });
+  });
+});
