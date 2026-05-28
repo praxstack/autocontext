@@ -1,10 +1,40 @@
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import type { Capabilities } from "../mcp/capabilities.js";
+import { loadContract } from "./cli-contract.js";
+import type { CommandSpec, Contract } from "./cli-contract.js";
 import { visibleSupportedCommandNames } from "./command-registry.js";
 
 export const CAPABILITIES_COMMANDS: readonly string[] = visibleSupportedCommandNames();
 
-export interface CapabilitiesCommandPayload
-  extends Omit<Capabilities, "features"> {
+/**
+ * AC-697 slice 5: capabilities now loads `docs/cli-contract.json` so
+ * the JSON payload advertises the canonical commands, their aliases,
+ * and per-runtime support exactly once across both runtimes. The
+ * legacy `commands: string[]` field is preserved for backward
+ * compatibility; new consumers should read `contract.commands` which
+ * carries the full canonical surface.
+ */
+export interface CapabilitiesContractCommand {
+  readonly id: string;
+  readonly path: readonly string[];
+  readonly summary: string;
+  readonly audience: string;
+  readonly maturity: string;
+  readonly aliases: readonly string[];
+  readonly runtime_support: {
+    readonly python: { readonly status: string; readonly reason?: string };
+    readonly typescript: { readonly status: string; readonly reason?: string };
+  };
+}
+
+export interface CapabilitiesContractPayload {
+  readonly schema_version: number;
+  readonly commands: readonly CapabilitiesContractCommand[];
+}
+
+export interface CapabilitiesCommandPayload extends Omit<Capabilities, "features"> {
   commands: string[];
   features: {
     mcp_server: boolean;
@@ -14,13 +44,51 @@ export interface CapabilitiesCommandPayload
     playbook_versioning: boolean;
   };
   project_config: Record<string, unknown> | null;
+  contract: CapabilitiesContractPayload;
+}
+
+function _defaultContractPath(): string {
+  // The contract JSON ships under the repo root's `docs/`. From the
+  // built `dist/cli/` location it's three levels up; tsx-run from
+  // `src/cli/` is the same. Both resolve via this relative walk.
+  const here = dirname(fileURLToPath(import.meta.url));
+  return resolve(here, "..", "..", "..", "docs", "cli-contract.json");
+}
+
+function _projectContract(path?: string): Contract {
+  return loadContract(path ?? _defaultContractPath());
+}
+
+function _toContractCommand(cmd: CommandSpec): CapabilitiesContractCommand {
+  return {
+    id: cmd.id,
+    path: cmd.path,
+    summary: cmd.summary,
+    audience: cmd.audience,
+    maturity: cmd.maturity,
+    aliases: cmd.aliases,
+    runtime_support: {
+      python: {
+        status: cmd.runtime_support.python.status,
+        ...(cmd.runtime_support.python.reason ? { reason: cmd.runtime_support.python.reason } : {}),
+      },
+      typescript: {
+        status: cmd.runtime_support.typescript.status,
+        ...(cmd.runtime_support.typescript.reason
+          ? { reason: cmd.runtime_support.typescript.reason }
+          : {}),
+      },
+    },
+  };
 }
 
 export function buildCapabilitiesPayload(
   baseCapabilities: Capabilities,
   projectConfig: Record<string, unknown> | null,
+  options: { readonly contractPath?: string } = {},
 ): CapabilitiesCommandPayload {
   const { features: _baseFeatures, ...rest } = baseCapabilities;
+  const contract = _projectContract(options.contractPath);
   return {
     ...rest,
     commands: [...CAPABILITIES_COMMANDS],
@@ -32,5 +100,9 @@ export function buildCapabilitiesPayload(
       playbook_versioning: true,
     },
     project_config: projectConfig,
+    contract: {
+      schema_version: contract.schema_version,
+      commands: contract.commands.map(_toContractCommand),
+    },
   };
 }
