@@ -602,14 +602,56 @@ def status(
         console.print(table)
 
 
-@app.command()
-def serve(
+def _run_http_serve(host: str, port: int) -> None:
+    """Backend for `autoctx serve` and `autoctx serve http`.
+
+    Extracted so the canonical sub-Typer group can route bare
+    `autoctx serve` (legacy form) and `autoctx serve http`
+    (explicit subcommand) through the same code path.
+    """
+    uvicorn.run("autocontext.server.app:app", host=host, port=port, reload=False)
+
+
+# AC-697 slice 6: `serve` is a sub-Typer group with `invoke_without_command`
+# so the legacy `autoctx serve [--host ...] [--port ...]` form continues
+# to start the HTTP API, while the canonical `serve mcp` path the slice-1
+# contract pins now exists as a registered subcommand.
+_serve_app = typer.Typer(invoke_without_command=True, help="Serve API or MCP endpoints.")
+
+
+@_serve_app.callback(invoke_without_command=True)
+def _serve_root(
+    ctx: typer.Context,
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8000, "--port"),
+) -> None:
+    """Legacy form: `autoctx serve [--host ...] [--port ...]` -> HTTP."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _run_http_serve(host, port)
+
+
+@_serve_app.command("http")
+def _serve_http(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8000, "--port"),
 ) -> None:
     """Serve HTTP API and WebSocket stream."""
+    _run_http_serve(host, port)
 
-    uvicorn.run("autocontext.server.app:app", host=host, port=port, reload=False)
+
+@_serve_app.command("mcp")
+def _serve_mcp() -> None:
+    """Start the MCP server on stdio (canonical path for `mcp-serve`)."""
+    try:
+        from autocontext.mcp.server import run_server
+    except ImportError:
+        console.print("[red]MCP dependencies not installed. Run: uv sync --extra mcp[/red]")
+        raise typer.Exit(code=1) from None
+    run_server()
+
+
+app.add_typer(_serve_app, name="serve")
 
 
 @app.command()
