@@ -201,6 +201,54 @@ def register_queue_command(
             write_json_stderr=_cli_attr(dependency_module, "_write_json_stderr"),
         )
 
+    # Per-option (default-value, "non-default" rule) so the
+    # callback-vs-subcommand merge can tell "user passed this
+    # explicitly" apart from "Typer filled in the default". PR #998
+    # review (P2): the previous design discarded callback options
+    # whenever Typer saw a subcommand, breaking legacy forms like
+    # `autoctx queue --json status` and `autoctx queue -s abc add
+    # --json` where flags appear before the subcommand. The new
+    # design stashes callback values in `ctx.obj` and merges in each
+    # subcommand: subcommand-explicit > callback-explicit > default.
+    _DEFAULTS: dict[str, Any] = {
+        "spec": "",
+        "task_prompt": "",
+        "rubric": "",
+        "browser_url": "",
+        "max_rounds": 5,
+        "threshold": 0.9,
+        "min_rounds": 1,
+        "priority": 0,
+        "provider": "",
+        "json_output": False,
+    }
+
+    def _merge_with_callback(
+        ctx: typer.Context,
+        **subcommand_values: Any,
+    ) -> dict[str, Any]:
+        """Return the effective option set for a queue subcommand.
+
+        For each option, prefer the subcommand's explicit value (i.e.
+        any value other than the default); otherwise fall back to the
+        callback's explicit value (also distinguished by non-default);
+        otherwise return the default. This lets users put flags before
+        the subcommand (legacy form) or after (canonical form) and
+        get the same behavior.
+        """
+        callback_values: dict[str, Any] = (ctx.obj or {}) if isinstance(ctx.obj, dict) else {}
+        merged: dict[str, Any] = {}
+        for key, default in _DEFAULTS.items():
+            sub_val = subcommand_values.get(key, default)
+            cb_val = callback_values.get(key, default)
+            if sub_val != default:
+                merged[key] = sub_val
+            elif cb_val != default:
+                merged[key] = cb_val
+            else:
+                merged[key] = default
+        return merged
+
     queue_app = typer.Typer(invoke_without_command=True, help="Manage the background task queue.")
 
     @queue_app.callback(invoke_without_command=True)
@@ -217,25 +265,34 @@ def register_queue_command(
         provider: str = typer.Option("", "--provider", help="Provider override accepted for queue-script compatibility"),
         json_output: bool = typer.Option(False, "--json", help="Output structured JSON"),
     ) -> None:
-        """Backward-compat: `autoctx queue -s <spec>` (no subcommand) routes to add."""
+        """`autoctx queue -s <spec>` (no subcommand) routes to add.
+
+        Options passed to the callback (before the subcommand) are
+        stashed on ``ctx.obj`` so subcommands can merge them with
+        their own explicit values; this preserves legacy forms like
+        ``autoctx queue --json status`` and ``autoctx queue -s abc
+        add --json`` that the original action-positional pattern
+        accepted.
+        """
+        ctx.obj = {
+            "spec": spec,
+            "task_prompt": task_prompt,
+            "rubric": rubric,
+            "browser_url": browser_url,
+            "max_rounds": max_rounds,
+            "threshold": threshold,
+            "min_rounds": min_rounds,
+            "priority": priority,
+            "provider": provider,
+            "json_output": json_output,
+        }
         if ctx.invoked_subcommand is not None:
             return
-        _dispatch(
-            action="add",
-            spec=spec,
-            task_prompt=task_prompt,
-            rubric=rubric,
-            browser_url=browser_url,
-            max_rounds=max_rounds,
-            threshold=threshold,
-            min_rounds=min_rounds,
-            priority=priority,
-            provider=provider,
-            json_output=json_output,
-        )
+        _dispatch(action="add", **ctx.obj)
 
     @queue_app.command("add")
     def queue_add(
+        ctx: typer.Context,
         spec: str = typer.Option("", "--spec", "-s", help="Task spec name"),
         task_prompt: str = typer.Option("", "--task-prompt", "--prompt", "-p", help="The queued task prompt"),
         rubric: str = typer.Option("", "--rubric", "-r", help="Evaluation rubric"),
@@ -248,8 +305,8 @@ def register_queue_command(
         json_output: bool = typer.Option(False, "--json", help="Output structured JSON"),
     ) -> None:
         """Add a task to the background runner queue."""
-        _dispatch(
-            action="add",
+        merged = _merge_with_callback(
+            ctx,
             spec=spec,
             task_prompt=task_prompt,
             rubric=rubric,
@@ -261,26 +318,18 @@ def register_queue_command(
             provider=provider,
             json_output=json_output,
         )
+        _dispatch(action="add", **merged)
 
     @queue_app.command("status")
     def queue_status(
+        ctx: typer.Context,
         json_output: bool = typer.Option(False, "--json", help="Output structured JSON"),
     ) -> None:
         """Show the count of pending tasks in the background queue."""
-        # `_dispatch` accepts unused-for-status arguments; the
-        # run_queue_command helper ignores them when action="status".
-        _dispatch(
-            action="status",
-            spec="",
-            task_prompt="",
-            rubric="",
-            browser_url="",
-            max_rounds=5,
-            threshold=0.9,
-            min_rounds=1,
-            priority=0,
-            provider="",
-            json_output=json_output,
-        )
+        # Merge so `autoctx queue --json status` (callback-side
+        # --json) still emits JSON; the subcommand's --json wins if
+        # both are passed.
+        merged = _merge_with_callback(ctx, json_output=json_output)
+        _dispatch(action="status", **merged)
 
     app.add_typer(queue_app, name="queue")

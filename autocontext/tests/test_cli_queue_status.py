@@ -85,3 +85,60 @@ def test_queue_legacy_dash_s_form_still_routes_to_add(tmp_path, monkeypatch) -> 
     combined = result.output + (result.stderr or "")
     # If we hit a "Usage:" banner, the callback didn't dispatch to add.
     assert "Usage:" not in combined or "queue" in combined.lower()
+
+
+# --- PR #998 review (P2): callback-before-subcommand legacy forms ---
+
+
+def test_queue_json_flag_before_status_subcommand_still_emits_json(tmp_path, monkeypatch) -> None:
+    """Reviewer's exact repro: `autoctx queue --json status` (--json
+    before the subcommand) must emit a JSON `pending_count` payload,
+    not the human-readable text. Without the merge fix the callback's
+    --json was discarded when typer saw the `status` subcommand."""
+    monkeypatch.setenv("AUTOCONTEXT_DB_PATH", str(tmp_path / "autocontext.db"))
+    monkeypatch.setenv("AUTOCONTEXT_CONFIG_DIR", str(tmp_path / "config"))
+    result = CliRunner().invoke(app, ["queue", "--json", "status"])
+    assert result.exit_code == 0, result.output
+    import json as _json
+
+    payload = _json.loads(result.output.strip())
+    assert payload == {"pending_count": 0}
+
+
+def test_queue_dash_s_before_add_subcommand_still_routes_to_add(tmp_path, monkeypatch) -> None:
+    """Reviewer's exact repro: `autoctx queue -s abc add --json`
+    (callback-side `-s abc`, subcommand-side `--json`) must reach
+    the add dispatch with spec=abc, not fail with "missing --spec".
+    Without the merge fix the callback's --spec was discarded."""
+    monkeypatch.setenv("AUTOCONTEXT_DB_PATH", str(tmp_path / "autocontext.db"))
+    monkeypatch.setenv("AUTOCONTEXT_CONFIG_DIR", str(tmp_path / "config"))
+    result = CliRunner().invoke(app, ["queue", "-s", "test_spec", "add", "--json"])
+    # The enqueue may fail downstream without a real settings/db,
+    # but the key invariant is that we did NOT exit with a typer
+    # "missing option" usage banner. If --spec was unmerged the
+    # CLI would emit `Usage:` with `Missing option '--spec' / '-s'`.
+    combined = result.output + (result.stderr or "")
+    assert "Missing option" not in combined
+    assert "Missing argument" not in combined
+
+
+# --- PR #998 review (P3): walker only yields invokable group paths ---
+
+
+def test_walker_yields_invokable_group_paths_only() -> None:
+    """The slice-3 walker change must yield group prefixes only for
+    groups that have `invoke_without_command` set (i.e. groups that
+    are themselves callable with no subcommand). `queue` is
+    invokable (legacy `-s <spec>` form); `scenario` is not. Listing
+    a bare group like `scenario` as a "supported command" would
+    falsely promise that `autoctx scenario` works."""
+    from autocontext.cli import app as _app
+    from autocontext.cli_contract import iter_python_command_paths
+
+    observed = {tuple(path) for path in iter_python_command_paths(_app)}
+    # `queue` is invokable -> yielded as a top-level path.
+    assert ("queue",) in observed
+    # `scenario` is bare -> NOT yielded as a top-level path; only its
+    # `create` subcommand is.
+    assert ("scenario",) not in observed
+    assert ("scenario", "create") in observed
