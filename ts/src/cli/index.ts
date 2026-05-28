@@ -1257,10 +1257,22 @@ async function cmdServeHttp(dbPath: string): Promise<void> {
   // canonical path the slice-1 contract pins.
   const subArgs = process.argv.slice(3);
   if (subArgs[0] === "mcp") {
+    // PR #1001 review (P3): the slice-6 delegation routed
+    // `autoctx serve mcp --help` through cmdMcpServe, which
+    // printed help under the legacy `autoctx mcp-serve` header.
+    // Intercept --help here so users asking about the canonical
+    // command name see canonical text. Same pattern as PR #999's
+    // `scenario create --help` fix.
+    const mcpArgs = subArgs.slice(1);
+    if (mcpArgs.includes("--help") || mcpArgs.includes("-h")) {
+      const { SERVE_MCP_HELP_TEXT } = await import("./mcp-serve-command-workflow.js");
+      console.log(SERVE_MCP_HELP_TEXT);
+      process.exit(0);
+    }
     // Rewrite argv so cmdMcpServe sees its sub-args at the
     // canonical position (process.argv.slice(3)). Same trick as
     // slice-4 `scenario create` -> `new-scenario`.
-    process.argv = [...process.argv.slice(0, 2), "mcp-serve", ...subArgs.slice(1)];
+    process.argv = [...process.argv.slice(0, 2), "mcp-serve", ...mcpArgs];
     return cmdMcpServe(dbPath);
   }
 

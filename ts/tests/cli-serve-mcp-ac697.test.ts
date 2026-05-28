@@ -17,6 +17,12 @@ import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 
 import { visibleSupportedCommandNames } from "../src/cli/command-registry.js";
+import {
+  MCP_SERVE_HELP_TEXT,
+  SERVE_MCP_HELP_TEXT,
+  buildMcpServeHelpText,
+} from "../src/cli/mcp-serve-command-workflow.js";
+import { SERVE_HELP_TEXT } from "../src/cli/serve-command-workflow.js";
 
 describe("AC-697 slice 6: TS `serve mcp` is canonical, `mcp-serve` is alias", () => {
   test("contract: TS `serve.mcp` is `yes`", () => {
@@ -47,5 +53,43 @@ describe("AC-697 slice 6: TS `serve mcp` is canonical, `mcp-serve` is alias", ()
     // Legacy alias kept for backward compat with existing Claude
     // Code MCP configurations.
     expect(registered.has("mcp-serve")).toBe(true);
+  });
+
+  // PR #1001 review (P3): the canonical help text must reflect the
+  // canonical command name. The slice-6 delegation routed
+  // `serve mcp --help` through cmdMcpServe, which printed the
+  // legacy `autoctx mcp-serve` header. The builder now takes the
+  // command name and the two surfaces stay byte-identical except
+  // for the header. Same pattern as PR #999's scenario fix.
+  test("buildMcpServeHelpText renders the body once with a configurable command-name header", () => {
+    const legacyBody = MCP_SERVE_HELP_TEXT.split("\n").slice(1).join("\n");
+    const canonicalBody = SERVE_MCP_HELP_TEXT.split("\n").slice(1).join("\n");
+    expect(canonicalBody).toBe(legacyBody);
+  });
+
+  test("legacy MCP help header still names `mcp-serve`", () => {
+    expect(MCP_SERVE_HELP_TEXT.split("\n")[0]).toBe(
+      "autoctx mcp-serve — Start MCP server on stdio",
+    );
+  });
+
+  test("canonical MCP help header names `serve mcp`", () => {
+    expect(SERVE_MCP_HELP_TEXT.split("\n")[0]).toBe(
+      "autoctx serve mcp — Start MCP server on stdio",
+    );
+  });
+
+  test("buildMcpServeHelpText is the single source of truth for both surfaces", () => {
+    expect(buildMcpServeHelpText("mcp-serve")).toBe(MCP_SERVE_HELP_TEXT);
+    expect(buildMcpServeHelpText("serve mcp")).toBe(SERVE_MCP_HELP_TEXT);
+  });
+
+  test("`autoctx serve --help` mentions the new `serve mcp` subcommand", () => {
+    // Before slice 6 the help text described only the HTTP server,
+    // so the canonical MCP path was invisible to operators reading
+    // `--help`. The expanded help text now lists `mcp` as a
+    // subcommand alongside the canonical-path note.
+    expect(SERVE_HELP_TEXT).toMatch(/mcp/);
+    expect(SERVE_HELP_TEXT.toLowerCase()).toContain("subcommand");
   });
 });

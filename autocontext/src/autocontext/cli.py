@@ -616,6 +616,33 @@ def _run_http_serve(host: str, port: int) -> None:
 # so the legacy `autoctx serve [--host ...] [--port ...]` form continues
 # to start the HTTP API, while the canonical `serve mcp` path the slice-1
 # contract pins now exists as a registered subcommand.
+
+# PR #1001 review (P2): the bare callback parses --host/--port options
+# whenever they appear before the subcommand. The previous design discarded
+# those parsed values when typer saw a subcommand, breaking
+# `autoctx serve --host 0.0.0.0 --port 9001 http` (callback values
+# ignored, http subcommand used its own defaults). Mirror of the PR #998
+# queue fix: stash callback values on `ctx.obj` and merge in the http
+# subcommand. Subcommand-explicit > callback-explicit > default.
+_SERVE_DEFAULTS: dict[str, Any] = {"host": "127.0.0.1", "port": 8000}
+
+
+def _merge_serve_options(ctx: typer.Context, **subcommand_values: Any) -> dict[str, Any]:
+    """Return effective serve options, merging callback values from ctx.obj."""
+    callback_values: dict[str, Any] = (ctx.obj or {}) if isinstance(ctx.obj, dict) else {}
+    merged: dict[str, Any] = {}
+    for key, default in _SERVE_DEFAULTS.items():
+        sub_val = subcommand_values.get(key, default)
+        cb_val = callback_values.get(key, default)
+        if sub_val != default:
+            merged[key] = sub_val
+        elif cb_val != default:
+            merged[key] = cb_val
+        else:
+            merged[key] = default
+    return merged
+
+
 _serve_app = typer.Typer(invoke_without_command=True, help="Serve API or MCP endpoints.")
 
 
@@ -625,7 +652,15 @@ def _serve_root(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8000, "--port"),
 ) -> None:
-    """Legacy form: `autoctx serve [--host ...] [--port ...]` -> HTTP."""
+    """`autoctx serve [--host ...] [--port ...]` -> HTTP (legacy form).
+
+    Options passed to the callback (before the subcommand) are stashed
+    on `ctx.obj` so subcommands can merge them with their own explicit
+    values; this preserves legacy forms like
+    `autoctx serve --host 0.0.0.0 --port 9001 http` that put flags
+    before the subcommand.
+    """
+    ctx.obj = {"host": host, "port": port}
     if ctx.invoked_subcommand is not None:
         return
     _run_http_serve(host, port)
@@ -633,11 +668,13 @@ def _serve_root(
 
 @_serve_app.command("http")
 def _serve_http(
+    ctx: typer.Context,
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8000, "--port"),
 ) -> None:
     """Serve HTTP API and WebSocket stream."""
-    _run_http_serve(host, port)
+    merged = _merge_serve_options(ctx, host=host, port=port)
+    _run_http_serve(merged["host"], merged["port"])
 
 
 @_serve_app.command("mcp")

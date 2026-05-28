@@ -50,6 +50,36 @@ def test_serve_typer_app_is_invokable_without_subcommand() -> None:
     assert serve_group.typer_instance.info.invoke_without_command is True
 
 
+def test_serve_callback_options_merge_into_http_subcommand(monkeypatch) -> None:
+    """PR #1001 review (P2): the bare callback used to discard its
+    parsed --host/--port options whenever typer saw a subcommand,
+    breaking `autoctx serve --host 0.0.0.0 --port 9001 http`.
+    The merge fix stashes callback values on ctx.obj and the http
+    subcommand uses them when its own values are at default."""
+    captured: dict[str, object] = {}
+
+    def _fake_run_http_serve(host: str, port: int) -> None:
+        captured["host"] = host
+        captured["port"] = port
+
+    monkeypatch.setattr("autocontext.cli._run_http_serve", _fake_run_http_serve)
+
+    from typer.testing import CliRunner
+
+    runner = CliRunner()
+    # Callback-side options (before subcommand) must reach http.
+    captured.clear()
+    result = runner.invoke(app, ["serve", "--host", "0.0.0.0", "--port", "9001", "http"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"host": "0.0.0.0", "port": 9001}, captured
+
+    # Subcommand-side options (after subcommand) override callback.
+    captured.clear()
+    result = runner.invoke(app, ["serve", "--host", "0.0.0.0", "--port", "9001", "http", "--port", "9002"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"host": "0.0.0.0", "port": 9002}, captured
+
+
 def test_contract_serve_mcp_is_yes_on_both_runtimes() -> None:
     """The slice-1 `serve.mcp` entry flipped from `intentional_gap`
     to `yes` on both Python and TypeScript with this slice."""
