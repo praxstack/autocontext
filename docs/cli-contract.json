@@ -368,12 +368,10 @@
       "aliases": [],
       "runtime_support": {
         "python": {
-          "status": "intentional_gap",
-          "reason": "Python does not ship `capabilities` yet. AC-697 follow-up slice adds it (loads docs/cli-contract.json and renders the canonical surface)."
+          "status": "yes"
         },
         "typescript": {
-          "status": "intentional_gap",
-          "reason": "Today TypeScript `autoctx capabilities --json` returns the legacy registry-only payload from capabilities-command-workflow.ts (command names only). AC-697 follow-up slice wires capabilities to load docs/cli-contract.json and return canonical commands + aliases + per-runtime support."
+          "status": "yes"
         }
       },
       "flags": [],
