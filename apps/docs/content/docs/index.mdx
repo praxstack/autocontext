@@ -1,0 +1,49 @@
+---
+title: Introduction
+description: autocontext is a recursive self-improving harness that helps agents succeed on any task.
+---
+
+## What autocontext is
+
+autocontext is a recursive self-improving harness. You point it at a goal in plain language, and it iterates against real evaluation: it keeps what worked, discards what did not, and produces a structured trace plus artifacts, playbooks, datasets, and (optionally) a distilled local model that the next agent inherits. Because that knowledge persists, repeated runs get better, not just different.
+
+## The mental model
+
+A loop of five specialized roles (competitor, analyst, coach, architect, and curator) runs your task against real evaluation. The competitor attempts the goal, the analyst scores the result, the coach turns failures into concrete advice, the architect shapes strategy, and the curator decides what is worth keeping. Knowledge that works persists across runs in a playbook that the next run inherits, so each pass starts from everything the last one learned.
+
+## Who these docs serve
+
+These docs are organized into three layered tracks, depending on how you want to use autocontext:
+
+- [The CLI](/docs/cli) is for terminal practitioners who want to run autocontext directly from the command line.
+- [Agent integration](/docs/agents) is for wiring autocontext into Claude Code, Pi, Hermes, or any other MCP client.
+- [The SDK](/docs/sdk) is for embedding autocontext in your own Python or TypeScript code.
+
+All three share the same [core concepts](/docs/concepts), so start there if you want the foundation before diving into a track.
+
+## Try it in 30 seconds
+
+The default provider is `deterministic` and runs fully offline, so every runnable example sets `AUTOCONTEXT_AGENT_PROVIDER` to pick a real runtime. Here is a first run against a customer-support goal:
+
+<Tabs items={['Python', 'TypeScript']}>
+<Tab value="Python">
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi AUTOCONTEXT_PI_COMMAND=pi \
+uv run autoctx solve "improve customer-support replies for billing disputes" --iterations 3
+```
+</Tab>
+<Tab value="TypeScript">
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi bunx autoctx solve \
+  "improve customer-support replies for billing disputes" --iterations 5 --json
+```
+</Tab>
+</Tabs>
+
+<Callout type="info">
+autocontext ships a Python package and a TypeScript package, both exposing the same `autoctx` CLI, so you can pick whichever fits your stack.
+</Callout>
+
+## Next step
+
+Ready to install and run your first loop? Head to [the quickstart](/docs/get-started/quickstart).

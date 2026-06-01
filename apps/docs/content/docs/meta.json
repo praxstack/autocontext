@@ -1,0 +1,15 @@
+{
+  "title": "autocontext",
+  "pages": [
+    "index",
+    "get-started",
+    "concepts",
+    "cli",
+    "providers",
+    "agents",
+    "sdk",
+    "guides",
+    "reference",
+    "faq"
+  ]
+}

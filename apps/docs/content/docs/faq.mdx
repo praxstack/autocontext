@@ -1,0 +1,20 @@
+---
+title: FAQ
+description: Common questions about installing and using autocontext.
+---
+
+## Do I need an API key?
+
+No. With the Pi runtime, a CLI runtime (claude-cli, codex, hermes), or a local provider (ollama, vllm, mlx), you authenticate through that tool, not through autocontext. The default `deterministic` provider is fully offline and needs no credentials at all. See [providers](/docs/providers) for the full list and how to pick one.
+
+## Python or TypeScript?
+
+Both. Each package exposes the same `autoctx` CLI, and the two are at parity for most surfaces. Python is the primary package, and the control-plane commands are TypeScript-only. See [the CLI overview](/docs/cli) for which commands live where.
+
+## Where do my results go?
+
+Each run writes to `runs/<run_id>/`, which holds the trace, report, generations, and artifacts for that run. Learned knowledge that survives across runs persists under `knowledge/<scenario>/`. See [runs, traces, and artifacts](/docs/concepts/runs-traces-artifacts) for the full layout.
+
+## How is this different from a prompt loop?
+
+autocontext evaluates against real scoring rather than self-assessment, persists curated knowledge across runs so later runs inherit what earlier ones learned, and splits the work across five specialized roles instead of a single repeated prompt. See [the self-improving loop](/docs/concepts) for how those pieces fit together.
