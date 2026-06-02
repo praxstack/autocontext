@@ -1,0 +1,69 @@
+---
+title: Plain-Language Workflows
+description: simulate, investigate, and analyze from a description.
+---
+
+Three commands let you drive autocontext from a plain-language description rather than a hand-written scenario: `simulate` models a system and sweeps parameters, `investigate` chases down a problem with evidence and hypotheses, and `analyze` compares the results of prior work.
+
+## simulate
+
+`simulate` turns a description into a runnable simulation, optionally sweeping variables and comparing outcomes.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx simulate \
+  --description "queue with arrival rate lambda and service rate mu" \
+  --variables "lambda=3,mu=5" \
+  --runs 1
+```
+
+Flags:
+
+- `--description` / `-d`: plain-language description of what to simulate.
+- `--variables`: variable overrides in `key=val,key2=val2` form.
+- `--sweep`: a sweep spec in `key=min:max:step` form, run across the range.
+- `--runs`: number of runs (default 1).
+- `--max-steps`: max steps per run (0 = auto).
+- `--provider`: provider override.
+- `--save-as`: name to save the simulation under.
+- `--replay`: replay a saved simulation by name.
+- `--compare-left` and `--compare-right`: two saved simulations to compare (must be supplied together).
+- `--export`: export a saved simulation by name, with `--format` choosing `json`, `markdown`, or `csv`.
+- `--json`: structured output.
+
+## investigate
+
+`investigate` runs a plain-language investigation, gathering evidence and generating hypotheses about a problem.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx investigate \
+  --description "checkout latency spikes every afternoon" \
+  --max-steps 8 \
+  --hypotheses 5
+```
+
+Flags:
+
+- `--description` / `-d`: the plain-language problem to investigate.
+- `--max-steps`: maximum investigation steps (default 8).
+- `--hypotheses`: maximum hypotheses to generate (default 5).
+- `--mode`: investigation mode, `synthetic` (default) or `iterative`.
+- `--browser-url`: an optional browser URL to capture before investigating.
+- `--save-as`: name to save the investigation under.
+- `--json`: structured output.
+
+## analyze
+
+`analyze` compares and reports across prior work: runs, simulations, investigations, and missions. It is the read-and-compare counterpart to the commands that produce those artifacts.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx analyze --help
+```
+
+<Callout type="info">
+`analyze` reads existing artifacts rather than generating new ones, so it does not need a provider key for the comparison itself. Run `autoctx analyze --help` for the exact subjects and selectors your installed version exposes.
+</Callout>
+
+## Related
+
+- [Scenarios and tasks](/docs/concepts/scenarios-tasks): how a description becomes something runnable.
+- [Runs, traces, and artifacts](/docs/concepts/runs-traces-artifacts): what `analyze` compares.

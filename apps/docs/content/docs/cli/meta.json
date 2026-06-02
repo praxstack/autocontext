@@ -1,0 +1,14 @@
+{
+  "title": "CLI",
+  "pages": [
+    "index",
+    "solve-run",
+    "evaluation-cmds",
+    "plain-language",
+    "missions-campaigns",
+    "queue-worker",
+    "auth",
+    "export-import",
+    "reference"
+  ]
+}

@@ -1,0 +1,157 @@
+---
+title: Solve & Run
+description: Create and run scenarios, then inspect the results.
+---
+
+The core working loop of autoctx is: turn a goal into a scenario, run it, and inspect what happened. `solve` and `run` are the two ways to start work, and `show`, `watch`, `list`, and `status` let you follow and review it.
+
+## solve
+
+`solve` takes a plain-language description, compiles it into a scenario, and runs the improvement loop on it. It is the fastest path from an idea to a result.
+
+<Tabs items={['Python','TypeScript']}>
+<Tab value="Python">
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx solve \
+  "build an orbital transfer optimizer" \
+  --iterations 3
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx solve \
+  "build an orbital transfer optimizer" \
+  --iterations 3
+```
+
+</Tab>
+</Tabs>
+
+The description can be a positional argument, the `--description` / `-d` flag, or loaded from a file with `--task-file` (mutually exclusive with `--description`, convenient for long prompts). Other useful flags:
+
+- `--gens` / `--generations` and `--iterations`: how many generations to run (1 to 50; `--iterations` is the plain-language alias).
+- `--timeout`: provider timeout override in seconds.
+- `--generation-time-budget`: soft per-generation time budget in seconds (0 = unlimited).
+- `--family`: force a specific scenario family, bypassing the keyword classifier.
+- `--task-prompt`: supply the verbatim task prompt for the agent, bypassing the LLM scenario designer. Use this to preserve long, detail-laden prompts the designer might otherwise truncate.
+- `--output`: write the solved package to a JSON file.
+- `--json`: structured output.
+
+## run
+
+`run` executes the generation loop for a scenario that already exists (for example `grid_ctf`), rather than compiling one from a description.
+
+<Tabs items={['Python','TypeScript']}>
+<Tab value="Python">
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx run \
+  --scenario grid_ctf \
+  --iterations 3
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx run \
+  --scenario grid_ctf \
+  --iterations 3
+```
+
+</Tab>
+</Tabs>
+
+The scenario can be passed positionally (`autoctx run grid_ctf`) or via `--scenario`. When neither is given, it defaults to `grid_ctf`. Flags:
+
+- `--gens` and `--iterations`: number of generations (`--iterations` is the plain-language alias for `--gens`).
+- `--run-id`: assign or resume a specific run id.
+- `--serve`: start the interactive API and WebSocket server alongside the loop.
+- `--port`: server port, only used with `--serve` (default 8000).
+- `--preset`: apply a named configuration preset.
+- `--json`: structured output. Note that `--json` cannot be combined with `--serve`.
+
+## resume
+
+<Callout type="info">
+`resume` is a Python-only command. It is not available in the npm (TypeScript) package.
+</Callout>
+
+`resume` continues a previously started run by its id:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx resume <run-id> --gens 1
+```
+
+## replay
+
+`replay` prints the replay JSON for a single generation of a run, so you can inspect exactly what was produced:
+
+```bash
+autoctx replay <run-id> --generation 1
+```
+
+## show
+
+`show` renders a finished run's artifacts: run metadata plus selected generations.
+
+```bash
+# Show only the best-scoring generation
+autoctx show <run-id> --best
+
+# Show a specific generation
+autoctx show <run-id> --generation 2
+
+# Structured output
+autoctx show <run-id> --json
+```
+
+## watch
+
+`watch` follows an in-flight run, streaming live status updates until it finishes.
+
+```bash
+autoctx watch <run-id> --interval 2
+```
+
+`--interval` sets the poll interval in seconds (default 2.0). With `--json`, `watch` emits one JSONL row per poll, which is handy for piping progress into another process.
+
+## list
+
+`list` shows recent runs:
+
+```bash
+autoctx list
+autoctx list --json
+```
+
+## status
+
+`status` reports the current state of a run by id:
+
+```bash
+autoctx status <run-id>
+autoctx status <run-id> --json
+```
+
+<Callout type="info">
+`status` is overloaded: with a run id it reports run state, and `autoctx queue status` reports the background queue depth. See [Background Queue](/docs/cli/queue-worker).
+</Callout>
+
+## benchmark
+
+`benchmark` runs repeated one-generation trials for quick benchmarking and aggregates the results:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx benchmark --scenario grid_ctf --runs 3
+```
+
+`--runs` sets how many trials to run (default 3). The scenario defaults to `grid_ctf`.
+
+## Related
+
+- [The self-improving loop](/docs/concepts/the-loop): what a generation actually does.
+- [Runs, traces, and artifacts](/docs/concepts/runs-traces-artifacts): what `show` and `replay` surface.

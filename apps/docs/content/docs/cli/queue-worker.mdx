@@ -1,0 +1,87 @@
+---
+title: Background Queue
+description: Queue tasks and process them with a worker.
+---
+
+autocontext can run improvement tasks in the background. You enqueue work with `queue add`, check depth with `queue status`, and process the queue with a long-running `worker`.
+
+## queue add
+
+`queue add` puts a task on the background runner queue.
+
+<Tabs items={['Python','TypeScript']}>
+<Tab value="Python">
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx queue add \
+  --task-prompt "Write a clear changelog entry for v2.0" \
+  --rubric "Clear, accurate, well-structured" \
+  --rounds 5 \
+  --threshold 0.9
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx queue add \
+  --task-prompt "Write a clear changelog entry for v2.0" \
+  --rubric "Clear, accurate, well-structured" \
+  --rounds 5 \
+  --threshold 0.9
+```
+
+</Tab>
+</Tabs>
+
+Flags:
+
+- `--spec` / `-s`: the task spec name (derived from the prompt if omitted).
+- `--task-prompt` / `--prompt` / `-p`: the queued task prompt.
+- `--rubric` / `-r`: the evaluation rubric.
+- `--browser-url`: an optional browser URL to capture before execution.
+- `--rounds` / `-n`: maximum improvement rounds (default 5).
+- `--threshold` / `-t`: quality threshold to stop (default 0.9).
+- `--min-rounds`: minimum rounds before the threshold can stop the loop (default 1).
+- `--priority`: task priority (default 0).
+- `--provider`: provider override accepted for queue-script compatibility.
+- `--json`: structured output.
+
+<Callout type="info">
+The flag for the round cap is `--rounds` (with the `-n` short form), matching `improve`. There is no `--max-rounds` flag.
+</Callout>
+
+## queue status
+
+`queue status` shows the count of pending tasks in the background queue:
+
+```bash
+autoctx queue status
+autoctx queue status --json
+```
+
+## worker
+
+`worker` runs the background task queue worker, pulling queued tasks and executing the improvement loop on each.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx worker
+```
+
+Flags:
+
+- `--poll-interval`: how often the worker polls for new tasks, in seconds.
+- `--concurrency`: how many tasks to process concurrently.
+- `--max-empty-polls`: stop after this many consecutive empty polls.
+- `--model`: judge model override for queued tasks.
+- `--once`: process one batch and exit, instead of running continuously.
+- `--json`: structured output on exit.
+
+## status
+
+The top-level `status` command reports run state when given a run id; `queue status` reports queue depth. Keep the two straight: `autoctx status <run-id>` versus `autoctx queue status`.
+
+## Related
+
+- [Evaluation Commands](/docs/cli/evaluation-cmds): `improve` runs the same loop the worker executes per task.
+- [Solve & Run](/docs/cli/solve-run): inspecting the runs a worker produces.

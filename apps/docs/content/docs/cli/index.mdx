@@ -1,0 +1,60 @@
+---
+title: CLI Overview
+description: How the autoctx command line is organized across Python and TypeScript.
+---
+
+autocontext ships two implementations of the same command line, both exposing the `autoctx` binary: a Python CLI (built on Typer) and a TypeScript CLI (built on Commander). The two share most of their command surface, so the workflows you learn here apply whichever runtime you install.
+
+<Callout type="info">
+The npm package is named `autoctx`, not `autocontext` (that is a different package). The Python distribution also installs the `autoctx` entry point. Both put the same command on your PATH.
+</Callout>
+
+## Invocation model
+
+Every command follows the same shape:
+
+```bash
+autoctx <command> [arguments] [flags]
+```
+
+Commands group into subcommands where it makes sense (for example `autoctx serve http`, `autoctx serve mcp`, `autoctx queue add`, `autoctx queue status`, `autoctx probes check`, and `autoctx scenario create`).
+
+Most read or report-style commands accept `--json` for structured, machine-readable output on stdout. This is the flag to reach for when you are scripting against autoctx or feeding its output into another tool. Human-readable tables are the default when `--json` is omitted.
+
+Examples in these pages set `AUTOCONTEXT_AGENT_PROVIDER` explicitly. The default provider is `anthropic`, which needs an API key. The `pi` provider is the zero-config path, and `deterministic` runs fully offline. See [Providers](/docs/providers) for the full picture.
+
+```bash
+# Zero-config: no key required
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx run grid_ctf --iterations 1
+```
+
+## Parity buckets
+
+The two runtimes are not identical. Commands fall into three buckets, and you can always check the live picture for your install with `autoctx capabilities --json`.
+
+### Shared core
+
+The bulk of the surface is available in both Python and TypeScript: `solve`, `run`, `replay`, `list`, `show`, `watch`, `status`, `benchmark`, `export`, `export-training-data`, `import-package`, `scenario create`, `simulate`, `investigate`, `analyze`, `judge`, `improve`, `repl`, `tui`, `capabilities`, `init`, `login`, `whoami`, `logout`, `providers`, `models`, `agent`, `queue`, `worker`, `serve` (with `serve http` / `serve mcp`), `mcp-serve`, `train`, `probes check`, `runtime-sessions`, `production-traces`, `instrument`, `trace-findings`, and `version`.
+
+<Callout type="info">
+A few shared-name commands have a deeper home on one runtime. `mission` and `campaign` orchestration is richer on the TypeScript CLI, and `mission` is recorded as an intentional gap on the Python side in the command contract.
+</Callout>
+
+### Python-only
+
+These exist only in the Python CLI and are not shipped in the npm package: `resume`, `ecosystem`, `ab-test`, `wait`, and `trigger-distillation`.
+
+### TypeScript-only control plane
+
+The control-plane commands live only in the TypeScript CLI: `candidate`, `eval`, `promotion`, `harness`, `registry`, and `emit-pr`. These manage candidate artifacts, evaluation runs, promotion transitions, harness proposals, the registry, and promotion PRs.
+
+## Where to go next
+
+- [Solve & Run](/docs/cli/solve-run): create and run scenarios, then inspect results.
+- [Evaluation Commands](/docs/cli/evaluation-cmds): score and iteratively improve output.
+- [Plain-Language Workflows](/docs/cli/plain-language): `simulate`, `investigate`, and `analyze`.
+- [Missions & Campaigns](/docs/cli/missions-campaigns): coordinate multi-step work.
+- [Background Queue](/docs/cli/queue-worker): queue tasks and run a worker.
+- [Auth & Discovery](/docs/cli/auth): credentials and capability discovery.
+- [Export & Import](/docs/cli/export-import): move strategies, data, and models.
+- [The full reference](/docs/cli/reference): every command at a glance.

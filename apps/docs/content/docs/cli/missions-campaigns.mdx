@@ -1,0 +1,35 @@
+---
+title: Missions & Campaigns
+description: Coordinate multi-step and multi-mission work.
+---
+
+When a single run is not enough, autocontext offers two levels of coordination: a `mission` groups multiple steps toward one objective, and a `campaign` groups multiple missions. Both are managed through subcommands.
+
+## mission
+
+`mission` manages multi-step task missions: creating them, listing them, and driving them through their steps.
+
+```bash
+autoctx mission --help
+```
+
+A mission is the unit you reach for when a goal naturally breaks into ordered steps that should share state and be tracked together, rather than as independent one-off runs.
+
+## campaign
+
+`campaign` manages multi-mission campaigns, coordinating several missions toward a larger objective.
+
+```bash
+autoctx campaign --help
+```
+
+<Callout type="info">
+Mission and campaign orchestration is richer on the TypeScript CLI. In the command contract, `mission` on the Python runtime is recorded as an intentional gap, so prefer the npm (`autoctx`) build when you are doing serious mission or campaign work. Run `autoctx capabilities --json` to confirm the support level for your install.
+</Callout>
+
+Because the available subcommands and selectors evolve, the most reliable reference for your installed version is the built-in help: `autoctx mission --help` and `autoctx campaign --help`.
+
+## Related
+
+- [Scenarios and tasks](/docs/concepts/scenarios-tasks): the building blocks a mission coordinates.
+- [Solve & Run](/docs/cli/solve-run): the single-run commands a mission composes.

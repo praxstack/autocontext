@@ -1,0 +1,105 @@
+---
+title: Evaluation Commands
+description: Score and iteratively improve agent output.
+---
+
+These commands operate on the evaluation side of autocontext: scoring a single output, looping to improve it, working interactively, and comparing configurations. They build on the same judge-and-rubric machinery described in [evaluation concepts](/docs/concepts/evaluation).
+
+## judge
+
+`judge` is a one-shot evaluation. It scores a candidate output against a task prompt and a rubric, then reports the score.
+
+<Tabs items={['Python','TypeScript']}>
+<Tab value="Python">
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx judge \
+  --task-prompt "Summarize the incident report" \
+  --output "The outage lasted 12 minutes due to a bad deploy." \
+  --rubric "Accurate, concise, mentions root cause" \
+  --json
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx judge \
+  --task-prompt "Summarize the incident report" \
+  --output "The outage lasted 12 minutes due to a bad deploy." \
+  --rubric "Accurate, concise, mentions root cause" \
+  --json
+```
+
+</Tab>
+</Tabs>
+
+Flags:
+
+- `--task-prompt` / `-p`: the task prompt (required).
+- `--output` / `-o`: the agent output to evaluate (required).
+- `--rubric` / `-r`: the evaluation rubric (required).
+- `--provider`: provider override for the judge.
+- `--model`: model override for the judge.
+- `--timeout`: provider timeout override in seconds.
+- `--json`: structured output.
+
+## improve
+
+`improve` runs a multi-round improvement loop: it generates, judges against the rubric, and revises until it hits a quality threshold or runs out of rounds.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx improve \
+  --task-prompt "Write a clear release note for v2.0" \
+  --rubric "Clear, accurate, well-structured" \
+  --rounds 5 \
+  --threshold 0.9
+```
+
+Flags:
+
+- `--task-prompt` / `-p`: the task prompt (required).
+- `--rubric` / `-r`: the evaluation rubric (required).
+- `--output` / `-o`: a starting output to improve from.
+- `--rounds` / `-n`: maximum improvement rounds (default 5).
+- `--threshold` / `-t`: quality threshold that stops the loop early (default 0.9).
+- `--provider`: provider override.
+- `--timeout`: provider timeout override in seconds.
+- `--json`: structured output. `improve` also supports NDJSON streaming and an optional verification command for closed-loop checks.
+
+## repl
+
+`repl` runs a direct REPL-loop session, useful for interactively iterating on a task without leaving the terminal:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx repl
+```
+
+## benchmark
+
+`benchmark` is also an evaluation tool: it runs repeated one-generation trials and aggregates the scores, which is the quickest way to get a stable read on a scenario.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx benchmark --scenario grid_ctf --runs 3
+```
+
+See [Solve & Run](/docs/cli/solve-run) for the full benchmark flags.
+
+## ab-test
+
+<Callout type="info">
+`ab-test` is a Python-only command. It is not available in the npm (TypeScript) package.
+</Callout>
+
+`ab-test` compares two configurations of the same scenario (a baseline against a variant) to measure the effect of a change:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx ab-test --scenario grid_ctf
+```
+
+The baseline and variant are expressed as environment-variable overrides, so you can A/B toggles like enabling or disabling a feature.
+
+## Related
+
+- [Evaluation concepts](/docs/concepts/evaluation): rubrics, judges, and tournament scoring.
+- [Per-role and judge providers](/docs/providers): pointing the judge at an independent model.

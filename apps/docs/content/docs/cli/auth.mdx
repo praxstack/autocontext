@@ -1,0 +1,74 @@
+---
+title: Auth & Discovery
+description: Manage provider credentials and discover capabilities.
+---
+
+These commands manage who autocontext talks to (provider credentials) and let you discover what your install can do (capabilities, scenarios, and a fresh project skeleton).
+
+## login
+
+`login` stores provider credentials persistently, so you do not have to keep setting environment variables:
+
+```bash
+autoctx login
+```
+
+## whoami
+
+`whoami` shows the current auth status and which provider is active:
+
+```bash
+autoctx whoami
+```
+
+## logout
+
+`logout` clears stored provider credentials:
+
+```bash
+autoctx logout
+```
+
+## providers
+
+`providers` lists all known providers along with their auth status, as JSON:
+
+```bash
+autoctx providers
+```
+
+## models
+
+`models` lists the available models for the providers you are authenticated against, as JSON:
+
+```bash
+autoctx models
+```
+
+<Callout type="info">
+`providers` and `models` emit JSON by design, which makes them convenient to script against when selecting a model for a run.
+</Callout>
+
+## capabilities
+
+`capabilities` shows the canonical command list, aliases, and per-runtime support. It is the authoritative way to see exactly which commands your install supports and whether each is implemented in Python, TypeScript, or both.
+
+```bash
+# Human-readable summary
+autoctx capabilities
+
+# Full structured payload
+autoctx capabilities --json
+```
+
+## init
+
+`init` scaffolds project configuration and agent guidance into the current directory, giving you a starting point for `.autoctx` config and AGENTS instructions:
+
+```bash
+autoctx init
+```
+
+## Related
+
+- [Providers](/docs/providers): configuring `anthropic`, `pi`, `deterministic`, and per-role providers.

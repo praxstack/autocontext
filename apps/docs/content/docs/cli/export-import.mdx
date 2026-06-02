@@ -1,0 +1,90 @@
+---
+title: Export & Import
+description: Move strategies, training data, and distilled models between projects.
+---
+
+autocontext accumulates value over time: curated strategies, training data, and distilled models. These commands move that value between projects, whether you are packaging a strategy to share, exporting data to fine-tune on, or training a distilled model from a curated dataset.
+
+## export
+
+`export` produces a portable strategy package for a scenario or run. It supports two formats.
+
+```bash
+# Default: a strategy JSON package
+autoctx export <run-id>
+
+# A pi-package directory
+autoctx export <run-id> --format pi-package
+```
+
+Flags:
+
+- A positional run id, or `--run-id`, or `--scenario` to select what to export.
+- `--format`: `strategy` (default, a JSON package) or `pi-package` (a directory).
+- `--output`: output path. Defaults to `<scenario-or-run-id>_package.json` for the strategy format, or `<scenario>-pi-package` for a pi-package directory.
+- `--db-path`, `--runs-root`, `--knowledge-root`, `--skills-root`, `--claude-skills-path`: override the source artifact locations.
+- `--json`: structured output.
+
+## export-training-data
+
+`export-training-data` exports runs as JSONL training data, suitable for downstream fine-tuning or analysis.
+
+```bash
+# Export a single run
+autoctx export-training-data --run-id <run-id>
+
+# Export every run for a scenario (requires the confirmation flag)
+autoctx export-training-data --scenario grid_ctf --all-runs
+```
+
+Flags:
+
+- `--run-id`: export a specific run.
+- `--scenario`: export all runs for a scenario.
+- `--all-runs`: required together with `--scenario` to confirm a multi-run export.
+
+## import-package
+
+`import-package` imports a strategy package from a file into the current project.
+
+```bash
+autoctx import-package ./grid_ctf_package.json --conflict merge
+```
+
+Flags:
+
+- A positional path to the strategy package JSON file (required).
+- `--scenario`: override the target scenario name.
+- `--conflict`: conflict policy, one of `overwrite`, `merge` (default), or `skip`.
+- `--db-path`, `--knowledge-root`, `--skills-root`, `--claude-skills-path`: override the target artifact locations.
+
+## train
+
+`train` launches the training loop to distill a model from a curated dataset.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx train \
+  --scenario grid_ctf \
+  --data training_data.jsonl \
+  --backend mlx
+```
+
+Flags:
+
+- `--scenario`: scenario to train on (default `grid_ctf`).
+- `--data`: path to the JSONL training data (default `training_data.jsonl`).
+- `--time-budget`: training time budget in seconds (default 300).
+- `--max-experiments`: max iterations (0 = unlimited).
+- `--memory-limit`: peak memory cap in MB (default 16384).
+- `--backend`: training backend to publish and activate, `mlx` (default) or `cuda`.
+- `--agent-provider`: LLM provider for the training agent (default `anthropic`).
+- `--agent-model`: model for the training agent (empty = provider default).
+- `--json`: structured output.
+
+<Callout type="info">
+`train` requires a configured training executor and a curated dataset (for example one produced by `export-training-data`). See the distillation guide for the end-to-end workflow.
+</Callout>
+
+## Related
+
+- [The distillation guide](/docs/guides/distillation-mlx): turning exported data into a distilled model on MLX.
