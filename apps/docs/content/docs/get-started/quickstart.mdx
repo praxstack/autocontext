@@ -1,0 +1,44 @@
+---
+title: Quickstart
+description: Run your first solve in about 30 seconds.
+---
+
+Once the [CLI is installed](/docs/get-started/installation), a single `autoctx solve` command points autocontext at a goal in plain language and iterates against real evaluation.
+
+## The 30-second solve
+
+The Pi runtime is the recommended zero-config path: install Pi, and it handles its own auth with no API key to set. Run a first solve against a customer-support goal:
+
+<Tabs items={['Python', 'TypeScript']}>
+<Tab value="Python">
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi \
+uv run autoctx solve "improve customer-support replies for billing disputes" --iterations 3
+```
+</Tab>
+<Tab value="TypeScript">
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi bunx autoctx solve \
+  "improve customer-support replies for billing disputes" --iterations 5 --json
+```
+</Tab>
+</Tabs>
+
+autocontext attempts the goal, scores the result, keeps what worked, and writes everything to a run directory you can inspect afterward.
+
+## Using an API provider
+
+To run against an API provider instead, set the provider and its key in the same command:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... \
+uv run autoctx solve "improve customer-support replies for billing disputes" --iterations 3
+```
+
+<Callout type="info">
+Without configuration, autocontext targets the `anthropic` provider, which needs a key, so set `AUTOCONTEXT_AGENT_PROVIDER` explicitly. Use `pi` for a zero-config local run, or `deterministic` for a fully offline smoke test with no credentials.
+</Callout>
+
+## Next step
+
+Want to understand the output and how re-running improves results? Continue to [your first solve](/docs/get-started/your-first-solve).

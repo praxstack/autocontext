@@ -1,0 +1,85 @@
+---
+title: Your First Solve
+description: Run a solve and understand the output it produces.
+---
+
+This walkthrough runs a solve, then explains the files it produces and how to inspect them. It assumes the [CLI is installed](/docs/get-started/installation).
+
+## Run a solve
+
+Using the zero-config Pi runtime:
+
+<Tabs items={['Python', 'TypeScript']}>
+<Tab value="Python">
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi \
+uv run autoctx solve "improve customer-support replies for billing disputes" --iterations 3
+```
+</Tab>
+<Tab value="TypeScript">
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi bunx autoctx solve \
+  "improve customer-support replies for billing disputes" --iterations 5 --json
+```
+</Tab>
+</Tabs>
+
+## What a run produces
+
+Each solve writes a self-contained directory at `runs/<run_id>/`. The pieces you will use most:
+
+- `trace.jsonl`: an append-only event log, one JSON object per line. This is the ground truth for what happened during the run, in order.
+- `report.md`: a human-readable summary of the run, good for a quick read.
+- `generations/`: per-iteration records, one entry for each pass the loop made.
+- `artifacts/`: the concrete outputs the run produced.
+
+Knowledge that survives across runs lives separately, under `knowledge/<scenario>/`:
+
+- `playbook.md`: the accumulated strategy the next run inherits.
+- `hints.md`: targeted advice carried forward for the next attempt.
+- `lessons.md`: consolidated lessons distilled from past runs.
+
+That directory also holds `tools/` (helpers generated along the way) and `snapshots/` (cross-run state). The run directory is per-run and disposable, while the knowledge directory is the part that compounds.
+
+## Inspect the results
+
+List recent runs to find a run id, then look at a specific one. `autoctx list` is shared across both runtimes, but the per-run inspect commands differ between them.
+
+```bash
+autoctx list
+```
+
+To look at a single run:
+
+<Tabs items={['Python', 'TypeScript']}>
+<Tab value="Python">
+```bash
+# Show generation-level status for a run
+autoctx status <run-id>
+
+# Machine-readable output
+autoctx status <run-id> --json
+```
+</Tab>
+<Tab value="TypeScript">
+```bash
+# Show the best generation for a run
+autoctx show <run-id> --best
+
+# Follow a run until it finishes
+autoctx watch <run-id>
+```
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The inspect surface differs by runtime: the Python CLI exposes `autoctx status <run-id>`, while the TypeScript CLI adds `autoctx show <run-id> --best` and `autoctx watch <run-id>`. Most commands accept `--json` for machine-readable output.
+</Callout>
+
+## Why re-running improves results
+
+Run the same solve again and it tends to do better, not just differently. That is because knowledge persists across runs: the playbook, hints, and lessons written to `knowledge/<scenario>/` are inherited by the next run, so each pass starts from everything the last one learned rather than from scratch.
+
+## Next step
+
+For the deeper model behind runs, knowledge, and the loop, read [core concepts](/docs/concepts).

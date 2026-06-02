@@ -1,0 +1,47 @@
+---
+title: Installation
+description: Install the autocontext CLI for Python or TypeScript.
+---
+
+autocontext ships a Python package and a TypeScript package. Both expose the same `autoctx` binary, so pick whichever fits your stack.
+
+## Install the CLI
+
+<Tabs items={['Python', 'TypeScript']}>
+<Tab value="Python">
+```bash
+uv tool install autocontext==0.5.0
+```
+
+This requires Python 3.11 or newer. If you prefer pip, `pip install autocontext` works too.
+</Tab>
+<Tab value="TypeScript">
+```bash
+bun add -g autoctx@0.5.0
+```
+
+If you prefer npm, `npm i -g autoctx` works too.
+</Tab>
+</Tabs>
+
+Both packages install the same `autoctx` command, so the rest of these docs apply no matter which one you chose. Confirm the install with:
+
+```bash
+autoctx --help
+```
+
+## Provider credentials
+
+autocontext runs your task through an agent provider, and how you authenticate depends on which provider you pick.
+
+- The Pi runtime is the zero-config path: install Pi, and it handles its own auth. There is no API key to plumb through autocontext.
+- API providers (Anthropic, OpenAI, and others) need a key set in the matching environment variable, for example `ANTHROPIC_API_KEY`.
+- The `deterministic` provider runs fully offline and needs no credentials at all, which is handy for a first smoke test.
+
+<Callout type="info">
+Without any configuration, autocontext targets the `anthropic` provider, which needs `ANTHROPIC_API_KEY`. Set `AUTOCONTEXT_AGENT_PROVIDER` explicitly to choose a different runtime. See [providers](/docs/providers) for the full list and how to pick one.
+</Callout>
+
+## Next step
+
+With the CLI installed, head to [the quickstart](/docs/get-started/quickstart) to run your first solve.
