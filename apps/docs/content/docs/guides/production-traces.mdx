@@ -1,0 +1,153 @@
+---
+title: Production Traces
+description: Ingest real traces and build datasets from them.
+---
+
+Production traces let you capture what your real LLM clients actually did in production, curate and redact those records locally, and turn them into evaluation datasets and structured findings. This closes the loop between live agent behavior and autocontext's improvement workflow.
+
+The TypeScript package (`autoctx`) ships three commands for this:
+
+- `autoctx production-traces`: ingest, curate, redact, and export the trace store.
+- `autoctx instrument`: scan a repo for LLM clients and propose or apply wrappers that emit traces.
+- `autoctx trace-findings`: extract structured findings from a single trace.
+
+<Callout type="info">
+  All three commands print their own help. Run `autoctx production-traces --help`, `autoctx instrument --help`, or `autoctx trace-findings --help` for the authoritative flag list.
+</Callout>
+
+## What a ProductionTrace is
+
+A `ProductionTrace` is the schema-versioned record autocontext stores for one captured LLM interaction. Each trace carries:
+
+- `schemaVersion` and a stable `traceId`
+- `source` of the capture and `provider` / `model` that served the call
+- optional `session` identifier and `env` context (the environment the call ran in)
+- the `messages` and `toolCalls` exchanged
+- an optional `outcome`, plus `timing` and `usage` info
+- `feedbackRefs`, `links`, and `redactions` markers
+- optional `routing` (the model-routing decision) and free-form `metadata`
+
+Traces live under `.autocontext/production-traces/` in your repo. Incoming batches land in `incoming/`, validated traces move to `ingested/`, and the redaction policy plus install-salt are scaffolded alongside them. The local store view is unredacted; redaction is applied on export.
+
+A `PublicTrace` is the redacted, exportable view of a trace. `autoctx trace-findings` reads either a `PublicTrace` JSON file or a stored trace looked up by id.
+
+## `autoctx production-traces`
+
+Ingest, curate, redact, and export production LLM traces. The command dispatches to subcommands; pass the subcommand after the `production-traces` keyword:
+
+```bash
+autoctx production-traces <subcommand> [flags]
+autoctx production-traces <subcommand> --help
+```
+
+### Subcommands
+
+| Subcommand | Purpose |
+| ------------- | ------------------------------------------------------------------------ |
+| `init`        | Scaffold `.autocontext/production-traces/` and generate install-salt. |
+| `ingest`      | Validate and move `incoming/` batches to `ingested/` (shared lock). |
+| `list`        | List stored traces (local view, no redaction). |
+| `show`        | Inspect a single trace (add `--as-exported` to preview redaction). |
+| `stats`       | Aggregate counts by env / app / provider / outcome / cluster. |
+| `build-dataset` | Generate an evaluation dataset from curated traces. |
+| `datasets`    | List or show generated datasets. |
+| `export`      | Export traces outbound with redaction applied. |
+| `policy`      | Show or set the redaction-mode policy. |
+| `rotate-salt` | Rotate install-salt (break-glass; requires `--force`). |
+| `prune`       | Enforce retention policy out-of-band. |
+
+### Typical flow
+
+```bash
+# 1. Scaffold the store and generate install-salt.
+autoctx production-traces init
+
+# 2. Drop captured batches into incoming/, then validate and move them.
+autoctx production-traces ingest
+
+# 3. Inspect what you have.
+autoctx production-traces list
+autoctx production-traces stats
+autoctx production-traces show <trace-id> --as-exported
+
+# 4. Turn curated traces into an evaluation dataset.
+autoctx production-traces build-dataset
+
+# 5. Export outbound with redaction applied.
+autoctx production-traces export
+```
+
+`show --as-exported` previews exactly what redaction will strip before you export. Use `policy` to inspect or change the redaction mode that `export` and the preview apply.
+
+## `autoctx instrument`
+
+Scan a repo for LLM clients and propose or apply autocontext wrappers that emit production traces. The default mode is a dry run that composes patches without touching your files:
+
+```bash
+autoctx instrument [--dry-run | --apply [--branch <name>] [--commit <msg>]]
+                   [--exclude <glob>]... [--exclude-from <file>]
+                   [--enhanced] [--max-file-bytes <N>]
+                   [--fail-if-empty] [--output json|table|pretty]
+                   [--force]
+```
+
+Modes are mutually exclusive; the default is `--dry-run`:
+
+- `--dry-run`: compose patches and a session directory; do NOT mutate files.
+- `--apply`: write patches into the working tree (requires a clean tree or `--force`).
+- `--apply --branch <name>`: branch off HEAD, apply, and commit (`--commit <msg>` optional).
+
+Filters:
+
+- `--exclude <glob>`: repeatable; adds gitignore-style exclude patterns.
+- `--exclude-from <file>`: read additional excludes from a file (gitignore syntax).
+- `--max-file-bytes <N>`: skip files over N bytes (default 1048576 = 1 MiB).
+
+Safety and observability:
+
+- `--fail-if-empty`: exit 12 when zero detector plugins are registered.
+- `--force`: bypass the clean-tree preflight (prints a prominent stderr warning).
+- `--enhanced`: force LLM enhancement of the PR-body narrative. Without a provider wired or without an API key, enhancement silently falls back to the deterministic default templates, so `plan.json` stays byte-identical whether enhancement is on or off.
+- `--output json|table|pretty`: format for the summary printed to stdout (default: `pretty`).
+
+```bash
+# Preview the wrappers instrument would add.
+autoctx instrument --dry-run
+
+# Apply on a fresh branch with a commit message.
+autoctx instrument --apply --branch add-autoctx-traces --commit "instrument LLM clients"
+```
+
+<Callout type="warn">
+  `--apply` refuses to run against a dirty working tree unless you pass `--force`. Prefer `--apply --branch <name>` so the changes land on their own branch.
+</Callout>
+
+## `autoctx trace-findings`
+
+Extract structured findings from a single trace:
+
+```bash
+autoctx trace-findings --trace <path> [--json]
+autoctx trace-findings --trace-id <id> [--json]
+autoctx trace-findings --help
+```
+
+Options:
+
+- `--trace <path>`: path to a `PublicTrace` JSON file.
+- `--trace-id <id>`: look up a stored `ProductionTrace` from the local `.autocontext/production-traces/ingested/` store.
+- `--json`: emit the `TraceFindingReport` as JSON instead of Markdown.
+
+Exactly one of `--trace` and `--trace-id` is required. By default the command prints a Markdown report with `Summary`, `Findings`, and `Failure Motifs` sections; `--json` emits the `TraceFindingReport` JSON matching `TraceFindingReportSchema`.
+
+```bash
+# Findings from a standalone PublicTrace file.
+autoctx trace-findings --trace ./trace.json
+
+# Findings from a stored trace, as JSON.
+autoctx trace-findings --trace-id <id> --json
+```
+
+<Callout type="info">
+  See [agent integration](/docs/agents) for how trace ingestion fits with other capture surfaces, and the [SDK](/docs/sdk) for emitting traces from your own code.
+</Callout>
