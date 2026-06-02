@@ -9,8 +9,8 @@ A one-line definition for each core term, with a link to its fuller treatment.
 | --- | --- |
 | [Scenario](/docs/concepts/scenarios-tasks) | A pluggable problem definition: either a game scenario (with match rules) or an agent-task scenario (evaluated by a judge). |
 | [Task](/docs/concepts/scenarios-tasks) | A prompt-centric unit of work framed as an agent task, scored by a judge against a rubric. |
-| [Mission](/docs/sdk) | A single verifier-driven objective the runtime pursues to completion through repeated verified steps. |
-| [Campaign](/docs/sdk) | A coordinator over multiple missions, with budgets, priorities, and dependencies between them. |
+| [Mission](/docs/concepts/scenarios-tasks) | A single verifier-driven objective the runtime pursues to completion through repeated verified steps. |
+| [Campaign](/docs/concepts/scenarios-tasks) | A coordinator over multiple missions, with budgets, priorities, and dependencies between them. |
 | [Run](/docs/concepts/runs-traces-artifacts) | One execution of a scenario across one or more generations, persisted to SQLite and the artifact store. |
 | [Generation](/docs/concepts/the-loop) | A single pass of the loop: agents act, matches are scored, and the backpressure gate decides advance, retry, or rollback. |
 | [Trace](/docs/concepts/runs-traces-artifacts) | A recorded, redactable record of what happened during execution, used for replay, datasets, and inspection. |
@@ -24,7 +24,7 @@ A one-line definition for each core term, with a link to its fuller treatment.
 | [Coach](/docs/concepts) | The agent role that updates the accumulated playbook and writes competitor hints. |
 | [Architect](/docs/concepts) | The agent role that proposes and persists tooling improvements for a scenario. |
 | [Curator](/docs/concepts) | The agent role that acts as the quality gate for playbook updates and consolidates lessons. |
-| [Judge](/docs/concepts/evaluation) | The LLM evaluator that scores agent-task outputs against a rubric, using multi-sample sampling and tolerant parsing. |
+| [Judge](/docs/concepts/evaluation) | The LLM evaluator that scores agent-task outputs against a rubric, using multi-sample voting and tolerant parsing. |
 | [Elo](/docs/concepts/evaluation) | The rating system used to score game scenarios through tournament matches between strategies. |
 | [Distillation](/docs/concepts/knowledge) | Compressing what a scenario learned into a portable, exportable form (a skill package or trained policy). |
 | [Snapshot](/docs/concepts/runs-traces-artifacts) | A per-run capture of knowledge that later runs inherit, enabling cross-run improvement. |
