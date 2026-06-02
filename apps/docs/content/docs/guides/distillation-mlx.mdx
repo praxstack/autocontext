@@ -5,14 +5,14 @@ description: Train a distilled local model on Apple Silicon.
 
 ## Overview
 
-autocontext's `autoctx train` command uses [MLX](https://github.com/ml-explore/mlx) to fine-tune local models from exported run data. With `--backend mlx`, training distills a local model from the JSONL data your runs produced, and the resulting checkpoint becomes a [snapshot](/docs/concepts) that `MLXProvider` can load for local inference.
+autocontext's `autoctx train` command uses [MLX](https://github.com/ml-explore/mlx) to fine-tune local models from exported run data. With `--backend mlx`, training distills a local model from the JSONL data your runs produced, and the resulting checkpoint becomes a [snapshot](/docs/concepts/knowledge) that `MLXProvider` can load for local inference.
 
 MLX requires direct access to Apple's Metal GPU framework, which means training must run on the macOS host, not inside a Docker sandbox.
 
 Docker containers on macOS run inside a Linux VM and cannot access Metal. The MLX Python package may install on Linux aarch64, but training cannot complete without a Metal-capable Apple Silicon host. Host-side Python environments also cannot be executed directly from the sandbox when they point to macOS-native binaries.
 
 <Callout type="info">
-  See [the train command](/docs/cli/export-import) for exporting run data and invoking training, and [local providers](/docs/providers/local) for serving the resulting checkpoint.
+  See [export and train commands](/docs/cli/export-import) for exporting run data and invoking training, and [local providers](/docs/providers/local) for serving the resulting checkpoint.
 </Callout>
 
 ## Prerequisites

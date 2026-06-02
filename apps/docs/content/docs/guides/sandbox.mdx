@@ -8,6 +8,7 @@ autocontext supports three shipped execution modes for game scenarios, plus judg
 - `local` executor: runs strategies in a process pool with timeout controls, and applies memory limits in the subprocess path.
 - `primeintellect` executor: runs strategies remotely via PrimeIntellect sandbox lifecycle (create/wait/execute/delete).
 - `monty` executor: runs strategies in a pydantic-monty interpreter sandbox with external function callbacks and configurable timeout/call limits.
+- `ssh` executor: also selectable via `AUTOCONTEXT_EXECUTOR_MODE=ssh`, runs strategies on an external execution host over SSH.
 - **Agent task evaluation**: Agent task scenarios bypass match execution entirely. `JudgeExecutor` delegates to `AgentTaskInterface.evaluate_output()`, which may use `LLMJudge` for LLM-based scoring against a rubric.
 
 ## Gondolin boundary
