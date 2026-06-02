@@ -39,7 +39,7 @@ Set `AUTOCONTEXT_EXTENSION_FAIL_FAST=true` when hook failures should stop the ru
 An extension module may expose `register(api)`, `configure(api)`, or `setup(api)`. References may also target a callable directly with `module:function`.
 
 ```python
-from autocontext.extensions import HookEvents, HookResult
+from autocontext import HookEvents, HookResult
 
 
 def register(api):

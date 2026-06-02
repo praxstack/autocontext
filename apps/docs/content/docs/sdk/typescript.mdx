@@ -44,6 +44,8 @@ console.log(result.bestScore, result.bestOutput);
 - `isImproved(...)`: predicate for whether a round improved on the prior best.
 - `isParseFailure(...)`: predicate for whether a judge result was a parse failure rather than a genuine low score.
 
+Here `task` is an `AgentTaskInterface` (an exported type), typically a scenario you load or implement that knows how to evaluate output. In the snippets on this page it is supplied by the caller.
+
 ## Evaluation
 
 `JudgeExecutor` evaluates a single agent output by delegating to an `AgentTaskInterface`, running context preparation and validation first.
@@ -147,6 +149,35 @@ export default async function supportAgent(
 ```
 
 See [`examples/agent-runtime`](https://github.com/greyhaven-ai/autocontext/tree/main/examples/agent-runtime) for a complete, runnable handler.
+
+## Putting it together
+
+The primitives compose into a small revise-until-good flow: open a store, wrap a task in a `JudgeExecutor` to check a single output, then hand the same task to an `ImprovementLoop` to drive multiple rounds. The `task` is an `AgentTaskInterface` supplied by the caller (a scenario you load or implement).
+
+```typescript
+import { SQLiteStore, JudgeExecutor, ImprovementLoop } from "autoctx";
+import type { AgentTaskInterface } from "autoctx";
+
+async function refine(task: AgentTaskInterface, draft: string) {
+  const store = new SQLiteStore("./autocontext.db");
+
+  // One-off check of the starting draft.
+  const judge = new JudgeExecutor(task);
+  const baseline = await judge.execute(draft, {});
+
+  // Iterate until it clears the quality threshold (or rounds run out).
+  const loop = new ImprovementLoop({ task, maxRounds: 5, qualityThreshold: 0.9 });
+  const result = await loop.run({ initialOutput: draft, state: {} });
+
+  console.log({
+    baselineScore: baseline.score,
+    bestScore: result.bestScore,
+    improved: result.bestScore > baseline.score,
+  });
+
+  return result.bestOutput;
+}
+```
 
 ## See also
 
