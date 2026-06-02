@@ -1,0 +1,36 @@
+---
+title: Knowledge
+description: What persists across runs and how it is curated.
+---
+
+Knowledge is the part of autocontext that compounds. While a run's artifacts are per-run and disposable, knowledge is persisted state that should carry forward across runs: playbooks, hints, lessons, and analysis. It is stored per scenario, so each scenario accumulates its own body of learned strategy.
+
+## Where knowledge lives
+
+Knowledge is written under the knowledge root (default `knowledge/`, override with `AUTOCONTEXT_KNOWLEDGE_ROOT`), in a per-scenario directory:
+
+- `playbook.md`: the accumulated strategy the next run inherits. It is versioned with rollback support.
+- `hints.md`: targeted advice from the coach, carried forward across runs.
+- `lessons.json`: consolidated, structured lessons distilled from past runs. This is JSON, not markdown.
+- `tools/`: tooling the architect generates for the scenario (older versions move to an `_archive/` subdirectory).
+- `snapshots/<run_id>/`: a cross-run snapshot of the knowledge as it stood at the end of a run, used for cross-run inheritance.
+- `reports/<run_id>.md`: the human-readable session report for a completed run.
+- `analysis/`, `progress_reports/`, and `weakness_reports/`: per-generation and per-run analysis written during the loop.
+
+<Callout type="info">
+`lessons.json` is structured JSON, not a markdown file. The playbook and hints are markdown so they read cleanly as prompt context, but lessons are stored as data so they can be consolidated and filtered programmatically.
+</Callout>
+
+## How knowledge is curated
+
+Not everything a run produces becomes durable knowledge. During each generation, the analyst and coach extract patterns from the run, and the curator gates which of those patterns are allowed to persist (see [The Generation Loop](/docs/concepts/the-loop)). The curator accepts, rejects, or merges proposed playbook and lesson updates, and only changes on an advancing generation are kept. This is what keeps persisted knowledge high-signal rather than an accumulation of every attempt.
+
+## Consolidation and decay
+
+Across many runs, raw knowledge would grow without bound, so autocontext consolidates it. Cross-run compaction and lesson consolidation distill repeated observations into fewer, stronger entries, and stale or low-value hints decay out over time rather than accumulating forever. The result is a body of knowledge that stays compact and applicable instead of bloating as runs pile up.
+
+Optionally, knowledge can also be exported: a distillation step can produce a portable skill package, and a local model snapshot can be trained from accumulated runs.
+
+## Knowledge in the prompt
+
+Persisted knowledge is not just stored, it is loaded back into the agents. At the start of each run, the applicable playbook, hints, and lessons for the scenario are assembled into the context the roles see, alongside the scenario or task inputs. That assembly is what turns yesterday's curated lessons into today's starting advantage.

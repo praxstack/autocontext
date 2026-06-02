@@ -1,0 +1,34 @@
+---
+title: Scenarios, Tasks, Missions, Campaigns
+description: The four ways you frame work for autocontext.
+---
+
+autocontext uses four user-facing nouns to describe what you want it to do. They differ in how the work is scoped, how it is evaluated, and how long it runs. Underneath, the runtime turns any of them into one or more runs (see [Runs, Traces, Artifacts](/docs/concepts/runs-traces-artifacts)).
+
+## Scenario
+
+A scenario is a reusable environment, simulation, or evaluation context with stable rules and scoring. It is the most established concept in autocontext: implemented across the Python and TypeScript packages, the CLI, MCP, and the API. Built-in game scenarios include `grid_ctf` and `othello`, and you can also author agent-task scenarios or generate custom ones from a natural-language description.
+
+Because a scenario carries stable rules and a scoring method, it is what knowledge accumulates against. Playbooks, hints, and lessons are stored per scenario under `knowledge/<scenario>/`.
+
+## Task
+
+A task is a user-authored unit of work, a prompt-centric objective that can be evaluated directly or embedded inside another surface. Where a scenario is an environment, a task is closer to a single prompt with an expected outcome that a judge can score.
+
+<Callout type="info">
+The name `task` is overloaded in the codebase: there is the user-facing task concept described here, an internal `AgentTask`/`AgentTaskSpec` type, and a background evaluation job in the task queue. In docs and product copy, `task` means the prompt-centric objective.
+</Callout>
+
+## Mission
+
+A mission is a long-running goal advanced step by step until a verifier says it is complete. Unlike a single run, a mission is expected to take many steps, and a runtime verifier decides when the goal has actually been met. Missions are a first-class control-plane concept in the TypeScript runtime today (with `autoctx mission create` and `autoctx mission run`), and are still being generalized into the Python package.
+
+## Campaign
+
+A campaign is a planned grouping of missions, runs, and scenarios used to coordinate broader work over time. Campaigns provide the richest orchestration layer, and that layer is more developed in the TypeScript runtime today: partial support exists through the TypeScript CLI, API, and MCP surfaces, but there is not yet a Python package campaign workflow.
+
+## solve is an operation, not a primitive
+
+It is tempting to treat `solve` as a fifth noun, but it is not. `solve` is a workflow operation: it creates or selects a scenario or task, launches a run, and exports the resulting knowledge. In other words, `solve` is a convenient verb wrapping the run lifecycle, not a peer concept alongside scenario, task, mission, and campaign.
+
+The same is true of `run` at the surface level: the CLI and MCP keep the verb, but the underlying noun is a run, the concrete execution instance described in [Runs, Traces, Artifacts](/docs/concepts/runs-traces-artifacts).

@@ -1,0 +1,47 @@
+---
+title: Runs, Traces, Artifacts
+description: The outputs a run produces and how to read them.
+---
+
+A run is the fundamental runtime unit in autocontext: a concrete execution instance of a scenario or task. Everything the system does at runtime happens inside a run. This page covers what a run writes to disk, the trace that records what it did, and how to tell transient run output apart from the knowledge that persists.
+
+## What a run produces
+
+A run writes its output under the runs root (default `runs/`, override with `AUTOCONTEXT_RUNS_ROOT`), in a per-run directory keyed by run id. Each pass of the loop writes its artifacts to a per-generation directory:
+
+- `runs/<run_id>/generations/gen_<N>/`: the artifacts produced by generation `N`, one directory per generation.
+
+These are the transient outputs of a run: candidate strategies, scored results, replays, and per-generation records. They are useful for inspection and debugging, but they are not the part that compounds.
+
+## The trace
+
+Every run also records an append-only trace: the ground-truth record of each action, LLM call, and decision, in order. The trace is the authoritative log of what actually happened during a run, and it is what replay and analysis read from.
+
+Rather than reading a raw file at a fixed path, inspect the trace through the CLI and the runtime-session readers:
+
+```bash
+autoctx show <run-id>              # inspect what a run did
+autoctx show <run-id> --best       # focus on the best generation
+autoctx replay <run-id>            # replay a run's events
+```
+
+<Callout type="info">
+Treat the trace as an append-only event log inspected through `autoctx show` and `autoctx replay`, not as a single fixed file you parse yourself. The trace is observational: it lets you replay what happened, not deterministically re-execute it.
+</Callout>
+
+## The session report
+
+When a run completes, autocontext writes a human-readable session report at:
+
+- `knowledge/<scenario>/reports/<run_id>.md`
+
+Note that this report lives under the knowledge root, not the runs root, because it is a durable per-run summary kept alongside the scenario's accumulated knowledge.
+
+## Transient output versus persisted knowledge
+
+The key distinction is between two roots:
+
+- **`runs/`** holds per-run output. The run directory is per-run and disposable. You can delete old run directories without losing what the system learned.
+- **`knowledge/`** holds what compounds across runs (playbooks, hints, lessons, and snapshots). This is the part the next run inherits.
+
+Both roots default to relative directories and are configurable: set `AUTOCONTEXT_RUNS_ROOT` and `AUTOCONTEXT_KNOWLEDGE_ROOT` to relocate them (for example, to a persistent volume on a shared host). For what lives under the knowledge root and how it is curated, see [Knowledge](/docs/concepts/knowledge).

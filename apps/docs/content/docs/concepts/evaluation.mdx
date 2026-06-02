@@ -1,0 +1,29 @@
+---
+title: Evaluation
+description: How autocontext scores work, with rubrics and tournaments.
+---
+
+Every generation has to be scored before the loop can decide whether to advance. autocontext uses two evaluation methods depending on the kind of scenario: a judge against a rubric for agent-task scenarios, and Elo-based tournament scoring for game scenarios. The score is what the [backpressure gate](/docs/concepts/the-loop) acts on.
+
+## Rubric and judge for agent-task scenarios
+
+Agent-task scenarios are prompt-centric: the output is a candidate response that needs to be assessed for quality. These are evaluated by an LLM judge against a rubric. The judge reads the task, the candidate output, and the rubric, then produces a score. autocontext samples the judge and uses a tolerant parser to extract the score reliably, so a single malformed response does not derail evaluation.
+
+This is the path used when you frame work as a task or an agent-task scenario, and it is what powers the `autoctx judge` and `autoctx improve` commands.
+
+## Elo and tournaments for game scenarios
+
+Game scenarios (such as `grid_ctf` and `othello`) have stable rules and head-to-head matches rather than a single gradable output. These are scored by playing tournament matches and tracking Elo ratings. A new strategy is good if it wins against the field, and Elo progression is what the loop uses to gate whether a generation advances.
+
+## The judge provider
+
+The judge runs on a configurable LLM provider. By default, `judge_provider=auto` inherits the provider from the first configured agent role, falling back to Anthropic if none is configured. This keeps the judge consistent with the models running the rest of the loop unless you deliberately point it elsewhere (for example, to evaluate with a different or independent model).
+
+<Callout type="info">
+Setting the judge to a different provider than the agents is a common way to reduce shared-model bias in evaluation. The judge provider, model, sample count, and temperature are all configurable.
+</Callout>
+
+## Related
+
+- [Evaluation CLI commands](/docs/cli/evaluation-cmds): running `judge` and `improve` from the command line.
+- [Per-role and judge providers](/docs/providers/per-role-and-judge): configuring which model evaluates and how provider inheritance works.
