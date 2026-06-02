@@ -1,0 +1,125 @@
+---
+title: Environment Variables
+description: Every AUTOCONTEXT_* variable and its default.
+---
+
+autocontext is configured entirely through environment variables. They are loaded into the Pydantic `AppSettings` object at startup, so any of them can be set in your shell, a `.env` file, or your deployment platform. The tables below are generated from the repository's `.env.example` and group the variables by concern. Each row lists the variable name, the default shipped in `.env.example`, and a one-line purpose.
+
+For how these variables map onto provider selection, see [providers](/docs/providers).
+
+## Core runtime
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTOCONTEXT_AGENT_PROVIDER` | `deterministic` | Selects the agent provider that drives the loop. |
+| `AUTOCONTEXT_EXECUTOR_MODE` | `local` | Where strategies are executed (`local`, `primeintellect`, `monty`). |
+
+<Callout type="warn">
+`.env.example` ships `AUTOCONTEXT_AGENT_PROVIDER=deterministic` so the offline demo runs without credentials, but the code default when the variable is unset is `anthropic`. Set the variable explicitly to avoid surprises, and see [providers](/docs/providers) for the full list of accepted values (`deterministic`, `anthropic`, `agent_sdk`, `pi`, `pi-rpc`, `openai`, `ollama`, `vllm`).
+</Callout>
+
+## Paths
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTOCONTEXT_DB_PATH` | `runs/autocontext.sqlite3` | SQLite database file for runs, generations, matches, and the task queue. |
+| `AUTOCONTEXT_RUNS_ROOT` | `runs` | Root directory for run artifacts and generation outputs. |
+| `AUTOCONTEXT_KNOWLEDGE_ROOT` | `knowledge` | Root directory for per-scenario playbooks, analysis, tools, and snapshots. |
+| `AUTOCONTEXT_SKILLS_ROOT` | `skills` | Root directory for generated operational skill notes. |
+| `AUTOCONTEXT_CLAUDE_SKILLS_PATH` | `.claude/skills` | Location where skill notes are synced for Claude Code. |
+| `AUTOCONTEXT_EVENT_STREAM_PATH` | `runs/events.ndjson` | Newline-delimited JSON event stream for the loop. |
+
+## Model selection (by role)
+
+Each agent role can run on a different model. See [agents](/docs/concepts) for what each role does.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTOCONTEXT_MODEL_COMPETITOR` | `claude-sonnet-4-5-20250929` | Model for the competitor role (produces strategies). |
+| `AUTOCONTEXT_MODEL_ANALYST` | `claude-sonnet-4-5-20250929` | Model for the analyst role (produces analysis). |
+| `AUTOCONTEXT_MODEL_COACH` | `claude-opus-4-6` | Model for the coach role (updates the playbook). |
+| `AUTOCONTEXT_MODEL_ARCHITECT` | `claude-opus-4-6` | Model for the architect role (proposes tooling). |
+| `AUTOCONTEXT_MODEL_TRANSLATOR` | `claude-sonnet-4-5-20250929` | Model for the translator role (extracts structured strategy). |
+| `AUTOCONTEXT_MODEL_CURATOR` | `claude-opus-4-6` | Model for the curator role (quality gate and lesson consolidation). |
+
+## Credentials
+
+Prefer provider-native variables such as `ANTHROPIC_API_KEY`. The `AUTOCONTEXT_ANTHROPIC_API_KEY` form remains a compatibility alias.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | (empty) | Anthropic API key (preferred provider-native form). |
+| `AUTOCONTEXT_ANTHROPIC_API_KEY` | (empty) | Compatibility alias for the Anthropic API key. |
+| `AUTOCONTEXT_COMPETITOR_API_KEY` | (empty) | Optional role-scoped API key for the competitor. |
+| `AUTOCONTEXT_COMPETITOR_BASE_URL` | (empty) | Optional role-scoped base URL for the competitor. |
+| `AUTOCONTEXT_ANALYST_API_KEY` | (empty) | Optional role-scoped API key for the analyst. |
+| `AUTOCONTEXT_ANALYST_BASE_URL` | (empty) | Optional role-scoped base URL for the analyst. |
+| `AUTOCONTEXT_COACH_API_KEY` | (empty) | Optional role-scoped API key for the coach. |
+| `AUTOCONTEXT_COACH_BASE_URL` | (empty) | Optional role-scoped base URL for the coach. |
+| `AUTOCONTEXT_ARCHITECT_API_KEY` | (empty) | Optional role-scoped API key for the architect. |
+| `AUTOCONTEXT_ARCHITECT_BASE_URL` | (empty) | Optional role-scoped base URL for the architect. |
+
+## Execution and loop tuning
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTOCONTEXT_DEFAULT_GENERATIONS` | `1` | Default number of generations per run when not specified. |
+| `AUTOCONTEXT_SEED_BASE` | `1000` | Base seed for deterministic match generation. |
+| `AUTOCONTEXT_MATCHES_PER_GENERATION` | `3` | Number of tournament matches run each generation. |
+| `AUTOCONTEXT_ARCHITECT_EVERY_N_GENS` | `3` | How often the architect role runs (every N generations). |
+| `AUTOCONTEXT_BACKPRESSURE_MIN_DELTA` | `0.005` | Minimum score improvement for the backpressure gate to advance. |
+| `AUTOCONTEXT_MAX_RETRIES` | `2` | Maximum retries for transient agent or execution failures. |
+| `AUTOCONTEXT_RETRY_BACKOFF_SECONDS` | `0.25` | Backoff delay between retries, in seconds. |
+| `AUTOCONTEXT_HARNESS_PROFILE` | `standard` | Harness profile controlling context and tool budgets. |
+| `AUTOCONTEXT_LEAN_CONTEXT_BUDGET_TOKENS` | `32000` | Token budget for visible context in lean harness mode. |
+| `AUTOCONTEXT_LEAN_HIDDEN_CONTEXT_BUDGET_TOKENS` | `0` | Token budget for hidden context in lean harness mode. |
+| `AUTOCONTEXT_LEAN_TOOL_ALLOWLIST` | `read,bash,edit,write` | Tools permitted in lean harness mode. |
+| `AUTOCONTEXT_PI_RPC_PERSISTENT` | `false` | Keep the Pi RPC session persistent across calls. |
+| `AUTOCONTEXT_EXTENSIONS` | (empty) | Comma-separated list of extensions to load. |
+| `AUTOCONTEXT_EXTENSION_FAIL_FAST` | `false` | Abort startup if an extension fails to load. |
+
+## PrimeIntellect
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTOCONTEXT_PRIMEINTELLECT_API_BASE` | `https://api.primeintellect.ai` | Base URL for the PrimeIntellect API. |
+| `AUTOCONTEXT_PRIMEINTELLECT_API_KEY` | (empty) | API key for PrimeIntellect remote sandboxes. |
+| `AUTOCONTEXT_PRIMEINTELLECT_DOCKER_IMAGE` | `python:3.11-slim` | Docker image used for the remote sandbox. |
+| `AUTOCONTEXT_PRIMEINTELLECT_CPU_CORES` | `1.0` | CPU cores allocated to the remote sandbox. |
+| `AUTOCONTEXT_PRIMEINTELLECT_MEMORY_GB` | `2.0` | Memory (GB) allocated to the remote sandbox. |
+| `AUTOCONTEXT_PRIMEINTELLECT_DISK_SIZE_GB` | `5.0` | Disk size (GB) allocated to the remote sandbox. |
+| `AUTOCONTEXT_PRIMEINTELLECT_TIMEOUT_MINUTES` | `30` | Timeout (minutes) for a remote sandbox run. |
+| `AUTOCONTEXT_PRIMEINTELLECT_WAIT_ATTEMPTS` | `60` | Number of polling attempts while the sandbox provisions. |
+| `AUTOCONTEXT_PRIMEINTELLECT_MAX_RETRIES` | `2` | Maximum retries for PrimeIntellect operations. |
+| `AUTOCONTEXT_PRIMEINTELLECT_BACKOFF_SECONDS` | `0.75` | Backoff delay between PrimeIntellect retries, in seconds. |
+| `AUTOCONTEXT_ALLOW_PRIMEINTELLECT_FALLBACK` | `true` | Allow falling back to local execution if PrimeIntellect is unavailable. |
+
+## Sandbox
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTOCONTEXT_LOCAL_SANDBOX_HARDENED` | `true` | Run the local sandbox with hardened isolation. |
+
+## Browser exploration
+
+Browser exploration ships disabled with secure defaults; enable it deliberately.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTOCONTEXT_BROWSER_ENABLED` | `false` | Master switch for browser exploration. |
+| `AUTOCONTEXT_BROWSER_BACKEND` | `chrome-cdp` | Browser backend driver. |
+| `AUTOCONTEXT_BROWSER_PROFILE_MODE` | `ephemeral` | Browser profile lifetime (`ephemeral` discards state). |
+| `AUTOCONTEXT_BROWSER_ALLOWED_DOMAINS` | (empty) | Allowlist of domains the browser may visit. |
+| `AUTOCONTEXT_BROWSER_ALLOW_AUTH` | `false` | Permit authenticated browser sessions. |
+| `AUTOCONTEXT_BROWSER_ALLOW_UPLOADS` | `false` | Permit file uploads from the browser. |
+| `AUTOCONTEXT_BROWSER_ALLOW_DOWNLOADS` | `false` | Permit file downloads from the browser. |
+| `AUTOCONTEXT_BROWSER_CAPTURE_SCREENSHOTS` | `true` | Capture screenshots during browser exploration. |
+| `AUTOCONTEXT_BROWSER_HEADLESS` | `true` | Run the browser in headless mode. |
+| `AUTOCONTEXT_BROWSER_DEBUGGER_URL` | `http://127.0.0.1:9222` | Chrome DevTools Protocol debugger endpoint. |
+| `AUTOCONTEXT_BROWSER_PREFERRED_TARGET_URL` | (empty) | Preferred initial target URL for the browser. |
+| `AUTOCONTEXT_BROWSER_DOWNLOADS_ROOT` | (empty) | Directory for browser downloads (when enabled). |
+| `AUTOCONTEXT_BROWSER_UPLOADS_ROOT` | (empty) | Directory browser uploads are sourced from (when enabled). |
+
+<Callout type="info">
+This catalog covers the variables shipped in `.env.example`. autocontext recognizes additional `AUTOCONTEXT_*` variables for the curator, RLM, judge, Pi, and notification subsystems that are documented inline in `config/settings.py`; the ones above are the ones surfaced for first-time setup.
+</Callout>

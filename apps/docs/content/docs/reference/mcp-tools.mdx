@@ -1,0 +1,289 @@
+---
+title: MCP Tools
+description: The full catalog of MCP tools on both runtimes.
+---
+
+autocontext ships an MCP server on both runtimes so agents can drive the loop, read knowledge, and manage runs without shelling out. The Python server (`uv run autoctx mcp-serve`) registers the largest surface: **72 distinct public tools**, all under the `autocontext_` prefix. The TypeScript server (`autoctx mcp-serve` in the `ts` package) exposes a parallel, mission- and campaign-oriented surface of **76 distinct tools** (the three solve tools are each registered under both a bare name and an `autocontext_`-prefixed alias, so 79 registrations cover 76 unique tools).
+
+The tables below are generated from the server source. For setup and how to wire the server into Claude Code or another MCP client, see [the MCP server guide](/docs/agents/mcp).
+
+## Python tools
+
+Grouped by family. All names carry the `autocontext_` prefix.
+
+### Solve, evaluate, improve, status
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_solve_scenario` | Submit a new problem for on-demand solving (autocontext creates a scenario for it). |
+| `autocontext_solve_status` | Check status of a solve-on-demand job. |
+| `autocontext_solve_result` | Get the skill package result of a completed solve job. |
+| `autocontext_evaluate_strategy` | Evaluate a candidate strategy against a scenario via tournament matches. |
+| `autocontext_evaluate_output` | One-shot evaluation of an output against a saved agent task spec. |
+| `autocontext_validate_strategy` | Validate a strategy JSON string against scenario constraints. |
+| `autocontext_validate_strategy_against_harness` | Validate a strategy against scenario constraints and harness validators. |
+| `autocontext_generate_output` | Generate an initial output for an agent task. |
+| `autocontext_run_improvement_loop` | Run the multi-step improvement loop for an agent task. |
+| `autocontext_queue_improvement_run` | Queue an agent task for background improvement-loop processing. |
+| `autocontext_get_best_output` | Get the highest-scoring output for a task across all completed runs. |
+| `autocontext_run_status` | Get generation-level metrics for a run. |
+
+### Scenario discovery
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_list_scenarios` | List available game scenarios with a rules preview. |
+| `autocontext_describe_scenario` | Get full scenario description: rules, strategy interface, evaluation criteria. |
+| `autocontext_skill_discover` | Discover available scenarios, optionally filtered by natural language query. |
+| `autocontext_skill_select` | Recommend the best scenario for a problem description. |
+| `autocontext_skill_scenario_capabilities` | Return per-scenario capabilities: evaluation mode, harness, playbook, best scores. |
+| `autocontext_skill_scenario_artifacts` | Return all artifacts associated with a scenario. |
+| `autocontext_search_strategies` | Search solved scenarios by natural language query. |
+| `autocontext_list_solved` | List scenarios with solved strategies, including best scores and run counts. |
+
+### Knowledge readers
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_read_playbook` | Read the current strategy playbook for a scenario. |
+| `autocontext_read_hints` | Read persisted coach hints for a scenario. |
+| `autocontext_read_analysis` | Read analysis for a specific generation. |
+| `autocontext_read_skills` | Read operational lessons from SKILL.md for a scenario. |
+| `autocontext_read_tools` | Read architect-generated tools for a scenario. |
+| `autocontext_read_trajectory` | Read the score trajectory table for a run. |
+
+### Runs and runtime sessions
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_list_runs` | List recent runs. |
+| `autocontext_run_match` | Execute a single match and return the result. |
+| `autocontext_run_tournament` | Run N matches and return aggregate stats. |
+| `autocontext_run_replay` | Read replay JSON for a specific generation. |
+| `autocontext_list_runtime_sessions` | List recorded runtime-session event logs. |
+| `autocontext_get_runtime_session` | Read a runtime-session event log by session id or run id. |
+| `autocontext_get_runtime_session_timeline` | Read an operator-facing runtime-session timeline. |
+| `autocontext_env_snapshot` | Return the environment snapshot collected at run start for a scenario. |
+
+### Sandbox
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_sandbox_create` | Create an isolated sandbox for external play. |
+| `autocontext_sandbox_run` | Run generation(s) in a sandbox. |
+| `autocontext_sandbox_status` | Get sandbox status. |
+| `autocontext_sandbox_playbook` | Read the sandbox playbook. |
+| `autocontext_sandbox_list` | List active sandboxes. |
+| `autocontext_sandbox_destroy` | Destroy a sandbox and clean up its data. |
+
+### Monitors
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_create_monitor_tool` | Create a new monitor condition to watch for events. |
+| `autocontext_list_monitors_tool` | List active monitor conditions. |
+| `autocontext_delete_monitor_tool` | Deactivate a monitor condition. |
+| `autocontext_list_monitor_alerts_tool` | List monitor alerts with optional filters. |
+| `autocontext_wait_for_monitor_tool` | Wait for a monitor condition to fire; blocks until alert or timeout. |
+
+### Agent tasks
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_create_agent_task` | Create and save an agent task spec for evaluation. |
+| `autocontext_get_agent_task` | Get the full agent task spec by name. |
+| `autocontext_list_agent_tasks` | List all saved agent task specs. |
+| `autocontext_delete_agent_task` | Delete an agent task spec. |
+| `autocontext_export_agent_task_skill` | Export a portable skill package for an agent task with best outputs and lessons. |
+| `autocontext_get_queue_status` | Get task queue status: pending, running, recent completed/failed. |
+| `autocontext_get_task_result` | Get the result of a specific queued task by ID. |
+
+### Evidence
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_evidence_list` | Return the evidence workspace manifest for a scenario. |
+| `autocontext_evidence_artifact` | Return a specific evidence artifact by ID, with optional excerpting. |
+
+### Export and import
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_export_skill` | Export a portable skill package (playbook, lessons, strategy) for a solved scenario. |
+| `autocontext_export_package` | Export a versioned, portable strategy package for a scenario. |
+| `autocontext_import_package` | Import a strategy package into scenario knowledge. |
+| `autocontext_publish_artifact` | Publish an artifact (harness, policy, or distilled model). |
+| `autocontext_fetch_artifact` | Fetch a published artifact by its ID. |
+| `autocontext_list_artifacts` | List published artifacts with optional scenario and type filters. |
+
+### Distillation
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_trigger_distillation` | Trigger a distillation workflow for a scenario. |
+| `autocontext_distill_status` | Check status of distillation workflows, optionally filtered by scenario. |
+| `autocontext_get_distill_job` | Get details of a specific distillation job by ID. |
+| `autocontext_update_distill_job` | Update a distillation job status (training metrics passed as a JSON string). |
+
+### Feedback
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_record_feedback` | Record human feedback on an agent task output (score 0.0-1.0). |
+| `autocontext_get_feedback` | Get recent human feedback for a scenario. |
+
+### Skill and capability surface
+
+| Tool | Purpose |
+| --- | --- |
+| `autocontext_capabilities` | Return capability metadata for this autocontext instance. |
+| `autocontext_skill_advertise` | Return a full capability advertisement: version, runtime health, scenarios, artifact counts. |
+| `autocontext_skill_manifest` | Get the ClawHub skill manifest for this instance. |
+| `autocontext_skill_runtime_health` | Return runtime health: executor mode, provider, harness mode, available models. |
+| `autocontext_skill_discover_artifacts` | Find published artifacts with optional scenario and type filters. |
+| `autocontext_skill_evaluate` | Full validate-plus-evaluate workflow for a strategy. |
+
+## TypeScript tools
+
+The TypeScript server centers on missions and campaigns, plus a production-traces data plane. Tool names here are unprefixed unless noted.
+
+### Solve
+
+| Tool | Purpose |
+| --- | --- |
+| `solve_scenario` (alias `autocontext_solve_scenario`) | Submit a problem for on-demand solving; returns a job_id for polling. |
+| `solve_status` (alias `autocontext_solve_status`) | Check status of a solve-on-demand job. |
+| `solve_result` (alias `autocontext_solve_result`) | Get the exported skill package result of a completed solve-on-demand job. |
+
+### Missions
+
+| Tool | Purpose |
+| --- | --- |
+| `create_mission` | Create a new verifier-driven mission. |
+| `mission_status` | Get the current status and summary for a mission. |
+| `mission_result` | Get the full mission result payload, including steps and verifications. |
+| `mission_artifacts` | Inspect durable checkpoint artifacts for a mission. |
+| `pause_mission` | Pause an active mission. |
+| `resume_mission` | Resume a paused mission. |
+| `cancel_mission` | Cancel a mission. |
+
+### Campaigns
+
+| Tool | Purpose |
+| --- | --- |
+| `create_campaign` | Create a new campaign to coordinate multiple missions. |
+| `campaign_status` | Get campaign details with progress and mission list. |
+| `campaign_progress` | Get campaign progress with completion percentage and budget usage. |
+| `list_campaigns` | List all campaigns, optionally filtered by status. |
+| `add_campaign_mission` | Add a mission to a campaign with optional priority and dependencies. |
+| `pause_campaign` | Pause an active campaign. |
+| `resume_campaign` | Resume a paused campaign. |
+| `cancel_campaign` | Cancel a campaign. |
+
+### Core control
+
+| Tool | Purpose |
+| --- | --- |
+| `evaluate_output` | One-shot evaluation of output against a rubric. |
+| `run_improvement_loop` | Run a multi-round improvement loop on agent output. |
+| `run_repl_session` | Run a direct REPL-loop session for agent-task generation or revision. |
+| `queue_task` | Add a task to the background runner queue. |
+| `get_queue_status` | Get the task queue status summary. |
+| `get_task_result` | Get the result of a queued task by ID. |
+| `capabilities` | Return capability metadata for this autocontext instance. |
+| `instrument` | Scan a repo for LLM clients and propose or apply autocontext wrappers. |
+
+### Scenarios
+
+| Tool | Purpose |
+| --- | --- |
+| `list_scenarios` | List available scenarios with metadata. |
+| `get_scenario` | Get detailed information about a scenario. |
+| `revise_scenario` | Revise a scenario spec from user feedback and return the updated spec. |
+| `validate_strategy` | Validate a strategy JSON against a scenario's constraints. |
+| `run_match` | Execute a single match for a scenario. |
+| `run_tournament` | Run N matches with Elo scoring. |
+
+### Runs
+
+| Tool | Purpose |
+| --- | --- |
+| `list_runs` | List recent runs with optional filters. |
+| `get_run_status` | Get run progress, scores, and generation details. |
+| `get_generation_detail` | Get detailed results for a specific generation. |
+| `get_playbook` | Read the accumulated playbook for a scenario. |
+| `run_scenario` | Kick off a scenario run with configuration options. |
+| `run_replay` | Read replay JSON for a specific generation. |
+
+### Runtime sessions
+
+| Tool | Purpose |
+| --- | --- |
+| `list_runtime_sessions` | List recent runtime-session event logs. |
+| `get_runtime_session` | Read a runtime-session event log by session id or run id. |
+| `get_runtime_session_timeline` | Read an operator-facing runtime-session timeline. |
+
+### Knowledge readers
+
+| Tool | Purpose |
+| --- | --- |
+| `read_trajectory` | Read the score trajectory for a run as markdown. |
+| `read_hints` | Read competitor hints for a scenario. |
+| `read_analysis` | Read the analyst output for a specific generation. |
+| `read_tools` | Read architect-generated tools for a scenario. |
+| `read_skills` | Read skill notes for a scenario. |
+| `export_skill` | Export a portable skill package with markdown for agent install. |
+| `list_solved` | List scenarios with exported knowledge or completed runs. |
+| `search_strategies` | Search past strategies by keyword. |
+
+### Agent task packages
+
+| Tool | Purpose |
+| --- | --- |
+| `create_agent_task` | Create a named agent task spec for evaluation. |
+| `list_agent_tasks` | List created agent task specs. |
+| `get_agent_task` | Get a specific agent task spec by name. |
+| `generate_output` | Generate an initial agent output for a task prompt. |
+| `export_package` | Export a versioned strategy package for a scenario. |
+| `import_package` | Import a strategy package into scenario knowledge. |
+
+### Sandbox
+
+| Tool | Purpose |
+| --- | --- |
+| `sandbox_create` | Create an isolated sandbox for scenario execution. |
+| `sandbox_run` | Run generation(s) in a sandbox. |
+| `sandbox_status` | Get sandbox status. |
+| `sandbox_playbook` | Read the current playbook for a sandbox. |
+| `sandbox_list` | List active sandboxes. |
+| `sandbox_destroy` | Destroy a sandbox and clean up its data. |
+
+### Feedback and replay
+
+| Tool | Purpose |
+| --- | --- |
+| `record_feedback` | Record human feedback for a scenario evaluation. |
+| `get_feedback` | Retrieve human feedback for a scenario. |
+| `run_replay` | Read replay JSON for a specific generation. |
+
+### Production traces
+
+| Tool | Purpose |
+| --- | --- |
+| `production_traces_init` | Scaffold the production-traces workspace and generate the install salt (idempotent). |
+| `production_traces_ingest` | Validate and move incoming trace batches into the ingested store. |
+| `production_traces_list` | List locally-stored traces (no redaction applied). |
+| `production_traces_show` | Inspect a single trace by traceId, optionally previewing redaction. |
+| `production_traces_stats` | Aggregate counts across ingested traces, grouped by a field. |
+| `production_traces_build_dataset` | Build an evaluation dataset from curated traces. |
+| `production_traces_datasets_list` | List dataset manifests. |
+| `production_traces_datasets_show` | Render a specific dataset's manifest. |
+| `production_traces_export` | Emit traces with redaction applied at the export boundary. |
+| `production_traces_policy_show` | Print the current redaction policy. |
+| `production_traces_policy_set` | Change the redaction mode. |
+| `production_traces_rotate_salt` | Rotate the install salt (break-glass; requires force). |
+| `production_traces_prune` | Enforce the retention policy out-of-band. |
+
+<Callout type="info">
+Tool names are read directly from the MCP server registrations. The Python and TypeScript surfaces overlap by intent but are not identical: the Python server carries the distillation, evidence, monitor, and skill-advertisement families, while the TypeScript server carries the mission, campaign, and production-traces families.
+</Callout>

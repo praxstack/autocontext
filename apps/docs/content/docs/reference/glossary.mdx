@@ -1,0 +1,32 @@
+---
+title: Glossary
+description: autocontext terms in one place.
+---
+
+A one-line definition for each core term, with a link to its fuller treatment.
+
+| Term | Definition |
+| --- | --- |
+| [Scenario](/docs/concepts/scenarios-tasks) | A pluggable problem definition: either a game scenario (with match rules) or an agent-task scenario (evaluated by a judge). |
+| [Task](/docs/concepts/scenarios-tasks) | A prompt-centric unit of work framed as an agent task, scored by a judge against a rubric. |
+| [Mission](/docs/sdk) | A single verifier-driven objective the runtime pursues to completion through repeated verified steps. |
+| [Campaign](/docs/sdk) | A coordinator over multiple missions, with budgets, priorities, and dependencies between them. |
+| [Run](/docs/concepts/runs-traces-artifacts) | One execution of a scenario across one or more generations, persisted to SQLite and the artifact store. |
+| [Generation](/docs/concepts/the-loop) | A single pass of the loop: agents act, matches are scored, and the backpressure gate decides advance, retry, or rollback. |
+| [Trace](/docs/concepts/runs-traces-artifacts) | A recorded, redactable record of what happened during execution, used for replay, datasets, and inspection. |
+| [Artifact](/docs/concepts/runs-traces-artifacts) | A durable output of a run (playbook, generated tool, snapshot, or published package) stored on the filesystem. |
+| [Knowledge](/docs/concepts/knowledge) | Everything that persists across runs: playbooks, hints, lessons, analysis, tools, and snapshots. |
+| [Playbook](/docs/concepts/knowledge) | The versioned, accumulated strategy document for a scenario, updated by the coach and gated by the curator. |
+| [Hints](/docs/concepts/knowledge) | Coach-authored competitor hints that persist across restarts and steer the next generation's strategy. |
+| [Lessons](/docs/concepts/knowledge) | Distilled, consolidated takeaways the curator periodically merges into durable knowledge. |
+| [Competitor](/docs/concepts) | The agent role that produces a candidate strategy (JSON or executable code). |
+| [Analyst](/docs/concepts) | The agent role that produces markdown analysis: findings, root causes, and recommendations. |
+| [Coach](/docs/concepts) | The agent role that updates the accumulated playbook and writes competitor hints. |
+| [Architect](/docs/concepts) | The agent role that proposes and persists tooling improvements for a scenario. |
+| [Curator](/docs/concepts) | The agent role that acts as the quality gate for playbook updates and consolidates lessons. |
+| [Judge](/docs/concepts/evaluation) | The LLM evaluator that scores agent-task outputs against a rubric, using multi-sample sampling and tolerant parsing. |
+| [Elo](/docs/concepts/evaluation) | The rating system used to score game scenarios through tournament matches between strategies. |
+| [Distillation](/docs/concepts/knowledge) | Compressing what a scenario learned into a portable, exportable form (a skill package or trained policy). |
+| [Snapshot](/docs/concepts/runs-traces-artifacts) | A per-run capture of knowledge that later runs inherit, enabling cross-run improvement. |
+| [Provider](/docs/providers) | The pluggable LLM backend that powers agent roles (Anthropic, Agent SDK, OpenAI-compatible, Pi, deterministic). |
+| [MCP](/docs/agents/mcp) | The Model Context Protocol server autocontext exposes so agents can drive the loop, read knowledge, and manage runs. |
