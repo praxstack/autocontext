@@ -11,6 +11,10 @@ The TypeScript package (`autoctx`) ships three commands for this:
 - `autoctx instrument`: scan a repo for LLM clients and propose or apply wrappers that emit traces.
 - `autoctx trace-findings`: extract structured findings from a single trace.
 
+<Callout type="warn">
+  `production-traces`, `instrument`, and `trace-findings` are TypeScript CLI commands (the npm `autoctx` build). They are not top-level Python commands. On the Python runtime, the findings equivalent is the nested `autoctx analytics trace-findings` (with different flags); there is no `autoctx production-traces` or `autoctx instrument` on Python. Run `autoctx capabilities --json` to confirm the support level for your install.
+</Callout>
+
 <Callout type="info">
   All three commands print their own help. Run `autoctx production-traces --help`, `autoctx instrument --help`, or `autoctx trace-findings --help` for the authoritative flag list.
 </Callout>

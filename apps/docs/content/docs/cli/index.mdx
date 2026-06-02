@@ -34,25 +34,27 @@ The two runtimes are not identical. Commands fall into three buckets, and you ca
 
 ### Shared core
 
-The bulk of the surface is available in both Python and TypeScript: `solve`, `run`, `replay`, `list`, `show`, `watch`, `status`, `benchmark`, `export`, `export-training-data`, `import-package`, `scenario create`, `simulate`, `investigate`, `analyze`, `judge`, `improve`, `repl`, `tui`, `capabilities`, `init`, `login`, `whoami`, `logout`, `providers`, `models`, `agent`, `queue`, `worker`, `serve` (with `serve http` / `serve mcp`), `mcp-serve`, `train`, `probes check`, `runtime-sessions`, `production-traces`, `instrument`, `trace-findings`, and `version`.
-
-<Callout type="info">
-A few shared-name commands have a deeper home on one runtime. `mission` and `campaign` orchestration is richer on the TypeScript CLI, and `mission` is recorded as an intentional gap on the Python side in the command contract.
-</Callout>
+The bulk of the surface is available in both Python and TypeScript: `solve`, `run`, `status`, `show`, `watch`, `list`, `replay`, `export`, `export-training-data`, `import-package`, `judge`, `improve`, `queue` (with `queue add` / `queue status`), `worker`, `scenario create`, `serve` (with `serve http` / `serve mcp`), `mcp-serve`, `train`, `capabilities`, `probes check`, `benchmark`, `simulate`, `investigate`, `new-scenario`, and `tui`.
 
 ### Python-only
 
-These exist only in the Python CLI and are not shipped in the npm package: `resume`, `ecosystem`, `ab-test`, `wait`, and `trigger-distillation`.
+These exist only in the Python CLI and are not shipped in the npm package: `resume`, `ecosystem`, `ab-test`, `wait`, `hermes`, and `analytics` (with subcommands `rebuild-traces`, `drift`, `context-selection`, `render-timeline`, `trace-findings`).
 
-### TypeScript-only control plane
+### TypeScript-only
 
-The control-plane commands live only in the TypeScript CLI: `candidate`, `eval`, `promotion`, `harness`, `registry`, and `emit-pr`. These manage candidate artifacts, evaluation runs, promotion transitions, harness proposals, the registry, and promotion PRs.
+These live only in the TypeScript CLI (the npm `autoctx` build) and are not top-level Python commands. They fall into a few groups:
+
+- Auth and discovery: `login`, `whoami`, `logout`, `providers`, `models`, `init`. Python users authenticate via environment variables (see [Providers](/docs/providers)).
+- Interactive and inspection: `repl`, `agent`, `analyze`, `runtime-sessions`, `version`.
+- Missions and campaigns: `mission`, `campaign`. `mission` is recorded as an intentional gap on the Python side in the command contract.
+- Production traces: `production-traces`, `instrument`, `trace-findings`. On Python, the findings equivalent is the nested `autoctx analytics trace-findings` (with different flags), and `context-selection` is likewise nested under `autoctx analytics`. The TypeScript CLI also exposes a top-level `context-selection`.
+- Control plane: `candidate`, `eval`, `promotion`, `harness`, `registry`, `emit-pr`, `trigger-distillation`. These manage candidate artifacts, evaluation runs, promotion transitions, harness proposals, the registry, and promotion PRs.
 
 ## Where to go next
 
 - [Solve & Run](/docs/cli/solve-run): create and run scenarios, then inspect results.
 - [Evaluation Commands](/docs/cli/evaluation-cmds): score and iteratively improve output.
-- [Plain-Language Workflows](/docs/cli/plain-language): `simulate`, `investigate`, and `analyze`.
+- [Plain-Language Workflows](/docs/cli/plain-language): `simulate`, `investigate`, and `analyze` (TypeScript-only).
 - [Missions & Campaigns](/docs/cli/missions-campaigns): coordinate multi-step work.
 - [Background Queue](/docs/cli/queue-worker): queue tasks and run a worker.
 - [Auth & Discovery](/docs/cli/auth): credentials and capability discovery.

@@ -5,6 +5,10 @@ description: Coordinate multi-step and multi-mission work.
 
 When a single run is not enough, autocontext offers two levels of coordination: a `mission` groups multiple steps toward one objective, and a `campaign` groups multiple missions. Both are managed through subcommands.
 
+<Callout type="warn">
+`mission` and `campaign` are TypeScript CLI commands (the npm `autoctx` build). They are not top-level Python commands: `mission` is recorded as an intentional gap on the Python runtime in the command contract. Use the npm build for mission and campaign work. The mission and campaign MCP tools are a separate surface; see [MCP tools](/docs/reference/mcp-tools).
+</Callout>
+
 ## mission
 
 `mission` manages multi-step task missions: creating them, listing them, and driving them through their steps.
@@ -24,7 +28,7 @@ autoctx campaign --help
 ```
 
 <Callout type="info">
-Mission and campaign orchestration is richer on the TypeScript CLI. In the command contract, `mission` on the Python runtime is recorded as an intentional gap, so prefer the npm (`autoctx`) build when you are doing serious mission or campaign work. Run `autoctx capabilities --json` to confirm the support level for your install.
+Mission and campaign orchestration lives in the TypeScript CLI. In the command contract, `mission` on the Python runtime is recorded as an intentional gap, so use the npm (`autoctx`) build for mission or campaign work. Run `autoctx capabilities --json` to confirm the support level for your install.
 </Callout>
 
 Because the available subcommands and selectors evolve, the most reliable reference for your installed version is the built-in help: `autoctx mission --help` and `autoctx campaign --help`.

@@ -3,13 +3,17 @@ title: MCP Tools
 description: The full catalog of MCP tools on both runtimes.
 ---
 
-autocontext ships an MCP server on both runtimes so agents can drive the loop, read knowledge, and manage runs without shelling out. The Python server (`uv run autoctx mcp-serve`) registers the largest surface: **72 distinct public tools**, all under the `autocontext_` prefix. The TypeScript server (`autoctx mcp-serve` in the `ts` package) exposes a parallel, mission- and campaign-oriented surface of **76 distinct tools** (the three solve tools are each registered under both a bare name and an `autocontext_`-prefixed alias, so 79 registrations cover 76 unique tools).
+autocontext ships an MCP server on both runtimes so agents can drive the loop, read knowledge, and manage runs without shelling out. The Python server (`uv run autoctx mcp-serve`) registers the largest surface: **72 distinct public tools**, primarily under the `autocontext_` prefix. Six of those tools (the three solve tools plus the three runtime-session readers) also register unprefixed aliases for parity with the TypeScript names, so MCP clients may discover them under both the prefixed and bare names. The TypeScript server (`autoctx mcp-serve` in the `ts` package) exposes a parallel, mission- and campaign-oriented surface of **76 distinct tools** (the three solve tools are each registered under both a bare name and an `autocontext_`-prefixed alias, so 79 registrations cover 76 unique tools).
 
 The tables below are generated from the server source. For setup and how to wire the server into Claude Code or another MCP client, see [the MCP server guide](/docs/agents/mcp).
 
 ## Python tools
 
-Grouped by family. All names carry the `autocontext_` prefix.
+Grouped by family. Names carry the `autocontext_` prefix.
+
+<Callout type="info">
+Six Python tools also register unprefixed aliases for parity with the TypeScript tool names (verified in `mcp/server.py`): `solve_scenario`, `solve_status`, `solve_result`, `list_runtime_sessions`, `get_runtime_session`, and `get_runtime_session_timeline`. Each of these is reachable under both its `autocontext_`-prefixed name and its bare name, so MCP clients may discover both forms.
+</Callout>
 
 ### Solve, evaluate, improve, status
 

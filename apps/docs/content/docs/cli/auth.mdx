@@ -5,6 +5,10 @@ description: Manage provider credentials and discover capabilities.
 
 These commands manage who autocontext talks to (provider credentials) and let you discover what your install can do (capabilities, scenarios, and a fresh project skeleton).
 
+<Callout type="warn">
+The credential-store and discovery commands on this page (`login`, `whoami`, `logout`, `providers`, `models`, `init`) are part of the TypeScript CLI (the npm `autoctx` build). They are not available on the Python CLI. On Python you configure providers through environment variables instead: set your credentials in the shell or a `.env` file and select a provider with `AUTOCONTEXT_AGENT_PROVIDER`. See [Providers](/docs/providers) and [Per-role and judge providers](/docs/providers/per-role-and-judge). The `capabilities` command works on both runtimes.
+</Callout>
+
 ## login
 
 `login` stores provider credentials persistently, so you do not have to keep setting environment variables:
@@ -12,6 +16,8 @@ These commands manage who autocontext talks to (provider credentials) and let yo
 ```bash
 autoctx login
 ```
+
+This is a TypeScript CLI command. Python users set credentials via environment variables (for example `ANTHROPIC_API_KEY`); there is no `autoctx login` on the Python runtime.
 
 ## whoami
 
@@ -21,6 +27,8 @@ autoctx login
 autoctx whoami
 ```
 
+TypeScript CLI command.
+
 ## logout
 
 `logout` clears stored provider credentials:
@@ -28,6 +36,8 @@ autoctx whoami
 ```bash
 autoctx logout
 ```
+
+TypeScript CLI command.
 
 ## providers
 
@@ -37,6 +47,8 @@ autoctx logout
 autoctx providers
 ```
 
+TypeScript CLI command.
+
 ## models
 
 `models` lists the available models for the providers you are authenticated against, as JSON:
@@ -45,13 +57,15 @@ autoctx providers
 autoctx models
 ```
 
+TypeScript CLI command.
+
 <Callout type="info">
 `providers` and `models` emit JSON by design, which makes them convenient to script against when selecting a model for a run.
 </Callout>
 
 ## capabilities
 
-`capabilities` shows the canonical command list, aliases, and per-runtime support. It is the authoritative way to see exactly which commands your install supports and whether each is implemented in Python, TypeScript, or both.
+`capabilities` shows the canonical command list, aliases, and per-runtime support. It is the authoritative way to see exactly which commands your install supports and whether each is implemented in Python, TypeScript, or both. It works on both runtimes.
 
 ```bash
 # Human-readable summary
@@ -69,6 +83,24 @@ autoctx capabilities --json
 autoctx init
 ```
 
+TypeScript CLI command.
+
+## Configuring providers on Python
+
+Python users do not use `login`, `whoami`, `logout`, `providers`, `models`, or `init`. Instead, select a provider and supply its credentials through environment variables:
+
+```bash
+# Anthropic API
+export ANTHROPIC_API_KEY=sk-...
+AUTOCONTEXT_AGENT_PROVIDER=anthropic autoctx run --scenario grid_ctf --gens 1
+
+# Offline, no credentials
+AUTOCONTEXT_AGENT_PROVIDER=deterministic autoctx run --scenario grid_ctf --gens 1
+```
+
+See [Providers](/docs/providers) for the full list of accepted provider values and [Per-role and judge providers](/docs/providers/per-role-and-judge) for pointing individual roles or the judge at independent models.
+
 ## Related
 
 - [Providers](/docs/providers): configuring `anthropic`, `pi`, `deterministic`, and per-role providers.
+- [Per-role and judge providers](/docs/providers/per-role-and-judge): role-scoped and judge credentials via env vars.

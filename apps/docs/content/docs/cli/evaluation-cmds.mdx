@@ -58,6 +58,10 @@ Flags:
 AUTOCONTEXT_AGENT_PROVIDER=pi autoctx repl
 ```
 
+<Callout type="info">
+`repl` is a TypeScript CLI command and is not available on the Python runtime. `judge`, `improve`, and `benchmark` run on both runtimes.
+</Callout>
+
 ## benchmark
 
 `benchmark` is also an evaluation tool: it runs repeated one-generation trials and aggregates the scores, which is the quickest way to get a stable read on a scenario.

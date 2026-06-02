@@ -3,10 +3,10 @@ title: Command Reference
 description: Every autoctx command at a glance.
 ---
 
-Every `autoctx` command, grouped by purpose. The **Runtime** column records whether a command is available in both runtimes, Python-only, or in the TypeScript-only control plane. For the authoritative, install-specific picture, run `autoctx capabilities --json`.
+Every `autoctx` command, grouped by purpose. The **Runtime** column records whether a command is available on both runtimes (`both`), Python-only (`Python`), or TypeScript-only (`TypeScript`). For the authoritative, install-specific picture, run `autoctx capabilities --json`.
 
 <Callout type="info">
-A few commands marked "both" have a deeper implementation on one runtime. `mission` and `campaign` orchestration is richer on TypeScript, and `mission` is recorded as an intentional gap on Python in the command contract.
+Auth and discovery (`login`, `whoami`, `logout`, `providers`, `models`, `init`), the interactive `repl`, `agent`, `analyze`, `runtime-sessions`, `version`, the mission and campaign commands, the production-traces commands, and the control plane are TypeScript-only. `mission` is recorded as an intentional gap on Python in the command contract. On Python, `trace-findings` and `context-selection` live under `autoctx analytics` (with different flags). Python users authenticate via environment variables, not `autoctx login`; see [Providers](/docs/providers).
 </Callout>
 
 ## Core: solve, run, and inspect
@@ -22,7 +22,7 @@ A few commands marked "both" have a deeper implementation on one runtime. `missi
 | `list` | List recent runs | both | `--json` |
 | `status` | Report the state of a run | both | run id argument, `--json` |
 | `benchmark` | Repeated one-generation trials with aggregate stats | both | `--scenario`, `--runs` |
-| `runtime-sessions` | Inspect recorded runtime sessions | both | varies (see `--help`) |
+| `runtime-sessions` | Inspect recorded runtime sessions | TypeScript | varies (see `--help`) |
 
 ## Evaluation
 
@@ -30,7 +30,7 @@ A few commands marked "both" have a deeper implementation on one runtime. `missi
 | --- | --- | --- | --- |
 | `judge` | One-shot evaluation against a rubric | both | `--task-prompt`/`-p`, `--output`/`-o`, `--rubric`/`-r`, `--provider`, `--model`, `--timeout`, `--json` |
 | `improve` | Multi-round improvement loop | both | `--task-prompt`/`-p`, `--rubric`/`-r`, `--output`/`-o`, `--rounds`/`-n`, `--threshold`/`-t`, `--provider`, `--json` |
-| `repl` | Direct REPL-loop session | both | (interactive) |
+| `repl` | Direct REPL-loop session | TypeScript | (interactive) |
 | `ab-test` | Paired A/B test comparing two configurations | Python | `--scenario`, `--baseline`, `--treatment`, `--runs`, `--gens`, `--seed` |
 
 ## Plain-language
@@ -39,14 +39,14 @@ A few commands marked "both" have a deeper implementation on one runtime. `missi
 | --- | --- | --- | --- |
 | `simulate` | Plain-language simulation with sweeps | both | `--description`/`-d`, `--variables`, `--sweep`, `--runs`, `--max-steps`, `--replay`, `--compare-left`, `--compare-right`, `--export`, `--format`, `--save-as`, `--json` |
 | `investigate` | Plain-language investigation | both | `--description`/`-d`, `--max-steps`, `--hypotheses`, `--mode`, `--browser-url`, `--save-as`, `--json` |
-| `analyze` | Compare runs, simulations, investigations, missions | both | varies (see `--help`) |
+| `analyze` | Compare runs, simulations, investigations, missions | TypeScript | varies (see `--help`) |
 
 ## Missions
 
 | Command | Description | Runtime | Key flags |
 | --- | --- | --- | --- |
-| `mission` | Manage multi-step task missions | both (richer on TS) | subcommands (see `--help`) |
-| `campaign` | Manage multi-mission campaigns | both (richer on TS) | subcommands (see `--help`) |
+| `mission` | Manage multi-step task missions | TypeScript | subcommands (see `--help`); Python records this as an intentional gap |
+| `campaign` | Manage multi-mission campaigns | TypeScript | subcommands (see `--help`) |
 
 ## Background queue
 
@@ -60,14 +60,14 @@ A few commands marked "both" have a deeper implementation on one runtime. `missi
 
 | Command | Description | Runtime | Key flags |
 | --- | --- | --- | --- |
-| `login` | Store provider credentials | both | (interactive) |
-| `whoami` | Show current auth status and provider | both | |
-| `logout` | Clear stored provider credentials | both | |
-| `providers` | List known providers with auth status (JSON) | both | |
-| `models` | List available models for authed providers (JSON) | both | |
+| `login` | Store provider credentials | TypeScript | (interactive); Python uses env vars |
+| `whoami` | Show current auth status and provider | TypeScript | |
+| `logout` | Clear stored provider credentials | TypeScript | |
+| `providers` | List known providers with auth status (JSON) | TypeScript | |
+| `models` | List available models for authed providers (JSON) | TypeScript | |
 | `capabilities` | Show commands, aliases, per-runtime support | both | `--json` |
-| `init` | Scaffold project config and agent guidance | both | |
-| `agent` | Run or dev-serve local `.autoctx/agents` handlers | both | varies (see `--help`) |
+| `init` | Scaffold project config and agent guidance | TypeScript | |
+| `agent` | Run or dev-serve local `.autoctx/agents` handlers | TypeScript | varies (see `--help`) |
 
 ## Export, import, and training
 
@@ -78,6 +78,7 @@ A few commands marked "both" have a deeper implementation on one runtime. `missi
 | `import-package` | Import a strategy package from a file | both | path argument, `--scenario`, `--conflict` (`overwrite`/`merge`/`skip`) |
 | `train` | Train a distilled model from a curated dataset | both | `--scenario`, `--data`, `--time-budget`, `--max-experiments`, `--memory-limit`, `--backend`, `--agent-provider`, `--agent-model`, `--json` |
 | `scenario create` | Create or scaffold a scenario | both | varies (see `--help`) |
+| `new-scenario` | Scaffold a scenario from a description or template | both | `--description`, `--template`, `--name` |
 
 ## Serve, MCP, and TUI
 
@@ -105,19 +106,21 @@ The bare `autoctx serve` (with `--host` and `--port`) is the legacy equivalent o
 
 | Command | Description | Runtime | Key flags |
 | --- | --- | --- | --- |
-| `production-traces` | Ingest, list, show, stats, build-dataset, export, policy, and prune production traces | both | subcommands (see `--help`) |
-| `instrument` | Scan a repo for LLM clients and propose wrappers | both | varies (see `--help`) |
-| `trace-findings` | Extract structured findings from a trace JSON file | both | varies (see `--help`) |
+| `production-traces` | Ingest, list, show, stats, build-dataset, export, policy, and prune production traces | TypeScript | subcommands (see `--help`) |
+| `instrument` | Scan a repo for LLM clients and propose wrappers | TypeScript | varies (see `--help`) |
+| `trace-findings` | Extract structured findings from a trace JSON file | TypeScript | varies (see `--help`); Python uses `analytics trace-findings` |
 | `probes check` | Run contract probes against observed harness state | both | `--suite`, `--json` |
 
 ## Utility and Python-only
 
 | Command | Description | Runtime | Key flags |
 | --- | --- | --- | --- |
-| `version` | Show the version | both | |
+| `version` | Show the version | TypeScript | |
 | `ecosystem` | Run a multi-cycle ecosystem loop | Python | `--scenario`, `--cycles`, `--gens-per-cycle` |
 | `wait` | Wait on a monitor condition | Python | condition id argument, `--timeout`, `--json` |
-| `trigger-distillation` | Trigger a distillation job | Python | varies (see `--help`) |
+| `hermes` | Drive autocontext with the Hermes CLI runtime | Python | varies (see `--help`) |
+| `analytics` | Analytics subcommands (`rebuild-traces`, `drift`, `context-selection`, `render-timeline`, `trace-findings`) | Python | subcommands (see `--help`) |
+| `trigger-distillation` | Trigger a distillation job | TypeScript | varies (see `--help`) |
 
 ## Related
 

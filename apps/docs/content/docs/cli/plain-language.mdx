@@ -3,7 +3,7 @@ title: Plain-Language Workflows
 description: simulate, investigate, and analyze from a description.
 ---
 
-Three commands let you drive autocontext from a plain-language description rather than a hand-written scenario: `simulate` models a system and sweeps parameters, `investigate` chases down a problem with evidence and hypotheses, and `analyze` compares the results of prior work.
+Three commands let you drive autocontext from a plain-language description rather than a hand-written scenario: `simulate` models a system and sweeps parameters, `investigate` chases down a problem with evidence and hypotheses, and `analyze` compares the results of prior work. `simulate` and `investigate` are available on both runtimes; `analyze` is a TypeScript CLI command.
 
 ## simulate
 
@@ -58,6 +58,10 @@ Flags:
 ```bash
 AUTOCONTEXT_AGENT_PROVIDER=pi autoctx analyze --help
 ```
+
+<Callout type="warn">
+`autoctx analyze` is a TypeScript CLI command and is not available on the Python runtime. Python users inspect prior work through `autoctx analytics` (with subcommands such as `render-timeline`, `drift`, and `trace-findings`) and the runtime-session readers. Do not run `autoctx analyze` on a Python install.
+</Callout>
 
 <Callout type="info">
 `analyze` reads existing artifacts rather than generating new ones, so it does not need a provider key for the comparison itself. Run `autoctx analyze --help` for the exact subjects and selectors your installed version exposes.
