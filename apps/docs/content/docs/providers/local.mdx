@@ -1,0 +1,60 @@
+---
+title: Local & Offline
+description: Run fully on your machine with no API key.
+---
+
+These providers run the loop without any hosted API. Use them to keep data on your machine, work offline, or develop autocontext itself without spending tokens.
+
+## `ollama`
+
+Targets a local [Ollama](https://ollama.com) server through its OpenAI-compatible API. autocontext defaults the base URL to `http://localhost:11434/v1`, so a stock Ollama install needs no further configuration. The default model is `llama3.1`.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=ollama \
+autoctx solve "explain this function"
+```
+
+Override the endpoint or model with `AUTOCONTEXT_AGENT_BASE_URL` and `AUTOCONTEXT_AGENT_DEFAULT_MODEL` if your server is elsewhere.
+
+## `vllm`
+
+Targets a local [vLLM](https://docs.vllm.ai) OpenAI-compatible server. The default base URL is `http://localhost:8000/v1`. No real key is required (autocontext sends a placeholder), so just point it at your server.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=vllm \
+AUTOCONTEXT_AGENT_DEFAULT_MODEL=my-served-model \
+autoctx solve "explain this function"
+```
+
+## `mlx`
+
+Runs a local MLX model on Apple silicon. You must give it a checkpoint directory through `AUTOCONTEXT_MLX_MODEL_PATH`, or it raises an error.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=mlx \
+AUTOCONTEXT_MLX_MODEL_PATH=/path/to/mlx-checkpoint \
+autoctx solve "explain this function"
+```
+
+Two sampling settings are available:
+
+| Setting | Env var | Default |
+| --- | --- | --- |
+| `mlx_model_path` | `AUTOCONTEXT_MLX_MODEL_PATH` | (required) |
+| `mlx_temperature` | `AUTOCONTEXT_MLX_TEMPERATURE` | `0.8` |
+| `mlx_max_tokens` | `AUTOCONTEXT_MLX_MAX_TOKENS` | `512` |
+
+An MLX checkpoint can come from distilling your own accumulated runs into a local model. See [the distillation guide](/docs/guides/distillation-mlx) for how to produce one.
+
+## `deterministic`
+
+The offline development provider. It returns fixed, scripted responses with no model call and no credentials, which makes it ideal for CI, plumbing tests, and exercising the loop's mechanics without spending tokens.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=deterministic \
+autoctx run grid_ctf --iterations 1
+```
+
+<Callout type="info">
+`deterministic` is the offline, no-credential option, not the production default. The code-level default provider is `anthropic` (which needs a key). For a real zero-config local model, prefer the [Pi runtime](/docs/providers/pi).
+</Callout>

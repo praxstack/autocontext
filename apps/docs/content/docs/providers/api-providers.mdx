@@ -1,0 +1,66 @@
+---
+title: API Providers
+description: Hosted model APIs that need an API key.
+---
+
+Hosted API providers run the loop against a remote model service. They are the fastest way to good results, and they require an API key on the autocontext side.
+
+## `anthropic`
+
+The default provider. It reads `ANTHROPIC_API_KEY` (or the compatibility alias `AUTOCONTEXT_ANTHROPIC_API_KEY`) and raises an error if neither is set.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=anthropic \
+ANTHROPIC_API_KEY=sk-ant-... \
+autoctx solve "summarize this codebase"
+```
+
+## `openai`
+
+Targets the OpenAI API and reads `OPENAI_API_KEY`. The default model is `gpt-4o`.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=openai \
+OPENAI_API_KEY=sk-... \
+autoctx solve "summarize this codebase"
+```
+
+## `openai-compatible`
+
+Targets any service that exposes an OpenAI-shaped chat-completions API. You provide the key and the base URL. This is the single enum value that covers every other vendor.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=openai-compatible \
+AUTOCONTEXT_AGENT_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+AUTOCONTEXT_AGENT_API_KEY=... \
+autoctx solve "summarize this codebase"
+```
+
+The relevant settings are `agent_base_url` (`AUTOCONTEXT_AGENT_BASE_URL`), `agent_api_key` (`AUTOCONTEXT_AGENT_API_KEY`), and `agent_default_model` (`AUTOCONTEXT_AGENT_DEFAULT_MODEL`, default `gpt-4o`).
+
+<Callout type="info">
+Gemini, Mistral, Groq, OpenRouter, and Azure OpenAI are not separate provider values. There is no `gemini` or `azure` enum. You reach all of them through `openai-compatible` by setting `AUTOCONTEXT_AGENT_BASE_URL` to their OpenAI-compatible endpoint and `AUTOCONTEXT_AGENT_API_KEY` to your key. Do not expect a dedicated provider value for them.
+</Callout>
+
+## Credential reference
+
+| Provider | Key env var | Endpoint env var |
+| --- | --- | --- |
+| `anthropic` | `ANTHROPIC_API_KEY` (or `AUTOCONTEXT_ANTHROPIC_API_KEY`) | (built in) |
+| `openai` | `OPENAI_API_KEY` | (built in) |
+| `openai-compatible` | `AUTOCONTEXT_AGENT_API_KEY` | `AUTOCONTEXT_AGENT_BASE_URL` |
+
+## `agent_sdk`
+
+There is also an `agent_sdk` provider that runs the agent through the Anthropic Agent SDK rather than the plain messages API. It is selected the same way (`AUTOCONTEXT_AGENT_PROVIDER=agent_sdk`) and is useful when you want SDK-style tool execution. Most users should start with `anthropic`, `openai`, or `openai-compatible`.
+
+## A full solve example
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=anthropic \
+ANTHROPIC_API_KEY=sk-ant-... \
+autoctx solve "draft a migration plan for the auth module" \
+  --output plan.md
+```
+
+To run the loop fully on your own machine with no API key, see [Local & Offline](/docs/providers/local). To drive autocontext with a coding-agent CLI instead, see [CLI Runtimes](/docs/providers/cli-runtimes).

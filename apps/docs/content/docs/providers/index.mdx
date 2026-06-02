@@ -1,0 +1,56 @@
+---
+title: Providers Overview
+description: Choose how autocontext runs your agent.
+---
+
+autocontext does not hardcode a model vendor. Every run dispatches to an agent provider that you select with a single environment variable, `AUTOCONTEXT_AGENT_PROVIDER`. The provider decides where the agent roles (competitor, analyst, coach, architect, translator, curator) actually run: a hosted API, a local server, an MLX checkpoint on your machine, or an existing coding-agent CLI you already have installed.
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx solve "summarize this repo"
+```
+
+## Provider values
+
+`AUTOCONTEXT_AGENT_PROVIDER` accepts one of the following values:
+
+| Value | Family | Page |
+| --- | --- | --- |
+| `anthropic` | Hosted API | [API Providers](/docs/providers/api-providers) |
+| `openai` | Hosted API | [API Providers](/docs/providers/api-providers) |
+| `openai-compatible` | Hosted API | [API Providers](/docs/providers/api-providers) |
+| `ollama` | Local server | [Local & Offline](/docs/providers/local) |
+| `vllm` | Local server | [Local & Offline](/docs/providers/local) |
+| `mlx` | Local model | [Local & Offline](/docs/providers/local) |
+| `deterministic` | Offline dev | [Local & Offline](/docs/providers/local) |
+| `pi` | Local runtime | [Pi Runtime](/docs/providers/pi) |
+| `pi-rpc` | Local runtime | [Pi Runtime](/docs/providers/pi) |
+| `claude-cli` | CLI runtime | [CLI Runtimes](/docs/providers/cli-runtimes) |
+| `codex` | CLI runtime | [CLI Runtimes](/docs/providers/cli-runtimes) |
+| `hermes` | CLI runtime | [CLI Runtimes](/docs/providers/cli-runtimes) |
+| `agent_sdk` | SDK runtime | [API Providers](/docs/providers/api-providers) |
+
+These are the only accepted values. Vendors like Gemini, Mistral, Groq, OpenRouter, and Azure are not separate enum values: you reach them through `openai-compatible` by pointing `AUTOCONTEXT_AGENT_BASE_URL` at their OpenAI-compatible endpoint.
+
+## The real default
+
+The code-level default is `anthropic`. If you run autocontext without setting `AUTOCONTEXT_AGENT_PROVIDER`, it targets the Anthropic API and requires a key (`ANTHROPIC_API_KEY` or `AUTOCONTEXT_ANTHROPIC_API_KEY`). It will raise an error if no key is present.
+
+<Callout type="info">
+The `.env.example` template suggests `AUTOCONTEXT_AGENT_PROVIDER=deterministic`, but that is a template convenience, not the code default. `deterministic` is the offline, no-credential option for development and testing. For a real zero-config local run, `pi` is the recommended path, since the Pi CLI handles its own authentication.
+</Callout>
+
+## Choosing a provider
+
+| Provider family | Credential | When to use |
+| --- | --- | --- |
+| `anthropic`, `openai` | API key (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) | Hosted frontier models, fastest to get good results |
+| `openai-compatible` | API key plus `AUTOCONTEXT_AGENT_BASE_URL` | Any OpenAI-shaped endpoint (Gemini, Mistral, Groq, OpenRouter, Azure, a gateway) |
+| `ollama`, `vllm` | None (local server URL) | Self-hosted open models on your own hardware |
+| `mlx` | None (`AUTOCONTEXT_MLX_MODEL_PATH`) | A distilled or local MLX checkpoint on Apple silicon |
+| `deterministic` | None | Offline development, CI, plumbing tests with no model calls |
+| `pi`, `pi-rpc` | None (Pi CLI auth) | Recommended zero-config local runtime |
+| `claude-cli`, `codex`, `hermes` | None (the CLI's own auth) | Drive autocontext with a coding-agent CLI you already use |
+
+## Beyond a single provider
+
+You are not limited to one model for the whole loop. You can assign different models, providers, keys, and base URLs to individual roles, and you can control the judge that scores each generation. See [Per-Role Models & Judge](/docs/providers/per-role-and-judge).

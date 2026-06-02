@@ -1,0 +1,70 @@
+---
+title: CLI Runtimes
+description: Drive autocontext with your existing coding-agent CLI.
+---
+
+CLI runtimes let autocontext drive a coding-agent CLI that you already have installed. Instead of calling a model API directly, autocontext shells out to the tool for each agent turn. The tool runs the model, executes its own tools, and returns the result.
+
+<Callout type="info">
+All CLI runtimes inherit authentication from the local tool. There is no autocontext API key to set for `claude-cli`, `codex`, or `hermes`. If the CLI works on its own (you have logged in or set its native env vars), autocontext can use it.
+</Callout>
+
+## `claude-cli`
+
+Drives the Claude CLI. autocontext invokes it with `--permission-mode` and a model alias.
+
+| Setting | Env var | Default |
+| --- | --- | --- |
+| `claude_model` | `AUTOCONTEXT_CLAUDE_MODEL` | `sonnet` |
+| `claude_timeout` | `AUTOCONTEXT_CLAUDE_TIMEOUT` | `600` |
+| `claude_permission_mode` | `AUTOCONTEXT_CLAUDE_PERMISSION_MODE` | `bypassPermissions` |
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=claude-cli \
+AUTOCONTEXT_CLAUDE_MODEL=sonnet \
+autoctx solve "add a test for the cache layer"
+```
+
+The permission mode controls how much the underlying CLI is allowed to do without prompting. The default `bypassPermissions` keeps non-interactive runs from stalling on confirmation prompts.
+
+## `codex`
+
+Drives the Codex CLI. autocontext passes a model and an approval mode.
+
+| Setting | Env var | Default |
+| --- | --- | --- |
+| `codex_model` | `AUTOCONTEXT_CODEX_MODEL` | `o4-mini` |
+| `codex_timeout` | `AUTOCONTEXT_CODEX_TIMEOUT` | `120` |
+| `codex_approval_mode` | `AUTOCONTEXT_CODEX_APPROVAL_MODE` | `full-auto` |
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=codex \
+AUTOCONTEXT_CODEX_MODEL=o4-mini \
+autoctx solve "add a test for the cache layer"
+```
+
+The approval mode mirrors Codex's own approval flag. The default `full-auto` lets the loop run unattended.
+
+## `hermes`
+
+Drives the Hermes CLI. Hermes can run in an isolated git worktree and preload toolsets and skills, which makes it well suited to multi-step agent work that touches the filesystem.
+
+| Setting | Env var | Default |
+| --- | --- | --- |
+| `hermes_command` | `AUTOCONTEXT_HERMES_COMMAND` | `hermes` |
+| `hermes_model` | `AUTOCONTEXT_HERMES_MODEL` | (empty) |
+| `hermes_timeout` | `AUTOCONTEXT_HERMES_TIMEOUT` | `120` |
+| `hermes_worktree` | `AUTOCONTEXT_HERMES_WORKTREE` | `false` |
+| `hermes_toolsets` | `AUTOCONTEXT_HERMES_TOOLSETS` | (empty) |
+| `hermes_skills` | `AUTOCONTEXT_HERMES_SKILLS` | (empty) |
+| `hermes_base_url` | `AUTOCONTEXT_HERMES_BASE_URL` | (empty) |
+| `hermes_api_key` | `AUTOCONTEXT_HERMES_API_KEY` | (empty) |
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=hermes \
+AUTOCONTEXT_HERMES_WORKTREE=true \
+AUTOCONTEXT_HERMES_TOOLSETS=web,terminal \
+autoctx solve "open a PR that fixes the failing test"
+```
+
+`hermes_api_key` and `hermes_base_url` are optional. They configure the model endpoint Hermes itself uses, and `hermes_base_url` takes precedence over the provider when both are set. They are not an autocontext credential: Hermes still owns its own authentication.

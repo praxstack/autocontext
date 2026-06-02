@@ -1,0 +1,68 @@
+---
+title: Pi Runtime
+description: The recommended zero-config local runtime.
+---
+
+Pi is the recommended way to run autocontext without configuring API keys. It is a local coding-agent CLI, and when you select a Pi provider, autocontext shells out to the `pi` binary and lets Pi handle its own authentication. There is no autocontext API key to set.
+
+autocontext exposes two Pi providers that differ only in how they talk to the binary.
+
+## `pi` versus `pi-rpc`
+
+The `pi` provider runs Pi in one-shot mode. For each agent call it invokes `pi --print`, passes the prompt, and reads a single completion back. Every call is an independent process.
+
+The `pi-rpc` provider runs Pi in RPC mode with `pi --mode rpc`. This speaks JSONL over the subprocess's stdin and stdout, so a single Pi process can serve multiple turns.
+
+<Callout type="info">
+`pi-rpc` is a subprocess speaking JSONL over stdin and stdout. It is not an HTTP server, and it does not open a network port. If you are looking for an HTTP endpoint, you want `openai-compatible` instead.
+</Callout>
+
+## Configuration
+
+Both Pi providers read the same `pi_*` settings. Each setting maps to an environment variable of the form `AUTOCONTEXT_<FIELD>`.
+
+| Setting | Env var | Default | Notes |
+| --- | --- | --- | --- |
+| `pi_command` | `AUTOCONTEXT_PI_COMMAND` | `pi` | Path to the Pi binary |
+| `pi_timeout` | `AUTOCONTEXT_PI_TIMEOUT` | `300` | Per-call execution timeout in seconds |
+| `pi_workspace` | `AUTOCONTEXT_PI_WORKSPACE` | (empty) | Workspace directory for Pi |
+| `pi_model` | `AUTOCONTEXT_PI_MODEL` | (empty) | Optional Pi model override |
+| `pi_no_context_files` | `AUTOCONTEXT_PI_NO_CONTEXT_FILES` | `false` | Skip Pi's own context files |
+
+The `pi-rpc` provider adds two RPC-only settings:
+
+| Setting | Env var | Default | Notes |
+| --- | --- | --- | --- |
+| `pi_rpc_session_persistence` | `AUTOCONTEXT_PI_RPC_SESSION_PERSISTENCE` | `true` | Reuse a session across turns |
+| `pi_rpc_persistent` | `AUTOCONTEXT_PI_RPC_PERSISTENT` | `false` | Keep one persistent RPC process for the whole run |
+
+<Callout type="info">
+`pi_rpc_session_persistence` and `pi_rpc_persistent` only apply to `pi-rpc`. The one-shot `pi` provider ignores them, since each call is already its own process.
+</Callout>
+
+## Example invocations
+
+One-shot Pi, the simplest zero-config path:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi autoctx solve "write a haiku about caching"
+```
+
+RPC mode, reusing a single Pi process across turns:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi-rpc \
+AUTOCONTEXT_PI_RPC_PERSISTENT=true \
+autoctx run grid_ctf --iterations 1
+```
+
+Point at a non-default Pi binary and raise the timeout:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=pi \
+AUTOCONTEXT_PI_COMMAND=/opt/pi/bin/pi \
+AUTOCONTEXT_PI_TIMEOUT=600 \
+autoctx solve "refactor the parser"
+```
+
+Because Pi owns its credentials, this is the fastest way to get a real model running the loop without managing any autocontext-side keys.

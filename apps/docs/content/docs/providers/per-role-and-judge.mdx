@@ -1,0 +1,88 @@
+---
+title: Per-Role Models & Judge
+description: Assign different models to roles and control the judge.
+---
+
+A single run uses several agent roles: competitor, analyst, coach, architect, translator, and curator. By default they all share the provider you set with `AUTOCONTEXT_AGENT_PROVIDER`, but you can give each role its own model, and the four core roles can even use a different provider, key, and endpoint.
+
+## Per-role models
+
+Every role has a model environment variable. These set the model name passed to whatever provider that role uses.
+
+| Role | Env var |
+| --- | --- |
+| Competitor | `AUTOCONTEXT_MODEL_COMPETITOR` |
+| Analyst | `AUTOCONTEXT_MODEL_ANALYST` |
+| Coach | `AUTOCONTEXT_MODEL_COACH` |
+| Architect | `AUTOCONTEXT_MODEL_ARCHITECT` |
+| Translator | `AUTOCONTEXT_MODEL_TRANSLATOR` |
+| Curator | `AUTOCONTEXT_MODEL_CURATOR` |
+
+A common pattern is a cheaper model for the high-volume competitor and a stronger model for the coach and architect:
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=anthropic \
+AUTOCONTEXT_MODEL_COMPETITOR=claude-sonnet-4-5-20250929 \
+AUTOCONTEXT_MODEL_COACH=claude-opus-4-6 \
+AUTOCONTEXT_MODEL_ARCHITECT=claude-opus-4-6 \
+autoctx run grid_ctf --iterations 3
+```
+
+## Per-role provider, key, and base URL overrides
+
+The four core roles (competitor, analyst, coach, architect) can each override the provider, API key, and base URL independently. This lets you run different roles against entirely different backends in the same loop.
+
+| Role | Provider | API key | Base URL |
+| --- | --- | --- | --- |
+| Competitor | `AUTOCONTEXT_COMPETITOR_PROVIDER` | `AUTOCONTEXT_COMPETITOR_API_KEY` | `AUTOCONTEXT_COMPETITOR_BASE_URL` |
+| Analyst | `AUTOCONTEXT_ANALYST_PROVIDER` | `AUTOCONTEXT_ANALYST_API_KEY` | `AUTOCONTEXT_ANALYST_BASE_URL` |
+| Coach | `AUTOCONTEXT_COACH_PROVIDER` | `AUTOCONTEXT_COACH_API_KEY` | `AUTOCONTEXT_COACH_BASE_URL` |
+| Architect | `AUTOCONTEXT_ARCHITECT_PROVIDER` | `AUTOCONTEXT_ARCHITECT_API_KEY` | `AUTOCONTEXT_ARCHITECT_BASE_URL` |
+
+```bash
+AUTOCONTEXT_AGENT_PROVIDER=openai \
+OPENAI_API_KEY=sk-... \
+AUTOCONTEXT_ARCHITECT_PROVIDER=anthropic \
+AUTOCONTEXT_ARCHITECT_API_KEY=sk-ant-... \
+autoctx run grid_ctf --iterations 3
+```
+
+Here the loop runs on OpenAI, but the architect role runs on Anthropic.
+
+## The judge
+
+The judge scores each generation. It has its own provider settings:
+
+| Setting | Env var | Default |
+| --- | --- | --- |
+| `judge_provider` | `AUTOCONTEXT_JUDGE_PROVIDER` | `auto` |
+| `judge_model` | `AUTOCONTEXT_JUDGE_MODEL` | `claude-sonnet-4-20250514` |
+| `judge_api_key` | `AUTOCONTEXT_JUDGE_API_KEY` | (empty) |
+| `judge_base_url` | `AUTOCONTEXT_JUDGE_BASE_URL` | (empty) |
+
+### Auto-inheritance
+
+With the default `judge_provider=auto`, the judge does not pick a provider blindly. It inherits from the first configured role provider in this priority order:
+
+1. competitor
+2. architect
+3. analyst
+4. coach
+5. the global `agent_provider`
+
+If the first configured provider it finds in that order is a CLI runtime (`claude-cli`, `codex`, `pi`, or `pi-rpc`), the judge uses it too, so a subscription-tier setup with only local CLI auth does not fall back to an API that needs a key. For any other provider, the judge falls back to `anthropic`.
+
+<Callout type="info">
+Auto-inheritance only carries over the CLI runtime providers. If your effective provider is a hosted API like `openai`, the `auto` judge still resolves to `anthropic` rather than inheriting OpenAI. Set `AUTOCONTEXT_JUDGE_PROVIDER` explicitly if you want the judge on a specific backend.
+</Callout>
+
+To pin the judge regardless of the loop's provider:
+
+```bash
+AUTOCONTEXT_JUDGE_PROVIDER=openai \
+AUTOCONTEXT_JUDGE_MODEL=gpt-4o \
+OPENAI_API_KEY=sk-... \
+autoctx judge --task task.json --output out.json
+```
+
+For how scoring fits into the loop, see [evaluation concepts](/docs/concepts/evaluation).
