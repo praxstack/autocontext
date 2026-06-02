@@ -26,20 +26,26 @@ AUTOCONTEXT_AGENT_PROVIDER=pi bunx autoctx solve \
 
 ## What a run produces
 
-Each solve writes a self-contained directory at `runs/<run_id>/`. The pieces you will use most:
+autocontext writes to two roots. Both default to relative directories and can be relocated with environment variables:
 
-- `trace.jsonl`: an append-only event log, one JSON object per line. This is the ground truth for what happened during the run, in order.
-- `report.md`: a human-readable summary of the run, good for a quick read.
-- `generations/`: per-iteration records, one entry for each pass the loop made.
-- `artifacts/`: the concrete outputs the run produced.
+- `runs/` holds per-run output (override with `AUTOCONTEXT_RUNS_ROOT`).
+- `knowledge/` holds the knowledge that compounds across runs (override with `AUTOCONTEXT_KNOWLEDGE_ROOT`).
 
-Knowledge that survives across runs lives separately, under `knowledge/<scenario>/`:
+Under `runs/<run_id>/`, each pass of the loop writes its artifacts to a per-generation directory:
+
+- `generations/gen_<N>/`: the artifacts produced by generation `N`, one directory per iteration.
+
+The compounding knowledge lives separately, per scenario, under `knowledge/<scenario>/`:
 
 - `playbook.md`: the accumulated strategy the next run inherits.
 - `hints.md`: targeted advice carried forward for the next attempt.
-- `lessons.md`: consolidated lessons distilled from past runs.
+- `lessons.json`: consolidated, structured lessons distilled from past runs.
+- `snapshots/<run_id>/`: a cross-run snapshot of the knowledge as it stood at the end of each run.
+- `reports/<run_id>.md`: the human-readable session report for a completed run.
 
-That directory also holds `tools/` (helpers generated along the way) and `snapshots/` (cross-run state). The run directory is per-run and disposable, while the knowledge directory is the part that compounds.
+The run directory is per-run and disposable, while the knowledge directory is the part that compounds.
+
+Every run also records an append-only trace: the ground-truth record of each action, LLM call, and decision, in order. Rather than reading a raw file, inspect it through the CLI with `autoctx show <run-id>` and `autoctx replay`, and through the runtime-session readers.
 
 ## Inspect the results
 
