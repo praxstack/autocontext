@@ -43,37 +43,17 @@ That directory also holds `tools/` (helpers generated along the way) and `snapsh
 
 ## Inspect the results
 
-List recent runs to find a run id, then look at a specific one. `autoctx list` is shared across both runtimes, but the per-run inspect commands differ between them.
+The inspect commands share the same names on both runtimes. List recent runs to find a run id, then look at a specific one:
 
 ```bash
-autoctx list
+autoctx list                       # recent runs
+autoctx show <run-id> --best       # best generation for a run
+autoctx watch <run-id>             # follow a run until it finishes
+autoctx status <run-id>            # generation status
 ```
-
-To look at a single run:
-
-<Tabs items={['Python', 'TypeScript']}>
-<Tab value="Python">
-```bash
-# Show generation-level status for a run
-autoctx status <run-id>
-
-# Machine-readable output
-autoctx status <run-id> --json
-```
-</Tab>
-<Tab value="TypeScript">
-```bash
-# Show the best generation for a run
-autoctx show <run-id> --best
-
-# Follow a run until it finishes
-autoctx watch <run-id>
-```
-</Tab>
-</Tabs>
 
 <Callout type="info">
-The inspect surface differs by runtime: the Python CLI exposes `autoctx status <run-id>`, while the TypeScript CLI adds `autoctx show <run-id> --best` and `autoctx watch <run-id>`. Most commands accept `--json` for machine-readable output.
+Most of these commands accept `--json` for machine-readable output, for example `autoctx list --json` or `autoctx show <run-id> --best --json`.
 </Callout>
 
 ## Why re-running improves results
