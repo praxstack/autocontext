@@ -23,12 +23,12 @@ All three share the same [core concepts](/docs/concepts), so start there if you 
 
 ## Try it in 30 seconds
 
-The default provider is `deterministic` and runs fully offline, so every runnable example sets `AUTOCONTEXT_AGENT_PROVIDER` to pick a real runtime. Here is a first run against a customer-support goal:
+autocontext supports many providers. The `deterministic` provider runs fully offline with no credentials, and the Pi runtime is the recommended zero-config path (it handles its own auth). Every runnable example sets `AUTOCONTEXT_AGENT_PROVIDER` to pick the runtime explicitly. Here is a first run against a customer-support goal:
 
 <Tabs items={['Python', 'TypeScript']}>
 <Tab value="Python">
 ```bash
-AUTOCONTEXT_AGENT_PROVIDER=pi AUTOCONTEXT_PI_COMMAND=pi \
+AUTOCONTEXT_AGENT_PROVIDER=pi \
 uv run autoctx solve "improve customer-support replies for billing disputes" --iterations 3
 ```
 </Tab>
