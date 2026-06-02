@@ -1,0 +1,35 @@
+---
+title: SDK Overview
+description: Embed autocontext in your own Python or TypeScript code.
+---
+
+The CLI and MCP server cover most workflows, but sometimes you want autocontext as a library: a function call inside your own service, a step in a pipeline, or a building block in a larger agent. autocontext ships two packages for that, one for Python and one for TypeScript.
+
+## When to embed vs use the CLI
+
+Reach for the SDK when you need:
+
+- Typed, in-process results instead of parsing CLI JSON.
+- To wire autocontext into an existing service, worker, or notebook.
+- Fine-grained control over individual pieces (judge, improvement loop, storage) rather than the whole generation loop.
+
+Stick with the [CLI](/docs/cli) or [agent integration](/docs/agents) when you want the full control plane, want another agent to drive autocontext over a shell or MCP, or just want to run a scenario end to end without writing code.
+
+<Callout>
+The SDK and CLI share the same underlying tool layer, so results are consistent across both. The SDK simply returns typed objects instead of dicts on stdout.
+</Callout>
+
+## The two packages
+
+| Package | Install | Best at |
+| --- | --- | --- |
+| Python (`autocontext`) | `pip install autocontext` / `uv add autocontext` | The high-level `AutoContext` client: discover scenarios, evaluate strategies, search solved knowledge, export skills. |
+| TypeScript (`autoctx`) | `npm install autoctx` | Composable building blocks: the improvement loop, judge, executor, storage, config, prompts, and scoring primitives. |
+
+The Python package gives you one stable, ergonomic class. The TypeScript package gives you a wider surface of lower-level primitives you can assemble yourself.
+
+## Where to go next
+
+- [Python SDK](/docs/sdk/python): the `AutoContext` class, every method, and a minimal end-to-end example.
+- [TypeScript SDK](/docs/sdk/typescript): the key exports from `autoctx`, grouped by concern.
+- [Extension Hooks](/docs/sdk/extensions): hook into autocontext lifecycle events from either language.

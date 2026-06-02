@@ -1,0 +1,154 @@
+---
+title: TypeScript SDK
+description: Programmatic building blocks from the autoctx package.
+---
+
+The TypeScript package is published as `autoctx` on npm. Unlike the Python package, which centers on one high-level client, `autoctx` exposes a wide surface of composable primitives you assemble yourself.
+
+```bash
+npm install autoctx
+```
+
+```typescript
+import { ImprovementLoop, JudgeExecutor } from "autoctx";
+```
+
+All exports come from the package root unless noted. The package is ESM-only and targets Node.js 18 or later.
+
+## Improvement loop
+
+`ImprovementLoop` drives a multi-round evaluate-then-revise loop over an agent task, with parse-failure resilience and plateau detection.
+
+```typescript
+import { ImprovementLoop, isImproved, isParseFailure } from "autoctx";
+import type { ImprovementLoopOpts } from "autoctx";
+
+const loop = new ImprovementLoop({
+  task,                 // an AgentTaskInterface
+  maxRounds: 5,
+  qualityThreshold: 0.9,
+  minRounds: 1,
+});
+
+const result = await loop.run({
+  initialOutput: "first draft",
+  state: {},
+  referenceContext: "authoritative context",
+  requiredConcepts: ["idempotency", "retries"],
+});
+
+console.log(result.bestScore, result.bestOutput);
+```
+
+- `ImprovementLoopOpts`: the constructor options (`task`, plus optional `maxRounds`, `qualityThreshold`, `minRounds`, `maxScoreDelta`, `capScoreJumps`, `dimensionThreshold`, `timeBudget`).
+- `isImproved(...)`: predicate for whether a round improved on the prior best.
+- `isParseFailure(...)`: predicate for whether a judge result was a parse failure rather than a genuine low score.
+
+## Evaluation
+
+`JudgeExecutor` evaluates a single agent output by delegating to an `AgentTaskInterface`, running context preparation and validation first.
+
+```typescript
+import { JudgeExecutor } from "autoctx";
+
+const judge = new JudgeExecutor(task); // task: AgentTaskInterface
+const result = await judge.execute(agentOutput, state, {
+  referenceContext: "...",
+  requiredConcepts: ["..."],
+});
+
+console.log(result.score, result.reasoning);
+```
+
+## Execution
+
+- `ExecutionSupervisor`: orchestrates an execution engine over an `ExecutionInput`, returning an `ExecutionOutput`.
+- `LocalExecutor`: a local execution engine for use with the supervisor.
+
+```typescript
+import { ExecutionSupervisor, LocalExecutor } from "autoctx";
+```
+
+## Storage
+
+`SQLiteStore` is the structured-data store for runs, generations, matches, feedback, and the task queue.
+
+```typescript
+import { SQLiteStore } from "autoctx";
+
+const store = new SQLiteStore("./autocontext.db");
+```
+
+## Config
+
+```typescript
+import { AppSettingsSchema, loadSettings, applyPreset, PRESETS } from "autoctx";
+
+const settings = loadSettings();          // read AUTOCONTEXT_* env vars
+const quick = applyPreset("quick");       // overrides for a named preset
+const presetNames = [...PRESETS.keys()];  // e.g. "quick", "standard"
+```
+
+- `loadSettings()`: build an `AppSettings` from the environment.
+- `applyPreset(name)`: return the field overrides for a named preset.
+- `PRESETS`: a `Map` of preset name to override object.
+- `AppSettingsSchema`: the zod schema backing `AppSettings`.
+
+## Prompts
+
+```typescript
+import { buildPromptBundle, estimateTokens, ContextBudget } from "autoctx";
+
+const tokens = estimateTokens("some prompt text");
+const budget = new ContextBudget(100_000);
+const bundle = buildPromptBundle(promptContext);
+```
+
+- `buildPromptBundle(ctx)`: assemble role prompts from a `PromptContext` into a `PromptBundle`.
+- `estimateTokens(text)`: a fast token-count estimate.
+- `ContextBudget`: enforce a token budget across prompt components.
+
+## Scoring
+
+```typescript
+import { expectedScore, updateElo } from "autoctx";
+
+const expected = expectedScore(1500, 1480);
+const next = updateElo(1500, 1480, 1.0); // playerRating, opponentRating, actualScore
+```
+
+- `expectedScore(playerRating, opponentRating)`: the expected Elo score.
+- `updateElo(playerRating, opponentRating, actualScore, kFactor = 24)`: the updated rating.
+
+## Validation
+
+`StrategyValidator` validates strategy dicts against a scenario before execution.
+
+```typescript
+import { StrategyValidator } from "autoctx";
+```
+
+## Experimental agent-handler surface
+
+The package also exposes an experimental `autoctx/agent-runtime` subpath for local programmable handlers placed in `.autoctx/agents/*.ts`. It uses the bundled `tsx` loader for `.ts`, `.tsx`, and `.mts` files on Node 18 or later. This is an open-source local authoring surface, not a hosted deployment layer.
+
+```typescript
+import type { AutoctxAgentContext } from "autoctx/agent-runtime";
+
+export const triggers = { webhook: true };
+
+export default async function supportAgent(
+  { init, payload }: AutoctxAgentContext<{ message: string }>,
+) {
+  const runtime = await init();
+  const session = await runtime.session("default");
+  return session.prompt(payload.message, { role: "support-triager" });
+}
+```
+
+See [`examples/agent-runtime`](https://github.com/greyhaven-ai/autocontext/tree/main/examples/agent-runtime) for a complete, runnable handler.
+
+## See also
+
+- [Extension Hooks](/docs/sdk/extensions): `ExtensionAPI`, `HookBus`, `HookEvents`, and `HookResult` are exported from `autoctx` as well.
+- [Python SDK](/docs/sdk/python): the higher-level `AutoContext` client for the Python package.

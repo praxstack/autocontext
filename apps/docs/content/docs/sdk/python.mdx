@@ -1,0 +1,176 @@
+---
+title: Python SDK
+description: The AutoContext class and how to use it.
+---
+
+The Python package exposes a single high-level client, `AutoContext`, that wraps the same tool layer used by the CLI and MCP server and returns typed result models instead of raw dicts.
+
+```python
+from autocontext import AutoContext
+```
+
+## Constructing the client
+
+`AutoContext` takes only keyword arguments, all optional:
+
+```python
+AutoContext(
+    *,
+    settings: AppSettings | None = None,
+    db_path: str | Path | None = None,
+    knowledge_root: str | Path | None = None,
+    skills_root: str | Path | None = None,
+    claude_skills_path: str | Path | None = None,
+    **overrides,
+)
+```
+
+- `settings`: a pre-built `AppSettings` instance. When provided, every other argument is ignored.
+- `db_path`, `knowledge_root`, `skills_root`, `claude_skills_path`: convenience path overrides that map to the matching `AppSettings` fields.
+- `**overrides`: any additional `AppSettings` field overrides (for example `matches_per_generation=5`).
+
+With no arguments it loads settings from `AUTOCONTEXT_*` environment variables.
+
+```python
+client = AutoContext(db_path="runs/autocontext.sqlite3")
+```
+
+## Typed result models
+
+Several methods return Pydantic models from `autocontext.sdk_models` rather than dicts:
+
+- `ValidateResult`: `valid: bool`, `reason: str`.
+- `EvaluateResult`: `scores: list[float]`, `mean_score: float`, `best_score: float`, `matches: int`, `error: str | None`.
+- `MatchResult`: `score: float`, `winner: str`, `summary: str`, `metrics: dict`, `replay: list | None`, `error: str | None`.
+- `SearchResult`: `scenario_name: str`, `display_name: str`, `description: str`, `relevance: float`, `best_score: float`, `best_elo: float`, `match_reason: str`.
+
+<Callout>
+`evaluate`, `match`, and `validate` never raise on a bad strategy. They populate the `error` (or `reason`) field on the result instead, so you can branch on it cleanly.
+</Callout>
+
+## Methods
+
+### `list_scenarios()`
+
+Return available scenarios, each as a dict with a name and rules preview.
+
+```python
+for s in client.list_scenarios():
+    print(s["name"])
+```
+
+Returns `list[dict[str, str]]`.
+
+### `describe_scenario(name)`
+
+Return the full description of a scenario: rules, strategy interface, and evaluation criteria.
+
+```python
+info = client.describe_scenario("grid_ctf")
+print(info["rules"])
+```
+
+Returns `dict[str, str]`.
+
+### `validate(scenario, strategy)`
+
+Validate a strategy dict against a scenario's constraints without running a match.
+
+```python
+result = client.validate("grid_ctf", {"aggression": 0.5})
+if not result.valid:
+    print(result.reason)
+```
+
+Returns `ValidateResult`.
+
+### `evaluate(scenario, strategy, matches=3, seed_base=42)`
+
+Run `matches` tournament games and return aggregate scores. The strategy is validated first; agent-task scenarios (which use judge evaluation) populate the `error` field instead.
+
+```python
+result = client.evaluate("grid_ctf", {"aggression": 0.5}, matches=5)
+print(result.mean_score, result.best_score)
+```
+
+Returns `EvaluateResult`.
+
+### `match(scenario, strategy, seed=42)`
+
+Execute a single match and return the result, including a replay when the scenario provides one.
+
+```python
+result = client.match("grid_ctf", {"aggression": 0.5}, seed=7)
+print(result.winner, result.score)
+```
+
+Returns `MatchResult`.
+
+### `search(query, top_k=5)`
+
+Search solved scenarios by natural-language query, ranked by relevance.
+
+```python
+for hit in client.search("capture the flag on a grid", top_k=3):
+    print(hit.scenario_name, hit.relevance)
+```
+
+Returns `list[SearchResult]`.
+
+### `export_skill(scenario)`
+
+Export a portable skill package (markdown plus JSON) for a solved scenario.
+
+```python
+pkg = client.export_skill("grid_ctf")
+```
+
+Returns `dict[str, Any]`.
+
+### `export_package(scenario)`
+
+Export a versioned, portable strategy package for a solved scenario.
+
+```python
+pkg = client.export_package("grid_ctf")
+```
+
+Returns `dict[str, Any]`.
+
+### `list_artifacts(scenario=None, artifact_type=None)`
+
+List published artifacts, optionally filtered by scenario or by artifact type.
+
+```python
+artifacts = client.list_artifacts(scenario="grid_ctf")
+```
+
+Returns `list[dict[str, Any]]`.
+
+## End-to-end example
+
+```python
+from autocontext import AutoContext
+
+client = AutoContext(db_path="runs/autocontext.sqlite3")
+
+# Discover what is available.
+for scenario in client.list_scenarios():
+    print(scenario["name"])
+
+# Evaluate a strategy over five matches.
+result = client.evaluate("grid_ctf", {"aggression": 0.5}, matches=5)
+if result.error:
+    print("evaluation failed:", result.error)
+else:
+    print(f"mean={result.mean_score:.3f} best={result.best_score:.3f}")
+
+# Search solved knowledge.
+for hit in client.search("grid capture the flag", top_k=3):
+    print(f"{hit.scenario_name}: {hit.relevance:.2f}")
+```
+
+## See also
+
+- [Extension Hooks](/docs/sdk/extensions): `ExtensionAPI`, `HookBus`, `HookEvents`, and `HookResult`, also exported from the `autocontext` package.
+- [Providers](/docs/providers): configure the LLM provider via `AUTOCONTEXT_*` settings that `AutoContext` reads.
