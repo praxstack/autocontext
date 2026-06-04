@@ -217,8 +217,13 @@ def test_preflight_raises_on_missing_dependency(monkeypatch) -> None:
         return real_find_spec(name, *args, **kwargs)
 
     monkeypatch.setattr(train_mod.importlib.util, "find_spec", fake_find_spec)
-    with pytest.raises(RuntimeError, match="numpy"):
+    with pytest.raises(RuntimeError) as excinfo:
         train_mod._preflight_backend_deps("mlx")
+    msg = str(excinfo.value)
+    assert "numpy" in msg
+    # preserve the no-MLX UX contract asserted by test_training_init
+    assert "mlx is required" in msg.lower()
+    assert "uv sync --group dev --extra mlx" in msg
 
 
 def test_preflight_unknown_backend_is_noop() -> None:

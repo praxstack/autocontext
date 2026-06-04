@@ -538,10 +538,11 @@ def _preflight_backend_deps(backend: str) -> None:
     missing = [m for m in required if importlib.util.find_spec(m) is None]
     if missing:
         extra = "mlx" if backend == "mlx" else "cuda"
-        raise RuntimeError(
-            f"missing dependencies for '{backend}' training backend: {', '.join(missing)}. "
-            f"Install with: uv sync --group dev --extra {extra}"
-        )
+        lead = {
+            "mlx": "MLX is required for local training",
+            "cuda": "CUDA (torch) is required for local training",
+        }.get(backend, f"missing dependencies for '{backend}' training backend")
+        raise RuntimeError(f"{lead}; missing: {', '.join(missing)}. Install with: uv sync --group dev --extra {extra}")
 
 
 def run_training(
