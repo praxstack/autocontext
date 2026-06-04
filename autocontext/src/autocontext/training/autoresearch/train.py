@@ -620,13 +620,15 @@ def _preflight_backend_deps(backend: str) -> None:
     required = {
         "mlx": ["mlx", "rustbpe", "tiktoken", "numpy", "safetensors"],
         "cuda": ["torch", "numpy", "safetensors"],
+        "mlxlm": ["mlx_lm"],
     }.get(backend, [])
     missing = [m for m in required if importlib.util.find_spec(m) is None]
     if missing:
-        extra = "mlx" if backend == "mlx" else "cuda"
+        extra = {"mlx": "mlx", "cuda": "cuda", "mlxlm": "mlxlm"}.get(backend, backend)
         lead = {
             "mlx": "MLX is required for local training",
             "cuda": "CUDA (torch) is required for local training",
+            "mlxlm": "mlx-lm is required for the pretrained-finetune backend",
         }.get(backend, f"missing dependencies for '{backend}' training backend")
         raise RuntimeError(f"{lead}; missing: {', '.join(missing)}. Install with: uv sync --group dev --extra {extra}")
 
@@ -650,6 +652,9 @@ def run_training(
     dedupe: bool = False,
     dedupe_near_threshold: float = 1.0,
     score_conditioned: bool = False,
+    base_model: str = "",
+    fine_tune_type: str = "lora",
+    num_layers: int = 8,
     backend: str = "mlx",
 ) -> dict[str, float]:
     # Reject out-of-range curation values before any training work: select_top_fraction
@@ -660,55 +665,39 @@ def run_training(
         raise ValueError(f"dedupe_near_threshold must be in (0, 1], got {dedupe_near_threshold}")
 
     normalized_backend = backend.strip().lower()
-    # Dependency preflight runs inside each backend entry (_run_mlx_training /
-    # run_cuda_training) so routing/dispatch stays importable and unit-testable
-    # without the optional extras installed.
+    # Shared args; backend-specific extras are added per dispatch. Each backend entry
+    # runs its own dependency preflight so routing stays importable without the extras.
+    common: dict[str, Any] = dict(
+        scenario_name=scenario_name,
+        data_path=data_path,
+        output_dir=output_dir,
+        time_budget=time_budget,
+        memory_limit_mb=memory_limit_mb,
+        train_steps=train_steps,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        assess_samples=assess_samples,
+        assess_temperature=assess_temperature,
+        elite_fraction=elite_fraction,
+        dedupe=dedupe,
+        dedupe_near_threshold=dedupe_near_threshold,
+        score_conditioned=score_conditioned,
+    )
     if normalized_backend == "mlx":
-        return _run_mlx_training(
-            scenario_name=scenario_name,
-            data_path=data_path,
-            output_dir=output_dir,
-            time_budget=time_budget,
-            memory_limit_mb=memory_limit_mb,
-            train_steps=train_steps,
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            seq_len=seq_len,
-            assess_samples=assess_samples,
-            assess_temperature=assess_temperature,
-            assess_top_k=assess_top_k,
-            val_select=val_select,
-            elite_fraction=elite_fraction,
-            dedupe=dedupe,
-            dedupe_near_threshold=dedupe_near_threshold,
-            score_conditioned=score_conditioned,
-        )
+        return _run_mlx_training(**common, seq_len=seq_len, assess_top_k=assess_top_k, val_select=val_select)
     if normalized_backend == "cuda":
         if val_select:
-            raise ValueError(
-                "val_select (validation-based checkpoint selection) is currently MLX-only; omit it for the cuda backend"
-            )
+            raise ValueError("val_select is currently MLX-only; omit it for the cuda backend")
         from autocontext.training.autoresearch.cuda import run_cuda_training
 
-        return run_cuda_training(
-            scenario_name=scenario_name,
-            data_path=data_path,
-            output_dir=output_dir,
-            time_budget=time_budget,
-            memory_limit_mb=memory_limit_mb,
-            train_steps=train_steps,
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            seq_len=seq_len,
-            assess_samples=assess_samples,
-            assess_temperature=assess_temperature,
-            assess_top_k=assess_top_k,
-            elite_fraction=elite_fraction,
-            dedupe=dedupe,
-            dedupe_near_threshold=dedupe_near_threshold,
-            score_conditioned=score_conditioned,
+        return run_cuda_training(**common, seq_len=seq_len, assess_top_k=assess_top_k)
+    if normalized_backend == "mlxlm":
+        from autocontext.training.autoresearch.mlxlm_backend import DEFAULT_BASE_MODEL, run_mlxlm_training
+
+        return run_mlxlm_training(
+            **common, base_model=base_model or DEFAULT_BASE_MODEL, fine_tune_type=fine_tune_type, num_layers=num_layers
         )
-    raise ValueError("unsupported training backend: expected 'mlx' or 'cuda'")
+    raise ValueError("unsupported training backend: expected 'mlx', 'cuda', or 'mlxlm'")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -716,7 +705,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scenario", required=True)
     parser.add_argument("--data", required=True)
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--backend", choices=("mlx", "cuda"), default="mlx")
+    parser.add_argument("--backend", choices=("mlx", "cuda", "mlxlm"), default="mlx")
     parser.add_argument("--time-budget", type=int, default=300)
     parser.add_argument("--memory-limit", type=int, default=16384)
     parser.add_argument("--train-steps", type=int, default=8)
@@ -733,6 +722,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--dedupe-near-threshold", type=float, default=1.0, help="with --dedupe, drop near-dups at/above this similarity"
     )
     parser.add_argument("--score-conditioned", action="store_true", help="emit quality token; generate conditioned on top bucket")
+    parser.add_argument("--base-model", default="", help="mlxlm backend: pretrained base model (empty = default)")
+    parser.add_argument("--fine-tune-type", choices=("lora", "dora", "full"), default="lora", help="mlxlm backend")
+    parser.add_argument("--num-layers", type=int, default=8, help="mlxlm backend: layers to fine-tune")
     return parser
 
 
@@ -758,6 +750,9 @@ def main(argv: list[str] | None = None) -> int:
             dedupe=args.dedupe,
             dedupe_near_threshold=args.dedupe_near_threshold,
             score_conditioned=args.score_conditioned,
+            base_model=args.base_model,
+            fine_tune_type=args.fine_tune_type,
+            num_layers=args.num_layers,
             backend=args.backend,
         )
     except Exception as exc:

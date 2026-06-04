@@ -315,7 +315,7 @@ class TestTrainJson:
             checkpoint_path=None,
         )
 
-        with patch("autocontext.cli._run_training", return_value=mock_result):
+        with patch("autocontext.cli_train._run_training", return_value=mock_result):
             result = runner.invoke(app, ["train", "--json", "--scenario", "grid_ctf"])
 
         assert result.exit_code == 0, result.output
@@ -329,7 +329,7 @@ class TestTrainJson:
 
     def test_train_json_error(self) -> None:
         """train --json on error should exit 1."""
-        with patch("autocontext.cli._run_training", side_effect=RuntimeError("training exploded")):
+        with patch("autocontext.cli_train._run_training", side_effect=RuntimeError("training exploded")):
             result = runner.invoke(app, ["train", "--json", "--scenario", "grid_ctf"])
 
         assert result.exit_code == 1
@@ -739,7 +739,7 @@ class TestWaitJson:
 class TestErrorStderr:
     def test_train_json_error_writes_to_stderr(self) -> None:
         """train --json errors should write JSON error to stderr."""
-        with patch("autocontext.cli._run_training", side_effect=RuntimeError("boom")):
+        with patch("autocontext.cli_train._run_training", side_effect=RuntimeError("boom")):
             result = runner.invoke(app, ["train", "--json", "--scenario", "grid_ctf"])
 
         assert result.exit_code == 1

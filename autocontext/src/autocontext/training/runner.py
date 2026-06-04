@@ -63,6 +63,9 @@ class TrainingConfig:
     dedupe: bool = False  # drop duplicate constructions, keeping the highest-scoring representative
     dedupe_near_threshold: float = 1.0  # with dedupe, also drop near-dups at/above this similarity
     score_conditioned: bool = False  # emit a quality control token + generate conditioned on the top bucket
+    base_model: str = ""  # mlxlm backend: pretrained base model (empty = backend default)
+    fine_tune_type: str = "lora"  # mlxlm backend: lora | dora | full
+    num_layers: int = 8  # mlxlm backend: number of layers to fine-tune
 
 
 @dataclass(slots=True)
@@ -384,6 +387,12 @@ class TrainingRunner:
             command += ["--dedupe-near-threshold", str(self.config.dedupe_near_threshold)]
         if self.config.score_conditioned:
             command.append("--score-conditioned")
+        if self.config.base_model:
+            command += ["--base-model", self.config.base_model]
+        if self.config.fine_tune_type != "lora":
+            command += ["--fine-tune-type", self.config.fine_tune_type]
+        if self.config.num_layers != 8:
+            command += ["--num-layers", str(self.config.num_layers)]
         return subprocess.run(
             command,
             cwd=self.work_dir,

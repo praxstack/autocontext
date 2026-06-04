@@ -1,0 +1,263 @@
+"""mlx-lm LoRA/DoRA fine-tuning backend for autoresearch.
+
+Instead of training a from-scratch GPT (the `mlx`/`cuda` backends), this fine-tunes a
+*pretrained* mlx-lm model with LoRA/DoRA on the curated, optionally score-conditioned
+records. It uses the base model's own tokenizer and a natural-language
+prompt/completion format with completion-only loss (``--mask-prompt``), so the model
+starts from a strong prior over JSON / numbers / structure rather than learning the
+format from scratch.
+
+Reuses the shared record curation (``data_selection``), the scenario interface
+(``get_task_prompt`` / ``evaluate_output`` / ``execute_match``), the strategy parser
+(``extract_strategy``), and the quality bucketing (``score_to_quality_bucket``). It
+does NOT use the autoresearch ``<|...|>`` BPE token contract.
+
+Gated behind the ``mlxlm`` optional-dependency extra (``mlx-lm``).
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+from autocontext.training.autoresearch.sequence_format import (
+    NUM_QUALITY_BUCKETS,
+    extract_strategy,
+    resolve_scenario_context,
+    score_to_quality_bucket,
+)
+
+HAS_MLXLM = importlib.util.find_spec("mlx_lm") is not None
+
+# Small instruct base with a 4-bit MLX conversion (QLoRA-friendly). Overridable.
+DEFAULT_BASE_MODEL = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+
+
+# ---------------------------------------------------------------------------
+# Pure data conversion (records -> mlx-lm completions format)
+# ---------------------------------------------------------------------------
+
+
+def _quality_prefix(quality: int | None, num_buckets: int) -> str:
+    """Natural-language quality directive prepended to the prompt when conditioning."""
+    if quality is None:
+        return ""
+    return f"Target quality: {quality} out of {num_buckets - 1} (higher is better).\n"
+
+
+def build_completion_record(
+    *,
+    task_prompt: str,
+    strategy_json: str,
+    quality: int | None = None,
+    num_buckets: int = NUM_QUALITY_BUCKETS,
+) -> dict[str, str]:
+    """Build one mlx-lm ``{"prompt", "completion"}`` record.
+
+    The prompt is the scenario task instruction (optionally prefixed with a quality
+    directive for score-conditioned training); the completion is the strategy JSON.
+    """
+    return {"prompt": _quality_prefix(quality, num_buckets) + task_prompt, "completion": strategy_json}
+
+
+def records_to_completions(
+    records: list[dict[str, Any]],
+    *,
+    task_prompt: str,
+    score_conditioned: bool = False,
+    num_buckets: int = NUM_QUALITY_BUCKETS,
+) -> list[dict[str, str]]:
+    """Convert training records into mlx-lm completion records."""
+    out: list[dict[str, str]] = []
+    for record in records:
+        quality = score_to_quality_bucket(float(record.get("score", 0.0)), num_buckets=num_buckets) if score_conditioned else None
+        out.append(
+            build_completion_record(
+                task_prompt=task_prompt,
+                strategy_json=json.dumps(record["strategy"], sort_keys=True),
+                quality=quality,
+                num_buckets=num_buckets,
+            )
+        )
+    return out
+
+
+def write_completion_dataset(
+    records: list[dict[str, Any]],
+    data_dir: Path,
+    *,
+    task_prompt: str,
+    score_conditioned: bool = False,
+    num_buckets: int = NUM_QUALITY_BUCKETS,
+    val_fraction: float = 0.1,
+) -> tuple[int, int]:
+    """Write ``train.jsonl`` + ``valid.jsonl`` (mlx-lm requires both) and return their sizes."""
+    comps = records_to_completions(records, task_prompt=task_prompt, score_conditioned=score_conditioned, num_buckets=num_buckets)
+    n_val = max(1, int(len(comps) * val_fraction)) if len(comps) > 1 else 0
+    val = comps[:n_val]
+    train = comps[n_val:] or comps
+    if not val:  # mlx-lm needs a non-empty valid set; reuse one train example
+        val = train[:1]
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "train.jsonl").write_text("\n".join(json.dumps(c) for c in train) + "\n", encoding="utf-8")
+    (data_dir / "valid.jsonl").write_text("\n".join(json.dumps(c) for c in val) + "\n", encoding="utf-8")
+    return len(train), len(val)
+
+
+def scenario_task_prompt(scenario: Any) -> str:
+    """Resolve the natural-language task instruction for a scenario.
+
+    Prefers ``get_task_prompt(initial_state())`` (agent-task scenarios); falls back to
+    the shared context resolver (task prompt / description).
+    """
+    get_task_prompt = getattr(scenario, "get_task_prompt", None)
+    initial_state = getattr(scenario, "initial_state", None)
+    if callable(get_task_prompt) and callable(initial_state):
+        try:
+            return str(get_task_prompt(initial_state()))
+        except Exception:
+            pass
+    return resolve_scenario_context(scenario)
+
+
+# ---------------------------------------------------------------------------
+# Training (gated; requires mlx-lm + a base model)
+# ---------------------------------------------------------------------------
+
+
+def run_mlxlm_training(
+    *,
+    scenario_name: str,
+    data_path: Path,
+    output_dir: Path,
+    time_budget: int,
+    memory_limit_mb: int,
+    train_steps: int = 100,
+    batch_size: int = 4,
+    learning_rate: float = 1e-4,
+    base_model: str = DEFAULT_BASE_MODEL,
+    fine_tune_type: str = "lora",
+    num_layers: int = 8,
+    assess_samples: int = 8,
+    assess_temperature: float = 0.0,
+    elite_fraction: float = 1.0,
+    dedupe: bool = False,
+    dedupe_near_threshold: float = 1.0,
+    score_conditioned: bool = False,
+) -> dict[str, float]:
+    """Fine-tune a pretrained mlx-lm model with LoRA/DoRA and assess it in-scenario."""
+    from autocontext.scenarios import SCENARIO_REGISTRY
+    from autocontext.training.autoresearch.data_selection import curate_records
+    from autocontext.training.autoresearch.train import _all_records, _peak_memory_mb, _preflight_backend_deps
+
+    _preflight_backend_deps("mlxlm")
+    if scenario_name not in SCENARIO_REGISTRY:
+        raise ValueError(f"unknown scenario: {scenario_name}")
+    scenario = SCENARIO_REGISTRY[scenario_name]()
+
+    records = curate_records(
+        _all_records(data_path),
+        elite_fraction=elite_fraction,
+        dedupe=dedupe,
+        near_threshold=dedupe_near_threshold,
+    )
+    task_prompt = scenario_task_prompt(scenario)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    data_dir = output_dir / "data"
+    n_train, _ = write_completion_dataset(records, data_dir, task_prompt=task_prompt, score_conditioned=score_conditioned)
+    adapter_dir = output_dir / "adapters"
+
+    command = [
+        sys.executable,
+        "-m",
+        "mlx_lm.lora",
+        "--model",
+        base_model,
+        "--train",
+        "--data",
+        str(data_dir),
+        "--adapter-path",
+        str(adapter_dir),
+        "--fine-tune-type",
+        fine_tune_type,
+        "--iters",
+        str(train_steps),
+        "--batch-size",
+        str(batch_size),
+        "--num-layers",
+        str(num_layers),
+        "--learning-rate",
+        str(learning_rate),
+        "--mask-prompt",  # completion-only loss
+    ]
+    started = time.perf_counter()
+    result = subprocess.run(command, capture_output=True, text=True, timeout=max(time_budget, 1), check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"mlx-lm LoRA training failed (exit {result.returncode}):\n{result.stderr[-2000:]}")
+
+    metrics = _assess_mlxlm(
+        base_model=base_model,
+        adapter_dir=adapter_dir,
+        scenario=scenario,
+        task_prompt=task_prompt,
+        n_samples=assess_samples,
+        temperature=assess_temperature,
+        score_conditioned=score_conditioned,
+    )
+    return {
+        "avg_score": metrics["avg_score"],
+        "valid_rate": metrics["valid_rate"],
+        "val_loss": float("nan"),
+        "training_seconds": time.perf_counter() - started,
+        "peak_memory_mb": min(_peak_memory_mb(), float(memory_limit_mb)),
+        "num_steps": float(train_steps),
+        "num_records": float(n_train),
+        "num_params_m": 0.0,  # LoRA adapter params are small / model-dependent
+        "depth": 0.0,
+    }
+
+
+def _assess_mlxlm(
+    *,
+    base_model: str,
+    adapter_dir: Path,
+    scenario: Any,
+    task_prompt: str,
+    n_samples: int,
+    temperature: float,
+    score_conditioned: bool,
+) -> dict[str, float]:
+    from mlx_lm import generate, load  # type: ignore[import-not-found]
+
+    loaded = load(base_model, adapter_path=str(adapter_dir))
+    model, tokenizer = loaded[0], loaded[1]
+    prefix = _quality_prefix(NUM_QUALITY_BUCKETS - 1, NUM_QUALITY_BUCKETS) if score_conditioned else ""
+    prompt = prefix + task_prompt
+    is_game = hasattr(scenario, "execute_match")
+
+    scores: list[float] = []
+    valid = 0
+    for _ in range(max(1, n_samples)):
+        try:
+            text = generate(model, tokenizer, prompt=prompt, max_tokens=512, verbose=False)
+            if is_game:
+                strategy = extract_strategy(text)
+                if strategy is None:
+                    continue
+                valid += 1
+                scores.append(scenario.execute_match(strategy, seed=0).score)
+            else:
+                valid += 1
+                scores.append(scenario.evaluate_output(output=text).score)
+        except Exception:
+            continue
+    return {
+        "avg_score": sum(scores) / len(scores) if scores else 0.0,
+        "valid_rate": valid / n_samples if n_samples > 0 else 0.0,
+    }

@@ -584,7 +584,7 @@ class TestTrainCLI:
         from autocontext.cli import app
 
         runner = CliRunner()
-        with patch("autocontext.cli._run_training") as mock_run:
+        with patch("autocontext.cli_train._run_training") as mock_run:
             mock_run.return_value = TrainingResult(
                 scenario="grid_ctf",
                 total_experiments=5,
@@ -633,7 +633,7 @@ class TestTrainCLI:
         from autocontext.cli import app
 
         runner = CliRunner()
-        with patch("autocontext.cli._run_training") as mock_run:
+        with patch("autocontext.cli_train._run_training") as mock_run:
             mock_run.return_value = TrainingResult(
                 scenario="grid_ctf",
                 total_experiments=0,
@@ -651,7 +651,7 @@ class TestTrainCLI:
         from autocontext.cli import app
 
         runner = CliRunner()
-        with patch("autocontext.cli._run_training") as mock_run:
+        with patch("autocontext.cli_train._run_training") as mock_run:
             mock_run.side_effect = KeyboardInterrupt()
             result = runner.invoke(app, ["train", "--scenario", "grid_ctf"])
             # Should not crash — graceful exit
