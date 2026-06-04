@@ -97,6 +97,23 @@ uv run autoctx train \
 The published model artifact records the curation settings plus the raw and
 curated record counts (`data_stats`) so a trained model's data split is reproducible.
 
+### Score-conditioned generation (optional)
+
+`--score-conditioned` trains the model to map a target quality onto a construction
+(Decision-Transformer / Quark style): each training example gets a `<|quality|>`
+control token before the strategy, derived from its score (quantized into 5 buckets
+over `[0, 1]`). At assessment/inference the model is prompted with the **top** bucket,
+steering it toward high-quality outputs rather than the dataset mean. Default off, so
+the sequence format is unchanged unless the flag is set. Pairs naturally with
+`--elite-fraction` (train on the best, then ask for the best):
+
+```bash
+uv run autoctx train \
+  --scenario grid_ctf \
+  --data /absolute/path/to/training/grid_ctf.jsonl \
+  --score-conditioned --elite-fraction 0.3
+```
+
 ## Automating Host Training for Sandboxed Agents
 
 For sandboxed agents, especially OpenClaw agents running in Docker, the cleanest low-risk approach is a file-based host-training bridge.

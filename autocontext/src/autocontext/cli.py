@@ -919,6 +919,11 @@ def train(
         "--dedupe-near-threshold",
         help="With --dedupe, also drop near-duplicates at/above this similarity (1.0 = exact only)",
     ),
+    score_conditioned: bool = typer.Option(
+        False,
+        "--score-conditioned",
+        help="Emit a quality control token and generate conditioned on the top quality bucket",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output structured JSON"),
 ) -> None:
     """Launch the autoresearch-style training loop."""
@@ -945,6 +950,7 @@ def train(
         elite_fraction=elite_fraction,
         dedupe=dedupe,
         dedupe_near_threshold=dedupe_near_threshold,
+        score_conditioned=score_conditioned,
     )
 
     try:

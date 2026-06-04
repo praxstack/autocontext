@@ -289,6 +289,7 @@ if HAS_MLX:
         temperature: float = 0.0,
         top_k: int = 0,
         seed_base: int = 0,
+        target_quality: int | None = None,
     ) -> dict[str, float]:
         """Assess model quality by generating strategies and scoring them.
 
@@ -334,6 +335,7 @@ if HAS_MLX:
                     seed=seed_base + i,
                     temperature=temperature,
                     top_k=top_k,
+                    target_quality=target_quality,
                 )
                 strategy = _extract_strategy_json(raw_output)
 
@@ -377,6 +379,7 @@ if HAS_MLX:
         max_new_tokens: int = 128,
         temperature: float = 0.0,
         top_k: int = 0,
+        target_quality: int | None = None,
     ) -> str:
         """Generate a candidate strategy from the model.
 
@@ -385,13 +388,16 @@ if HAS_MLX:
         seeded by ``seed`` so distinct seeds yield diverse completions. In both
         modes a vocab/special-token mask keeps generation within decodable ids and
         prevents the body from re-emitting structural header tokens.
+
+        ``target_quality`` conditions generation on a quality bucket (for models
+        trained score-conditioned), steering toward that quality.
         """
 
         if not hasattr(model, "cfg"):
             # Test doubles may not expose a sampling surface; fall back to the tokenizer stub.
             return cast(str, tokenizer.decode([seed] * 32))
 
-        prompt = build_generation_prompt(scenario)
+        prompt = build_generation_prompt(scenario, target_quality=target_quality)
         token_ids = list(tokenizer.encode(prompt))
         seq_len = int(model.cfg.seq_len)
         vocab_size = int(getattr(model.cfg, "vocab_size", total_vocab_size(BASE_VOCAB_SIZE)))

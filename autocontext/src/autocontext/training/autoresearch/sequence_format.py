@@ -34,7 +34,14 @@ SPECIAL_TOKEN_STRINGS = (
     "<|strategy|>",
     "<|score|>",
     "<|end|>",
+    # Quality/return control token (Decision-Transformer / Quark style): appended
+    # last so the existing token ids (scenario..end) stay stable. Emitted before the
+    # strategy only when score-conditioned training is enabled.
+    "<|quality|>",
 )
+
+# Number of discrete quality buckets the score is quantized into for conditioning.
+NUM_QUALITY_BUCKETS = 5
 
 # rustbpe / tiktoken split pattern (GPT-style). Part of the tokenizer contract.
 _BPE_PAT = (
@@ -57,6 +64,21 @@ def build_special_tokens(base_vocab_size: int) -> dict[str, int]:
 def total_vocab_size(base_vocab_size: int) -> int:
     """Return the embedding/output vocab size including special tokens."""
     return base_vocab_size + len(SPECIAL_TOKEN_STRINGS)
+
+
+def score_to_quality_bucket(score: float, *, num_buckets: int = NUM_QUALITY_BUCKETS, lo: float = 0.0, hi: float = 1.0) -> int:
+    """Quantize a score into a discrete quality bucket ``0..num_buckets-1``.
+
+    Buckets are uniform over ``[lo, hi]`` (scores are normalized to ``[0, 1]`` for
+    construction scenarios). The top bucket (``num_buckets-1``) is the conditioning
+    target used at generation time: "produce a construction as good as the best".
+    Scores outside the range are clamped.
+    """
+    if num_buckets <= 1 or hi <= lo:
+        return 0
+    frac = (score - lo) / (hi - lo)
+    bucket = int(frac * num_buckets)
+    return max(0, min(num_buckets - 1, bucket))
 
 
 def decodable_vocab_size(tokenizer: Any) -> int:
@@ -100,7 +122,7 @@ def generation_logit_mask_values(
         mask[i] = -1e9
     if block_structural_specials:
         specials = build_special_tokens(base)
-        for name in ("<|scenario|>", "<|context|>", "<|strategy|>"):
+        for name in ("<|scenario|>", "<|context|>", "<|strategy|>", "<|quality|>"):
             sid = specials.get(name)
             if sid is not None and 0 <= sid < vocab_size:
                 mask[sid] = -1e9
@@ -152,22 +174,30 @@ def format_example(
     context: str,
     strategy_json: str,
     score: float,
+    quality: int | None = None,
 ) -> str:
     """Format a single training example in the standard input format.
 
-    Format:
-        <|scenario|>{scenario}<|context|>{context}<|strategy|>{strategy_json}<|score|>{score}<|end|>
+    Format (``quality`` omitted unless score-conditioned):
+        <|scenario|>{scenario}<|context|>{context}[<|quality|>{quality}]<|strategy|>{strategy_json}<|score|>{score}<|end|>
     """
-    return f"<|scenario|>{scenario}<|context|>{context}<|strategy|>{strategy_json}<|score|>{score}<|end|>"
+    quality_segment = f"<|quality|>{quality}" if quality is not None else ""
+    return f"<|scenario|>{scenario}<|context|>{context}{quality_segment}<|strategy|>{strategy_json}<|score|>{score}<|end|>"
 
 
-def build_generation_prompt(scenario: Any) -> str:
+def build_generation_prompt(scenario: Any, *, target_quality: int | None = None) -> str:
     """Build the generation prompt for a scenario (header up to ``<|strategy|>``).
 
     Single source for both the MLX and CUDA generators (and any provider) so the
-    prompt prefix stays in lockstep with :func:`format_example`.
+    prompt prefix stays in lockstep with :func:`format_example`. When
+    ``target_quality`` is given (score-conditioned generation) the quality control
+    token is emitted before ``<|strategy|>`` to steer toward that quality bucket.
     """
-    return f"<|scenario|>{resolve_scenario_name(scenario)}<|context|>{resolve_scenario_context(scenario)}<|strategy|>"
+    quality_segment = f"<|quality|>{target_quality}" if target_quality is not None else ""
+    return (
+        f"<|scenario|>{resolve_scenario_name(scenario)}<|context|>{resolve_scenario_context(scenario)}"
+        f"{quality_segment}<|strategy|>"
+    )
 
 
 def extract_strategy(text: str) -> dict[str, Any] | None:
@@ -269,10 +299,18 @@ class TrainingExample:
             score=float(record["score"]),
         )
 
-    def to_sequence(self) -> str:
+    def to_sequence(self, *, score_conditioned: bool = False, num_buckets: int = NUM_QUALITY_BUCKETS) -> str:
+        """Lay the fields out as a token sequence.
+
+        When ``score_conditioned`` is set, a quality control token derived from the
+        record's score is emitted before the strategy so the model learns to map a
+        target quality onto a construction (Decision-Transformer / Quark style).
+        """
+        quality = score_to_quality_bucket(self.score, num_buckets=num_buckets) if score_conditioned else None
         return format_example(
             scenario=self.scenario,
             context=self.context,
             strategy_json=self.strategy_json,
             score=self.score,
+            quality=quality,
         )
