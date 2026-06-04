@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from autocontext.training import HAS_MLX
+from autocontext.training.autoresearch.data_selection import curate_records
 from autocontext.training.autoresearch.prepare import BASE_VOCAB_SIZE, save_tokenizer_json, total_vocab_size
 
 logger = logging.getLogger(__name__)
@@ -438,6 +439,9 @@ def _run_mlx_training(
     assess_temperature: float = 0.0,
     assess_top_k: int = 0,
     val_select: bool = False,
+    elite_fraction: float = 1.0,
+    dedupe: bool = False,
+    dedupe_near_threshold: float = 1.0,
 ) -> dict[str, float]:
     _preflight_backend_deps("mlx")
     if not HAS_MLX:
@@ -480,6 +484,15 @@ def _run_mlx_training(
         train_records, val_records = list(val_records), []
     if not train_records:
         raise ValueError(f"no training records found in {data_path}")
+
+    # Curate the TRAIN split only (val stays held out untouched): dedupe duplicate
+    # constructions and keep the highest-scoring elite fraction.
+    train_records = curate_records(
+        train_records,
+        elite_fraction=elite_fraction,
+        dedupe=dedupe,
+        near_threshold=dedupe_near_threshold,
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     corpus_path = output_dir / "corpus.txt"
@@ -617,6 +630,9 @@ def run_training(
     assess_temperature: float = 0.0,
     assess_top_k: int = 0,
     val_select: bool = False,
+    elite_fraction: float = 1.0,
+    dedupe: bool = False,
+    dedupe_near_threshold: float = 1.0,
     backend: str = "mlx",
 ) -> dict[str, float]:
     normalized_backend = backend.strip().lower()
@@ -638,6 +654,9 @@ def run_training(
             assess_temperature=assess_temperature,
             assess_top_k=assess_top_k,
             val_select=val_select,
+            elite_fraction=elite_fraction,
+            dedupe=dedupe,
+            dedupe_near_threshold=dedupe_near_threshold,
         )
     if normalized_backend == "cuda":
         if val_select:
@@ -659,6 +678,9 @@ def run_training(
             assess_samples=assess_samples,
             assess_temperature=assess_temperature,
             assess_top_k=assess_top_k,
+            elite_fraction=elite_fraction,
+            dedupe=dedupe,
+            dedupe_near_threshold=dedupe_near_threshold,
         )
     raise ValueError("unsupported training backend: expected 'mlx' or 'cuda'")
 
@@ -688,6 +710,23 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="keep the best-by-validation-loss checkpoint and early-stop (MLX backend only)",
     )
+    parser.add_argument(
+        "--elite-fraction",
+        type=float,
+        default=1.0,
+        help="train on only the top fraction of records by score (1.0 = all)",
+    )
+    parser.add_argument(
+        "--dedupe",
+        action="store_true",
+        help="drop duplicate constructions, keeping the highest-scoring representative",
+    )
+    parser.add_argument(
+        "--dedupe-near-threshold",
+        type=float,
+        default=1.0,
+        help="with --dedupe, also drop near-duplicates at/above this shingle-Jaccard similarity (1.0 = exact only)",
+    )
     return parser
 
 
@@ -709,6 +748,9 @@ def main(argv: list[str] | None = None) -> int:
             assess_temperature=args.assess_temperature,
             assess_top_k=args.assess_top_k,
             val_select=args.val_select,
+            elite_fraction=args.elite_fraction,
+            dedupe=args.dedupe,
+            dedupe_near_threshold=args.dedupe_near_threshold,
             backend=args.backend,
         )
     except Exception as exc:

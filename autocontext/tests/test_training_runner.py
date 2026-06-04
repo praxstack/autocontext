@@ -681,3 +681,36 @@ class TestValSelectSubprocess:
     def test_no_val_select_omits_flag(self, tmp_path: Path) -> None:
         command = self._capture_command(tmp_path, val_select=False)
         assert "--val-select" not in command
+
+
+class TestCurationSubprocess:
+    """Elite/dedup curation flags must reach the train.py subprocess."""
+
+    def _capture_command(self, tmp_path: Path, **config_kwargs: object) -> list[str]:
+        cfg = TrainingConfig(
+            scenario="grid_ctf",
+            data_path=tmp_path / "data.jsonl",
+            **config_kwargs,
+        )
+        runner = TrainingRunner(cfg, work_dir=tmp_path / "workspace")
+        fake = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        with patch("autocontext.training.runner.subprocess.run", return_value=fake) as mock_run:
+            runner._run_experiment_subprocess(0)
+        return list(mock_run.call_args.args[0])
+
+    def test_defaults_omit_curation_flags(self, tmp_path: Path) -> None:
+        command = self._capture_command(tmp_path)
+        assert "--elite-fraction" not in command
+        assert "--dedupe" not in command
+        assert "--dedupe-near-threshold" not in command
+
+    def test_elite_fraction_appended(self, tmp_path: Path) -> None:
+        command = self._capture_command(tmp_path, elite_fraction=0.25)
+        assert "--elite-fraction" in command
+        assert command[command.index("--elite-fraction") + 1] == "0.25"
+
+    def test_dedupe_flags_appended(self, tmp_path: Path) -> None:
+        command = self._capture_command(tmp_path, dedupe=True, dedupe_near_threshold=0.8)
+        assert "--dedupe" in command
+        assert "--dedupe-near-threshold" in command
+        assert command[command.index("--dedupe-near-threshold") + 1] == "0.8"

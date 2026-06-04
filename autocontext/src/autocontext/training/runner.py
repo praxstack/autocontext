@@ -59,6 +59,9 @@ class TrainingConfig:
     agent_provider: str = "anthropic"
     agent_model: str = ""
     val_select: bool = False  # keep best-by-validation-loss checkpoint + early stop (MLX only)
+    elite_fraction: float = 1.0  # train on only the top fraction of records by score (1.0 = all)
+    dedupe: bool = False  # drop duplicate constructions, keeping the highest-scoring representative
+    dedupe_near_threshold: float = 1.0  # with dedupe, also drop near-dups at/above this similarity
 
 
 @dataclass(slots=True)
@@ -372,6 +375,12 @@ class TrainingRunner:
         ]
         if self.config.val_select:
             command.append("--val-select")
+        if self.config.elite_fraction != 1.0:
+            command += ["--elite-fraction", str(self.config.elite_fraction)]
+        if self.config.dedupe:
+            command.append("--dedupe")
+        if self.config.dedupe_near_threshold != 1.0:
+            command += ["--dedupe-near-threshold", str(self.config.dedupe_near_threshold)]
         return subprocess.run(
             command,
             cwd=self.work_dir,

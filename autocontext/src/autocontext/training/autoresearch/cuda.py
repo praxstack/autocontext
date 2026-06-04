@@ -262,7 +262,11 @@ def run_cuda_training(
     assess_samples: int = 8,
     assess_temperature: float = 0.0,
     assess_top_k: int = 0,
+    elite_fraction: float = 1.0,
+    dedupe: bool = False,
+    dedupe_near_threshold: float = 1.0,
 ) -> dict[str, float]:
+    from autocontext.training.autoresearch.data_selection import curate_records
     from autocontext.training.autoresearch.train import _preflight_backend_deps
 
     _preflight_backend_deps("cuda")
@@ -280,7 +284,12 @@ def run_cuda_training(
     if scenario_name not in SCENARIO_REGISTRY:
         raise ValueError(f"unknown scenario: {scenario_name}")
 
-    records = _all_records(data_path)
+    records = curate_records(
+        _all_records(data_path),
+        elite_fraction=elite_fraction,
+        dedupe=dedupe,
+        near_threshold=dedupe_near_threshold,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     corpus_path = output_dir / "corpus.txt"
     corpus_path.write_text(_build_corpus(records), encoding="utf-8")
