@@ -908,10 +908,27 @@ def train(
         "--val-select",
         help="Keep the best-by-validation-loss checkpoint and early-stop (MLX backend only)",
     ),
+    elite_fraction: float = typer.Option(
+        1.0, "--elite-fraction", help="Train on only the top fraction of records by score (1.0 = all)"
+    ),
+    dedupe: bool = typer.Option(
+        False, "--dedupe", help="Drop duplicate constructions, keeping the highest-scoring representative"
+    ),
+    dedupe_near_threshold: float = typer.Option(
+        1.0,
+        "--dedupe-near-threshold",
+        help="With --dedupe, also drop near-duplicates at/above this similarity (1.0 = exact only)",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output structured JSON"),
 ) -> None:
     """Launch the autoresearch-style training loop."""
     from autocontext.training.runner import TrainingConfig
+
+    # Fail fast on out-of-range curation values before any workspace/subprocess setup.
+    if not 0.0 < elite_fraction <= 1.0:
+        raise typer.BadParameter(f"--elite-fraction must be in (0, 1], got {elite_fraction}")
+    if not 0.0 < dedupe_near_threshold <= 1.0:
+        raise typer.BadParameter(f"--dedupe-near-threshold must be in (0, 1], got {dedupe_near_threshold}")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -925,6 +942,9 @@ def train(
         agent_provider=agent_provider,
         agent_model=agent_model,
         val_select=val_select,
+        elite_fraction=elite_fraction,
+        dedupe=dedupe,
+        dedupe_near_threshold=dedupe_near_threshold,
     )
 
     try:

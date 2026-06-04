@@ -59,6 +59,9 @@ class TrainingConfig:
     agent_provider: str = "anthropic"
     agent_model: str = ""
     val_select: bool = False  # keep best-by-validation-loss checkpoint + early stop (MLX only)
+    elite_fraction: float = 1.0  # train on only the top fraction of records by score (1.0 = all)
+    dedupe: bool = False  # drop duplicate constructions, keeping the highest-scoring representative
+    dedupe_near_threshold: float = 1.0  # with dedupe, also drop near-dups at/above this similarity
 
 
 @dataclass(slots=True)
@@ -372,6 +375,12 @@ class TrainingRunner:
         ]
         if self.config.val_select:
             command.append("--val-select")
+        if self.config.elite_fraction != 1.0:
+            command += ["--elite-fraction", str(self.config.elite_fraction)]
+        if self.config.dedupe:
+            command.append("--dedupe")
+        if self.config.dedupe_near_threshold != 1.0:
+            command += ["--dedupe-near-threshold", str(self.config.dedupe_near_threshold)]
         return subprocess.run(
             command,
             cwd=self.work_dir,
@@ -530,13 +539,22 @@ class TrainingRunner:
             logger.debug("training.runner: caught Exception", exc_info=True)
             return ""
 
-    def _data_stats(self) -> dict[str, float | str]:
-        stats: dict[str, float | str] = {"data_path": str(self.config.data_path)}
+    def _data_stats(self, best_result: ExperimentResult | None = None) -> dict[str, float | str]:
+        # Record the curation settings (with the raw + curated record counts) so a
+        # published model carries enough provenance to reproduce the training split.
+        stats: dict[str, float | str] = {
+            "data_path": str(self.config.data_path),
+            "elite_fraction": float(self.config.elite_fraction),
+            "dedupe": 1.0 if self.config.dedupe else 0.0,
+            "dedupe_near_threshold": float(self.config.dedupe_near_threshold),
+        }
         try:
             line_count = sum(1 for _ in self.config.data_path.open(encoding="utf-8"))
             stats["records"] = float(line_count)
         except OSError:
             logger.debug("training.runner: suppressed OSError", exc_info=True)
+        if best_result is not None and "num_records" in best_result.summary_metrics:
+            stats["curated_records"] = float(best_result.summary_metrics["num_records"])
         return stats
 
     def _checkpoint_dir(self, experiment_index: int) -> Path:
@@ -567,7 +585,7 @@ class TrainingRunner:
                 "num_steps": best_result.summary_metrics.get("num_steps", 0.0),
                 "depth": best_result.summary_metrics.get("depth", 0.0),
             },
-            data_stats=self._data_stats(),
+            data_stats=self._data_stats(best_result),
             runtime_types=self._backend.supported_runtime_types(),
             metadata={
                 "backend_metadata": self._backend.metadata(),

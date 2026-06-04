@@ -681,3 +681,67 @@ class TestValSelectSubprocess:
     def test_no_val_select_omits_flag(self, tmp_path: Path) -> None:
         command = self._capture_command(tmp_path, val_select=False)
         assert "--val-select" not in command
+
+
+class TestCurationSubprocess:
+    """Elite/dedup curation flags must reach the train.py subprocess."""
+
+    def _capture_command(self, tmp_path: Path, **config_kwargs: object) -> list[str]:
+        cfg = TrainingConfig(
+            scenario="grid_ctf",
+            data_path=tmp_path / "data.jsonl",
+            **config_kwargs,
+        )
+        runner = TrainingRunner(cfg, work_dir=tmp_path / "workspace")
+        fake = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        with patch("autocontext.training.runner.subprocess.run", return_value=fake) as mock_run:
+            runner._run_experiment_subprocess(0)
+        return list(mock_run.call_args.args[0])
+
+    def test_defaults_omit_curation_flags(self, tmp_path: Path) -> None:
+        command = self._capture_command(tmp_path)
+        assert "--elite-fraction" not in command
+        assert "--dedupe" not in command
+        assert "--dedupe-near-threshold" not in command
+
+    def test_elite_fraction_appended(self, tmp_path: Path) -> None:
+        command = self._capture_command(tmp_path, elite_fraction=0.25)
+        assert "--elite-fraction" in command
+        assert command[command.index("--elite-fraction") + 1] == "0.25"
+
+    def test_dedupe_flags_appended(self, tmp_path: Path) -> None:
+        command = self._capture_command(tmp_path, dedupe=True, dedupe_near_threshold=0.8)
+        assert "--dedupe" in command
+        assert "--dedupe-near-threshold" in command
+        assert command[command.index("--dedupe-near-threshold") + 1] == "0.8"
+
+
+class TestDataStatsProvenance:
+    """Published data_stats records the curation settings + raw/curated counts."""
+
+    def test_data_stats_includes_curation_settings_and_counts(self, tmp_path: Path) -> None:
+        data_path = tmp_path / "data.jsonl"
+        data_path.write_text("{}\n{}\n{}\n{}\n", encoding="utf-8")  # 4 raw records
+        cfg = TrainingConfig(
+            scenario="grid_ctf",
+            data_path=data_path,
+            elite_fraction=0.5,
+            dedupe=True,
+            dedupe_near_threshold=0.9,
+        )
+        runner = TrainingRunner(cfg, work_dir=tmp_path / "workspace")
+        best = ExperimentResult(
+            experiment_index=0,
+            avg_score=0.5,
+            valid_rate=1.0,
+            peak_memory_mb=1.0,
+            training_seconds=1.0,
+            outcome=ExperimentOutcome.KEPT,
+            summary_metrics={"num_records": 2.0},  # curated count from the subprocess summary
+        )
+        stats = runner._data_stats(best)
+        assert stats["elite_fraction"] == 0.5
+        assert stats["dedupe"] == 1.0
+        assert stats["dedupe_near_threshold"] == 0.9
+        assert stats["records"] == 4.0  # raw JSONL line count
+        assert stats["curated_records"] == 2.0  # records actually used after curation

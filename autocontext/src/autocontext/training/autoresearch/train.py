@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from autocontext.training import HAS_MLX
+from autocontext.training.autoresearch.data_selection import curate_records
 from autocontext.training.autoresearch.prepare import BASE_VOCAB_SIZE, save_tokenizer_json, total_vocab_size
 
 logger = logging.getLogger(__name__)
@@ -354,19 +355,22 @@ def format_summary(
     num_params_m: float,
     depth: int,
     val_loss: float | None = None,
+    num_records: float | None = None,
 ) -> str:
     """Format the training results summary block.
 
     This block is printed to stdout and parsed by the autoresearch agent and by
-    TrainingRunner.parse_summary. ``val_loss`` is included only when available
-    (MLX backend with a validation split) so existing callers stay unchanged.
+    TrainingRunner.parse_summary. ``val_loss`` and ``num_records`` are included only
+    when available so existing callers stay unchanged.
     """
     val_loss_line = f"val_loss: {val_loss:.4f}\n" if val_loss is not None else ""
+    num_records_line = f"num_records: {int(num_records)}\n" if num_records is not None else ""
     return (
         "=== TRAINING SUMMARY ===\n"
         f"avg_score: {avg_score:.4f}\n"
         f"valid_rate: {valid_rate:.4f}\n"
         f"{val_loss_line}"
+        f"{num_records_line}"
         f"training_seconds: {training_seconds:.1f}\n"
         f"peak_memory_mb: {peak_memory_mb:.1f}\n"
         f"num_steps: {num_steps}\n"
@@ -438,6 +442,9 @@ def _run_mlx_training(
     assess_temperature: float = 0.0,
     assess_top_k: int = 0,
     val_select: bool = False,
+    elite_fraction: float = 1.0,
+    dedupe: bool = False,
+    dedupe_near_threshold: float = 1.0,
 ) -> dict[str, float]:
     _preflight_backend_deps("mlx")
     if not HAS_MLX:
@@ -480,6 +487,15 @@ def _run_mlx_training(
         train_records, val_records = list(val_records), []
     if not train_records:
         raise ValueError(f"no training records found in {data_path}")
+
+    # Curate the TRAIN split only (val stays held out untouched): dedupe duplicate
+    # constructions and keep the highest-scoring elite fraction.
+    train_records = curate_records(
+        train_records,
+        elite_fraction=elite_fraction,
+        dedupe=dedupe,
+        near_threshold=dedupe_near_threshold,
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     corpus_path = output_dir / "corpus.txt"
@@ -575,6 +591,7 @@ def _run_mlx_training(
         "training_seconds": time.perf_counter() - started,
         "peak_memory_mb": min(_peak_memory_mb(), float(memory_limit_mb)),
         "num_steps": float(steps_completed),
+        "num_records": float(len(train_records)),  # records used after curation
         "num_params_m": _count_params_million(model.parameters()),
         "depth": float(cfg.depth),
     }
@@ -617,8 +634,18 @@ def run_training(
     assess_temperature: float = 0.0,
     assess_top_k: int = 0,
     val_select: bool = False,
+    elite_fraction: float = 1.0,
+    dedupe: bool = False,
+    dedupe_near_threshold: float = 1.0,
     backend: str = "mlx",
 ) -> dict[str, float]:
+    # Reject out-of-range curation values before any training work: select_top_fraction
+    # otherwise clamps and silently collapses the dataset to the single top record.
+    if not 0.0 < elite_fraction <= 1.0:
+        raise ValueError(f"elite_fraction must be in (0, 1], got {elite_fraction}")
+    if not 0.0 < dedupe_near_threshold <= 1.0:
+        raise ValueError(f"dedupe_near_threshold must be in (0, 1], got {dedupe_near_threshold}")
+
     normalized_backend = backend.strip().lower()
     # Dependency preflight runs inside each backend entry (_run_mlx_training /
     # run_cuda_training) so routing/dispatch stays importable and unit-testable
@@ -638,6 +665,9 @@ def run_training(
             assess_temperature=assess_temperature,
             assess_top_k=assess_top_k,
             val_select=val_select,
+            elite_fraction=elite_fraction,
+            dedupe=dedupe,
+            dedupe_near_threshold=dedupe_near_threshold,
         )
     if normalized_backend == "cuda":
         if val_select:
@@ -659,6 +689,9 @@ def run_training(
             assess_samples=assess_samples,
             assess_temperature=assess_temperature,
             assess_top_k=assess_top_k,
+            elite_fraction=elite_fraction,
+            dedupe=dedupe,
+            dedupe_near_threshold=dedupe_near_threshold,
         )
     raise ValueError("unsupported training backend: expected 'mlx' or 'cuda'")
 
@@ -688,6 +721,23 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="keep the best-by-validation-loss checkpoint and early-stop (MLX backend only)",
     )
+    parser.add_argument(
+        "--elite-fraction",
+        type=float,
+        default=1.0,
+        help="train on only the top fraction of records by score (1.0 = all)",
+    )
+    parser.add_argument(
+        "--dedupe",
+        action="store_true",
+        help="drop duplicate constructions, keeping the highest-scoring representative",
+    )
+    parser.add_argument(
+        "--dedupe-near-threshold",
+        type=float,
+        default=1.0,
+        help="with --dedupe, also drop near-duplicates at/above this shingle-Jaccard similarity (1.0 = exact only)",
+    )
     return parser
 
 
@@ -709,6 +759,9 @@ def main(argv: list[str] | None = None) -> int:
             assess_temperature=args.assess_temperature,
             assess_top_k=args.assess_top_k,
             val_select=args.val_select,
+            elite_fraction=args.elite_fraction,
+            dedupe=args.dedupe,
+            dedupe_near_threshold=args.dedupe_near_threshold,
             backend=args.backend,
         )
     except Exception as exc:
@@ -726,6 +779,7 @@ def main(argv: list[str] | None = None) -> int:
             num_params_m=metrics["num_params_m"],
             depth=int(metrics["depth"]),
             val_loss=metrics.get("val_loss"),
+            num_records=metrics.get("num_records"),
         )
     )
     return 0
