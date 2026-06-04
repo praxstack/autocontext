@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 from pathlib import Path
 from typing import Any
 
 from autocontext.training.autoresearch.prepare import save_tokenizer_json
+from autocontext.training.autoresearch.sequence_format import (
+    TrainingExample,
+    build_generation_prompt,
+    extract_strategy,
+    generation_logit_mask_values,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,43 +134,6 @@ def _save_torch_checkpoint_bundle(
     )
 
 
-def _resolve_scenario_name(scenario: Any) -> str:
-    value = getattr(scenario, "name", None)
-    if isinstance(value, str) and value.strip():
-        return value
-    scenario_name = str(scenario.__class__.__name__)
-    return scenario_name.lower()
-
-
-def _resolve_scenario_context(scenario: Any) -> str:
-    task_prompt = getattr(scenario, "get_task_prompt", None)
-    if callable(task_prompt):
-        try:
-            prompt = task_prompt()
-        except TypeError:
-            prompt = None
-        if isinstance(prompt, str):
-            return prompt
-
-    description = getattr(scenario, "description", None)
-    if isinstance(description, str):
-        return description
-    return ""
-
-
-def _extract_strategy_json(text: str) -> dict[str, Any] | None:
-    match = re.search(r"<\|strategy\|>(.*?)(?:<\||$)", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))  # type: ignore[no-any-return]
-        except json.JSONDecodeError:
-            return None
-    try:
-        return json.loads(text)  # type: ignore[no-any-return]
-    except json.JSONDecodeError:
-        return None
-
-
 def _generate_torch_strategy_text(
     *,
     model: Any,
@@ -178,9 +146,7 @@ def _generate_torch_strategy_text(
     temperature: float = 0.0,
     top_k: int = 0,
 ) -> str:
-    from autocontext.training.autoresearch.prepare import generation_logit_mask_values
-
-    prompt = f"<|scenario|>{_resolve_scenario_name(scenario)}<|context|>{_resolve_scenario_context(scenario)}<|strategy|>"
+    prompt = build_generation_prompt(scenario)
     token_ids = list(tokenizer.encode(prompt))
     seq_len = int(model.cfg.seq_len)
     vocab_size = int(getattr(model.cfg, "vocab_size", 0))
@@ -249,7 +215,7 @@ def _assess_torch_strategy_quality(
                 temperature=temperature,
                 top_k=top_k,
             )
-            strategy = _extract_strategy_json(raw_output)
+            strategy = extract_strategy(raw_output)
             if strategy is None:
                 continue
             valid_count += 1
@@ -293,9 +259,9 @@ def run_cuda_training(
     from autocontext.training.autoresearch.train import ModelConfig, _all_records, _build_corpus, _peak_memory_mb
 
     try:
-        from prepare import format_example, train_tokenizer  # type: ignore[import-not-found]
+        from prepare import train_tokenizer  # type: ignore[import-not-found]
     except ImportError:
-        from autocontext.training.autoresearch.prepare import format_example, train_tokenizer
+        from autocontext.training.autoresearch.prepare import train_tokenizer
 
     if scenario_name not in SCENARIO_REGISTRY:
         raise ValueError(f"unknown scenario: {scenario_name}")
@@ -308,16 +274,7 @@ def run_cuda_training(
 
     token_ids: list[int] = []
     for record in records:
-        token_ids.extend(
-            tokenizer.encode(
-                format_example(
-                    scenario=str(record["scenario"]),
-                    context=json.dumps(record.get("context", {}), sort_keys=True),
-                    strategy_json=json.dumps(record["strategy"], sort_keys=True),
-                    score=float(record["score"]),
-                )
-            )
-        )
+        token_ids.extend(tokenizer.encode(TrainingExample.from_record(record).to_sequence()))
 
     batches = _create_torch_dataloader(
         token_ids,
