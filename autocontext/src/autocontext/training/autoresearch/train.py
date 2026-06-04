@@ -353,15 +353,20 @@ def format_summary(
     num_steps: int,
     num_params_m: float,
     depth: int,
+    val_loss: float | None = None,
 ) -> str:
     """Format the training results summary block.
 
-    This block is printed to stdout and parsed by the autoresearch agent.
+    This block is printed to stdout and parsed by the autoresearch agent and by
+    TrainingRunner.parse_summary. ``val_loss`` is included only when available
+    (MLX backend with a validation split) so existing callers stay unchanged.
     """
+    val_loss_line = f"val_loss: {val_loss:.4f}\n" if val_loss is not None else ""
     return (
         "=== TRAINING SUMMARY ===\n"
         f"avg_score: {avg_score:.4f}\n"
         f"valid_rate: {valid_rate:.4f}\n"
+        f"{val_loss_line}"
         f"training_seconds: {training_seconds:.1f}\n"
         f"peak_memory_mb: {peak_memory_mb:.1f}\n"
         f"num_steps: {num_steps}\n"
@@ -720,6 +725,7 @@ def main(argv: list[str] | None = None) -> int:
             num_steps=int(metrics["num_steps"]),
             num_params_m=metrics["num_params_m"],
             depth=int(metrics["depth"]),
+            val_loss=metrics.get("val_loss"),
         )
     )
     return 0
