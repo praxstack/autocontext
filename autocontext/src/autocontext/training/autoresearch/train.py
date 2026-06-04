@@ -21,6 +21,7 @@ from typing import Any
 from autocontext.training import HAS_MLX
 from autocontext.training.autoresearch.data_selection import curate_records
 from autocontext.training.autoresearch.prepare import BASE_VOCAB_SIZE, save_tokenizer_json, total_vocab_size
+from autocontext.training.autoresearch.sequence_format import NUM_QUALITY_BUCKETS
 
 logger = logging.getLogger(__name__)
 
@@ -331,6 +332,12 @@ def save_inference_bundle(
             for key in ("depth", "aspect_ratio", "head_dim", "n_kv_heads", "vocab_size", "seq_len")
             if hasattr(cfg, key)
         }
+    # Persist the conditioning contract so the serving path (MLXProvider) applies the
+    # same top-bucket quality prompt the model was trained with.
+    score_conditioned = bool(getattr(tokenizer, "include_quality", False))
+    config_payload["score_conditioned"] = score_conditioned
+    if score_conditioned:
+        config_payload["num_quality_buckets"] = NUM_QUALITY_BUCKETS
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "config.json").write_text(
         json.dumps(config_payload, indent=2, sort_keys=True),
@@ -418,13 +425,13 @@ def _all_records(data_path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def _build_corpus(records: list[dict[str, Any]]) -> str:
+def _build_corpus(records: list[dict[str, Any]], *, score_conditioned: bool = False) -> str:
     try:
         from prepare import TrainingExample  # type: ignore[import-not-found]
     except ImportError:
         from autocontext.training.autoresearch.prepare import TrainingExample
 
-    return "\n".join(TrainingExample.from_record(record).to_sequence() for record in records)
+    return "\n".join(TrainingExample.from_record(record).to_sequence(score_conditioned=score_conditioned) for record in records)
 
 
 def _run_mlx_training(
@@ -445,6 +452,7 @@ def _run_mlx_training(
     elite_fraction: float = 1.0,
     dedupe: bool = False,
     dedupe_near_threshold: float = 1.0,
+    score_conditioned: bool = False,
 ) -> dict[str, float]:
     _preflight_backend_deps("mlx")
     if not HAS_MLX:
@@ -499,8 +507,8 @@ def _run_mlx_training(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     corpus_path = output_dir / "corpus.txt"
-    corpus_path.write_text(_build_corpus(train_records), encoding="utf-8")
-    tokenizer = train_tokenizer(corpus_path)
+    corpus_path.write_text(_build_corpus(train_records, score_conditioned=score_conditioned), encoding="utf-8")
+    tokenizer = train_tokenizer(corpus_path, score_conditioned=score_conditioned)
 
     base_vocab = int(getattr(tokenizer, "base_vocab_size", BASE_VOCAB_SIZE))
     strategy_token_id = build_special_tokens(base_vocab)["<|strategy|>"]
@@ -508,7 +516,7 @@ def _run_mlx_training(
 
     # Per-example, completion-masked batches (no cross-document packing, no tail drop).
     def _masked_batches(recs: list[dict[str, Any]]) -> list[Any]:
-        seqs = [tokenizer.encode(TrainingExample.from_record(r).to_sequence()) for r in recs]
+        seqs = [tokenizer.encode(TrainingExample.from_record(r).to_sequence(score_conditioned=score_conditioned)) for r in recs]
         return list(
             iter_masked_batches(
                 seqs,
@@ -524,7 +532,9 @@ def _run_mlx_training(
         raise ValueError("not enough tokenized training data for a single batch")
     val_batches = _masked_batches(val_records)
 
-    cfg = ModelConfig(seq_len=seq_len)
+    # Size the model head/embedding to the tokenizer (grows by one slot only when
+    # score-conditioned, so the default architecture is unchanged).
+    cfg = ModelConfig(seq_len=seq_len, vocab_size=int(tokenizer.vocab_size))
     model = GPTModel(cfg)
     optimizer = optim.AdamW(learning_rate=learning_rate)
     loss_and_grad = nn.value_and_grad(model, compute_loss)
@@ -581,6 +591,8 @@ def _run_mlx_training(
         n_samples=assess_samples,
         temperature=assess_temperature,
         top_k=assess_top_k,
+        # condition on the top quality bucket when trained score-conditioned
+        target_quality=(NUM_QUALITY_BUCKETS - 1) if score_conditioned else None,
     )
     save_inference_bundle(model, cfg, tokenizer, output_dir)
 
@@ -637,6 +649,7 @@ def run_training(
     elite_fraction: float = 1.0,
     dedupe: bool = False,
     dedupe_near_threshold: float = 1.0,
+    score_conditioned: bool = False,
     backend: str = "mlx",
 ) -> dict[str, float]:
     # Reject out-of-range curation values before any training work: select_top_fraction
@@ -668,6 +681,7 @@ def run_training(
             elite_fraction=elite_fraction,
             dedupe=dedupe,
             dedupe_near_threshold=dedupe_near_threshold,
+            score_conditioned=score_conditioned,
         )
     if normalized_backend == "cuda":
         if val_select:
@@ -692,6 +706,7 @@ def run_training(
             elite_fraction=elite_fraction,
             dedupe=dedupe,
             dedupe_near_threshold=dedupe_near_threshold,
+            score_conditioned=score_conditioned,
         )
     raise ValueError("unsupported training backend: expected 'mlx' or 'cuda'")
 
@@ -709,35 +724,15 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--seq-len", type=int, default=128)
     parser.add_argument("--assess-samples", type=int, default=8)
-    parser.add_argument(
-        "--assess-temperature",
-        type=float,
-        default=0.0,
-        help="sampling temperature for assessment generation (<=0 = greedy; >0 enables diverse samples)",
-    )
+    parser.add_argument("--assess-temperature", type=float, default=0.0, help="assessment sampling temp (<=0 greedy)")
     parser.add_argument("--assess-top-k", type=int, default=0, help="optional top-k truncation when sampling")
+    parser.add_argument("--val-select", action="store_true", help="keep best-by-val-loss checkpoint + early-stop (MLX)")
+    parser.add_argument("--elite-fraction", type=float, default=1.0, help="train on only the top fraction by score")
+    parser.add_argument("--dedupe", action="store_true", help="drop duplicate constructions (keep highest-scoring)")
     parser.add_argument(
-        "--val-select",
-        action="store_true",
-        help="keep the best-by-validation-loss checkpoint and early-stop (MLX backend only)",
+        "--dedupe-near-threshold", type=float, default=1.0, help="with --dedupe, drop near-dups at/above this similarity"
     )
-    parser.add_argument(
-        "--elite-fraction",
-        type=float,
-        default=1.0,
-        help="train on only the top fraction of records by score (1.0 = all)",
-    )
-    parser.add_argument(
-        "--dedupe",
-        action="store_true",
-        help="drop duplicate constructions, keeping the highest-scoring representative",
-    )
-    parser.add_argument(
-        "--dedupe-near-threshold",
-        type=float,
-        default=1.0,
-        help="with --dedupe, also drop near-duplicates at/above this shingle-Jaccard similarity (1.0 = exact only)",
-    )
+    parser.add_argument("--score-conditioned", action="store_true", help="emit quality token; generate conditioned on top bucket")
     return parser
 
 
@@ -762,6 +757,7 @@ def main(argv: list[str] | None = None) -> int:
             elite_fraction=args.elite_fraction,
             dedupe=args.dedupe,
             dedupe_near_threshold=args.dedupe_near_threshold,
+            score_conditioned=args.score_conditioned,
             backend=args.backend,
         )
     except Exception as exc:

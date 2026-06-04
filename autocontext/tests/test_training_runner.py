@@ -745,3 +745,21 @@ class TestDataStatsProvenance:
         assert stats["dedupe_near_threshold"] == 0.9
         assert stats["records"] == 4.0  # raw JSONL line count
         assert stats["curated_records"] == 2.0  # records actually used after curation
+
+
+def test_score_conditioned_flag_in_subprocess(tmp_path: Path) -> None:
+    """--score-conditioned reaches the train.py subprocess only when enabled."""
+    def capture(score_conditioned: bool) -> list[str]:
+        cfg = TrainingConfig(
+            scenario="grid_ctf",
+            data_path=tmp_path / "data.jsonl",
+            score_conditioned=score_conditioned,
+        )
+        runner = TrainingRunner(cfg, work_dir=tmp_path / "ws")
+        fake = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        with patch("autocontext.training.runner.subprocess.run", return_value=fake) as mock_run:
+            runner._run_experiment_subprocess(0)
+        return list(mock_run.call_args.args[0])
+
+    assert "--score-conditioned" in capture(True)
+    assert "--score-conditioned" not in capture(False)

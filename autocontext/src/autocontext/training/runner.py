@@ -62,6 +62,7 @@ class TrainingConfig:
     elite_fraction: float = 1.0  # train on only the top fraction of records by score (1.0 = all)
     dedupe: bool = False  # drop duplicate constructions, keeping the highest-scoring representative
     dedupe_near_threshold: float = 1.0  # with dedupe, also drop near-dups at/above this similarity
+    score_conditioned: bool = False  # emit a quality control token + generate conditioned on the top bucket
 
 
 @dataclass(slots=True)
@@ -381,6 +382,8 @@ class TrainingRunner:
             command.append("--dedupe")
         if self.config.dedupe_near_threshold != 1.0:
             command += ["--dedupe-near-threshold", str(self.config.dedupe_near_threshold)]
+        if self.config.score_conditioned:
+            command.append("--score-conditioned")
         return subprocess.run(
             command,
             cwd=self.work_dir,
@@ -547,6 +550,7 @@ class TrainingRunner:
             "elite_fraction": float(self.config.elite_fraction),
             "dedupe": 1.0 if self.config.dedupe else 0.0,
             "dedupe_near_threshold": float(self.config.dedupe_near_threshold),
+            "score_conditioned": 1.0 if self.config.score_conditioned else 0.0,
         }
         try:
             line_count = sum(1 for _ in self.config.data_path.open(encoding="utf-8"))

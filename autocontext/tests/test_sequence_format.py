@@ -39,6 +39,7 @@ def test_special_tokens_and_vocab_via_prepare() -> None:
         total_vocab_size,
     )
 
+    # Default: the original five tokens only (quality is gated -> default arch unchanged).
     specials = build_special_tokens(BASE_VOCAB_SIZE)
     assert specials == {
         "<|scenario|>": BASE_VOCAB_SIZE + 0,
@@ -47,7 +48,18 @@ def test_special_tokens_and_vocab_via_prepare() -> None:
         "<|score|>": BASE_VOCAB_SIZE + 3,
         "<|end|>": BASE_VOCAB_SIZE + 4,
     }
+    assert "<|quality|>" not in specials
     assert total_vocab_size(BASE_VOCAB_SIZE) == BASE_VOCAB_SIZE + len(SPECIAL_TOKEN_STRINGS)
+
+
+def test_special_tokens_include_quality_is_gated() -> None:
+    from autocontext.training.autoresearch.prepare import BASE_VOCAB_SIZE, build_special_tokens, total_vocab_size
+
+    specials = build_special_tokens(BASE_VOCAB_SIZE, include_quality=True)
+    assert specials["<|quality|>"] == BASE_VOCAB_SIZE + 5  # appended last, ids 0..4 stable
+    assert total_vocab_size(BASE_VOCAB_SIZE, include_quality=True) == BASE_VOCAB_SIZE + 6
+    # default stays at the original size
+    assert total_vocab_size(BASE_VOCAB_SIZE) == BASE_VOCAB_SIZE + 5
 
 
 def test_generation_logit_mask_values_via_prepare_unchanged() -> None:
@@ -174,6 +186,85 @@ def test_build_masked_example_too_short_returns_none() -> None:
     from autocontext.training.autoresearch.sequence_format import build_masked_example
 
     assert build_masked_example([7], seq_len=4, pad_token_id=0, strategy_token_id=99) is None
+
+
+def test_score_to_quality_bucket() -> None:
+    from autocontext.training.autoresearch.sequence_format import score_to_quality_bucket
+
+    assert score_to_quality_bucket(0.0, num_buckets=5) == 0
+    assert score_to_quality_bucket(1.0, num_buckets=5) == 4  # top bucket (clamped from index 5)
+    assert score_to_quality_bucket(0.5, num_buckets=5) == 2
+    # out-of-range clamps into [0, num_buckets-1]
+    assert score_to_quality_bucket(-1.0, num_buckets=5) == 0
+    assert score_to_quality_bucket(2.0, num_buckets=5) == 4
+
+
+def test_format_example_without_quality_is_unchanged() -> None:
+    from autocontext.training.autoresearch.sequence_format import format_example
+
+    # golden master: omitting quality reproduces the pre-conditioning format exactly
+    out = format_example(scenario="s", context="c", strategy_json='{"a": 1}', score=0.5)
+    assert out == '<|scenario|>s<|context|>c<|strategy|>{"a": 1}<|score|>0.5<|end|>'
+
+
+def test_format_example_with_quality_inserts_control_token() -> None:
+    from autocontext.training.autoresearch.sequence_format import format_example
+
+    out = format_example(scenario="s", context="c", strategy_json='{"a": 1}', score=0.5, quality=4)
+    assert out == '<|scenario|>s<|context|>c<|quality|>4<|strategy|>{"a": 1}<|score|>0.5<|end|>'
+
+
+def test_build_generation_prompt_with_target_quality() -> None:
+    from autocontext.training.autoresearch.sequence_format import build_generation_prompt
+
+    class _Scn:
+        name = "capset"
+        description = "build a set"
+
+    assert build_generation_prompt(_Scn()) == "<|scenario|>capset<|context|>build a set<|strategy|>"
+    assert build_generation_prompt(_Scn(), target_quality=4) == "<|scenario|>capset<|context|>build a set<|quality|>4<|strategy|>"
+
+
+def test_training_example_score_conditioned_emits_quality() -> None:
+    from autocontext.training.autoresearch.sequence_format import TrainingExample
+
+    ex = TrainingExample.from_record({"scenario": "s", "strategy": {"x": 1}, "score": 1.0})
+    plain = ex.to_sequence()
+    conditioned = ex.to_sequence(score_conditioned=True, num_buckets=5)
+    assert "<|quality|>" not in plain
+    assert "<|quality|>4" in conditioned  # score 1.0 -> top bucket
+
+
+def test_quality_token_blocked_in_structural_mask() -> None:
+    from autocontext.training.autoresearch.sequence_format import (
+        build_special_tokens,
+        generation_logit_mask_values,
+        total_vocab_size,
+    )
+
+    # A score-conditioned tokenizer exposes the quality token in special_tokens, so
+    # the mask (which reads tokenizer.special_tokens) blocks it during body generation.
+    vocab = total_vocab_size(16, include_quality=True)
+    quality_id = build_special_tokens(16, include_quality=True)["<|quality|>"]
+    mask = generation_logit_mask_values(_FakeTok16(), vocab, block_structural_specials=True)
+    assert mask[quality_id] == -1e9
+
+
+class _FakeTok16:
+    class _Enc:
+        _mergeable_ranks = {bytes([i]): i for i in range(4)}
+
+    _encoding = _Enc()
+    base_vocab_size = 16
+    # score-conditioned special-token map (base 16): ids 16..21
+    special_tokens = {
+        "<|scenario|>": 16,
+        "<|context|>": 17,
+        "<|strategy|>": 18,
+        "<|score|>": 19,
+        "<|end|>": 20,
+        "<|quality|>": 21,
+    }
 
 
 def test_cuda_uses_shared_contract_no_duplicate_definitions() -> None:

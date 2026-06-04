@@ -159,8 +159,9 @@ def _generate_torch_strategy_text(
     max_new_tokens: int = 128,
     temperature: float = 0.0,
     top_k: int = 0,
+    target_quality: int | None = None,
 ) -> str:
-    prompt = build_generation_prompt(scenario)
+    prompt = build_generation_prompt(scenario, target_quality=target_quality)
     token_ids = list(tokenizer.encode(prompt))
     seq_len = int(model.cfg.seq_len)
     vocab_size = int(getattr(model.cfg, "vocab_size", 0))
@@ -212,6 +213,7 @@ def _assess_torch_strategy_quality(
     n_samples: int,
     temperature: float = 0.0,
     top_k: int = 0,
+    target_quality: int | None = None,
 ) -> dict[str, float]:
     scores: list[float] = []
     valid_count = 0
@@ -228,6 +230,7 @@ def _assess_torch_strategy_quality(
                 seed=i,
                 temperature=temperature,
                 top_k=top_k,
+                target_quality=target_quality,
             )
             strategy = extract_strategy(raw_output)
             if strategy is None:
@@ -265,8 +268,10 @@ def run_cuda_training(
     elite_fraction: float = 1.0,
     dedupe: bool = False,
     dedupe_near_threshold: float = 1.0,
+    score_conditioned: bool = False,
 ) -> dict[str, float]:
     from autocontext.training.autoresearch.data_selection import curate_records
+    from autocontext.training.autoresearch.sequence_format import NUM_QUALITY_BUCKETS
     from autocontext.training.autoresearch.train import _preflight_backend_deps
 
     _preflight_backend_deps("cuda")
@@ -292,10 +297,13 @@ def run_cuda_training(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     corpus_path = output_dir / "corpus.txt"
-    corpus_path.write_text(_build_corpus(records), encoding="utf-8")
-    tokenizer = train_tokenizer(corpus_path)
+    corpus_path.write_text(_build_corpus(records, score_conditioned=score_conditioned), encoding="utf-8")
+    tokenizer = train_tokenizer(corpus_path, score_conditioned=score_conditioned)
 
-    sequences = [tokenizer.encode(TrainingExample.from_record(record).to_sequence()) for record in records]
+    sequences = [
+        tokenizer.encode(TrainingExample.from_record(record).to_sequence(score_conditioned=score_conditioned))
+        for record in records
+    ]
     base_vocab = int(getattr(tokenizer, "base_vocab_size", 8192))
     strategy_token_id = build_special_tokens(base_vocab)["<|strategy|>"]
     pad_token_id = getattr(tokenizer, "end_token_id", 0) or 0
@@ -311,7 +319,7 @@ def run_cuda_training(
     if not batches:
         raise ValueError("not enough tokenized training data for a single batch")
 
-    cfg = ModelConfig(seq_len=seq_len)
+    cfg = ModelConfig(seq_len=seq_len, vocab_size=int(tokenizer.vocab_size))
     model = _build_torch_model(cfg, torch_module).to(device)
     optimizer = torch_module.optim.AdamW(model.parameters(), lr=learning_rate)
     try:
@@ -350,6 +358,7 @@ def run_cuda_training(
         n_samples=assess_samples,
         temperature=assess_temperature,
         top_k=assess_top_k,
+        target_quality=(NUM_QUALITY_BUCKETS - 1) if score_conditioned else None,
     )
     _save_torch_checkpoint_bundle(
         model=model,

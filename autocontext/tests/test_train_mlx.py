@@ -259,6 +259,30 @@ def test_run_training_val_select_completes(tmp_path: str) -> None:
     assert (Path(tmp_path) / "out" / "model.safetensors").exists()
 
 
+def test_run_training_score_conditioned_end_to_end(tmp_path: str) -> None:
+    """score_conditioned training + top-bucket-conditioned assessment runs end to end."""
+    from pathlib import Path
+
+    from autocontext.training.autoresearch.train import run_training
+
+    metrics = run_training(
+        scenario_name="grid_ctf",
+        data_path=_write_grid_ctf_dataset(tmp_path),
+        output_dir=Path(tmp_path) / "out",
+        time_budget=30,
+        memory_limit_mb=4096,
+        train_steps=2,
+        batch_size=1,
+        seq_len=24,
+        assess_samples=1,
+        score_conditioned=True,
+        backend="mlx",
+    )
+    assert "avg_score" in metrics and "valid_rate" in metrics
+    # the corpus should carry the quality control token
+    assert "<|quality|>" in (Path(tmp_path) / "out" / "corpus.txt").read_text(encoding="utf-8")
+
+
 def test_checkpoint_save_load(tmp_path: str) -> None:
     """Model weights can be saved and loaded from a checkpoint."""
     from pathlib import Path
