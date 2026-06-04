@@ -15,48 +15,41 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
 
 from autocontext.training import HAS_MLX
 
+# The sequence-format contract is owned by sequence_format (pure domain module).
+# Re-exported here for backward compatibility: existing callers / tests import these
+# names from prepare. New code should import from sequence_format directly.
+from autocontext.training.autoresearch.sequence_format import (  # noqa: F401
+    _BPE_PAT,
+    BASE_VOCAB_SIZE,
+    SPECIAL_TOKEN_STRINGS,
+    TrainingExample,
+    build_generation_prompt,
+    build_special_tokens,
+    decodable_vocab_size,
+    format_example,
+    generation_logit_mask_values,
+    total_vocab_size,
+)
+from autocontext.training.autoresearch.sequence_format import (
+    extract_strategy as _extract_strategy_json,  # noqa: F401
+)
+from autocontext.training.autoresearch.sequence_format import (
+    resolve_scenario_context as _resolve_scenario_context,  # noqa: F401
+)
+from autocontext.training.autoresearch.sequence_format import (
+    resolve_scenario_name as _resolve_scenario_name,  # noqa: F401
+)
+
 logger = logging.getLogger(__name__)
 
 if HAS_MLX:
     import mlx.core as mx  # type: ignore[import-not-found]
-
-
-BASE_VOCAB_SIZE = 8192
-SPECIAL_TOKEN_STRINGS = (
-    "<|scenario|>",
-    "<|context|>",
-    "<|strategy|>",
-    "<|score|>",
-    "<|end|>",
-)
-
-_BPE_PAT = (
-    r"(?i:'s|'t|'re|'ve|'m|'ll|'d)"
-    r"|[^\r\n\p{L}\p{N}]?\p{L}+"
-    r"|\p{N}{1,3}"
-    r"| ?[^\s\p{L}\p{N}]+[\r\n]*"
-    r"|\s*[\r\n]+"
-    r"|\s+"
-)
-
-
-def build_special_tokens(base_vocab_size: int) -> dict[str, int]:
-    """Map the autoresearch special tokens above the base tokenizer range."""
-
-    return {token: base_vocab_size + offset for offset, token in enumerate(SPECIAL_TOKEN_STRINGS)}
-
-
-def total_vocab_size(base_vocab_size: int) -> int:
-    """Return the embedding/output vocab size including special tokens."""
-
-    return base_vocab_size + len(SPECIAL_TOKEN_STRINGS)
 
 
 def serialize_tokenizer(tokenizer: Any) -> dict[str, Any]:
@@ -83,69 +76,6 @@ def save_tokenizer_json(tokenizer: Any, path: Path) -> None:
     """Persist tokenizer metadata in the format expected by MLXProvider."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(serialize_tokenizer(tokenizer), indent=2, sort_keys=True), encoding="utf-8")
-
-
-def _extract_strategy_json(text: str) -> dict[str, Any] | None:
-    """Extract JSON strategy from model output text."""
-    match = re.search(r"<\|strategy\|>(.*?)(?:<\||$)", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))  # type: ignore[no-any-return]
-        except json.JSONDecodeError:
-            return None
-    # Try parsing the whole text as JSON
-    try:
-        return json.loads(text)  # type: ignore[no-any-return]
-    except json.JSONDecodeError:
-        return None
-
-
-def decodable_vocab_size(tokenizer: Any) -> int:
-    """Number of real, decodable BPE base tokens the tokenizer learned.
-
-    On small corpora the BPE trainer learns fewer than ``base_vocab_size`` merges,
-    leaving a gap of ids in ``[n_learned, base_vocab_size)`` that the underlying
-    tiktoken encoding cannot decode (``decode`` raises ``KeyError``). Sampling must
-    not emit ids in that gap. Returns ``max(rank) + 1`` over the mergeable ranks,
-    falling back to ``base_vocab_size`` when the ranks are unavailable.
-    """
-    enc = getattr(tokenizer, "_encoding", None)
-    ranks = getattr(enc, "_mergeable_ranks", None)
-    if isinstance(ranks, dict) and ranks:
-        return int(max(ranks.values())) + 1
-    base = getattr(tokenizer, "base_vocab_size", None)
-    return int(base) if base else BASE_VOCAB_SIZE
-
-
-def generation_logit_mask_values(
-    tokenizer: Any,
-    vocab_size: int,
-    *,
-    block_structural_specials: bool = True,
-) -> list[float]:
-    """Additive logit-mask values (0.0 = allowed, -1e9 = blocked).
-
-    Always blocks the phantom-id gap ``[decodable_vocab_size, base_vocab_size)``
-    that the tokenizer cannot decode, so neither training-time assessment nor
-    ``MLXProvider`` inference can sample an id that later crashes ``decode``.
-
-    When ``block_structural_specials`` is true (training assessment) it also blocks
-    the ``<|scenario|>`` / ``<|context|>`` / ``<|strategy|>`` tokens so a generated
-    body cannot restart the header. Providers doing general completion pass
-    ``False`` to leave all (decodable) special tokens available.
-    """
-    base = int(getattr(tokenizer, "base_vocab_size", BASE_VOCAB_SIZE))
-    n_base = decodable_vocab_size(tokenizer)
-    mask = [0.0] * vocab_size
-    for i in range(max(0, n_base), min(base, vocab_size)):
-        mask[i] = -1e9
-    if block_structural_specials:
-        specials = build_special_tokens(base)
-        for name in ("<|scenario|>", "<|context|>", "<|strategy|>"):
-            sid = specials.get(name)
-            if sid is not None and 0 <= sid < vocab_size:
-                mask[sid] = -1e9
-    return mask
 
 
 # ---------------------------------------------------------------------------
@@ -195,21 +125,6 @@ def load_jsonl(
 # ---------------------------------------------------------------------------
 # 2. Input formatting (no MLX dependency)
 # ---------------------------------------------------------------------------
-
-
-def format_example(
-    *,
-    scenario: str,
-    context: str,
-    strategy_json: str,
-    score: float,
-) -> str:
-    """Format a single training example in the standard input format.
-
-    Format:
-        <|scenario|>{scenario}<|context|>{context}<|strategy|>{strategy_json}<|score|>{score}<|end|>
-    """
-    return f"<|scenario|>{scenario}<|context|>{context}<|strategy|>{strategy_json}<|score|>{score}<|end|>"
 
 
 def extract_best_opponent(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -440,7 +355,7 @@ if HAS_MLX:
             # Test doubles may not expose a sampling surface; fall back to the tokenizer stub.
             return cast(str, tokenizer.decode([seed] * 32))
 
-        prompt = f"<|scenario|>{_resolve_scenario_name(scenario)}<|context|>{_resolve_scenario_context(scenario)}<|strategy|>"
+        prompt = build_generation_prompt(scenario)
         token_ids = list(tokenizer.encode(prompt))
         seq_len = int(model.cfg.seq_len)
         vocab_size = int(getattr(model.cfg, "vocab_size", total_vocab_size(BASE_VOCAB_SIZE)))
@@ -468,25 +383,3 @@ if HAS_MLX:
                 break
 
         return cast(str, tokenizer.decode(token_ids))
-
-    def _resolve_scenario_name(scenario: Any) -> str:
-        value = getattr(scenario, "name", None)
-        if isinstance(value, str) and value.strip():
-            return value
-        scenario_name = cast(str, scenario.__class__.__name__)
-        return scenario_name.lower()
-
-    def _resolve_scenario_context(scenario: Any) -> str:
-        task_prompt = getattr(scenario, "get_task_prompt", None)
-        if callable(task_prompt):
-            try:
-                prompt = task_prompt()
-            except TypeError:
-                prompt = None
-            if isinstance(prompt, str):
-                return prompt
-
-        description = getattr(scenario, "description", None)
-        if isinstance(description, str):
-            return description
-        return ""

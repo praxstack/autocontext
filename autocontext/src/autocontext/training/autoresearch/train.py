@@ -402,20 +402,11 @@ def _all_records(data_path: Path) -> list[dict[str, Any]]:
 
 def _build_corpus(records: list[dict[str, Any]]) -> str:
     try:
-        from prepare import format_example  # type: ignore[import-not-found]
+        from prepare import TrainingExample  # type: ignore[import-not-found]
     except ImportError:
-        from autocontext.training.autoresearch.prepare import format_example
+        from autocontext.training.autoresearch.prepare import TrainingExample
 
-    examples = [
-        format_example(
-            scenario=str(record["scenario"]),
-            context=json.dumps(record.get("context", {}), sort_keys=True),
-            strategy_json=json.dumps(record["strategy"], sort_keys=True),
-            score=float(record["score"]),
-        )
-        for record in records
-    ]
-    return "\n".join(examples)
+    return "\n".join(TrainingExample.from_record(record).to_sequence() for record in records)
 
 
 def _run_mlx_training(
@@ -445,16 +436,15 @@ def _run_mlx_training(
 
     try:
         from prepare import (  # type: ignore[import-not-found]
+            TrainingExample,
             assess_strategy_quality,
             create_dataloader,
-            format_example,
             train_tokenizer,
         )
     except ImportError:
         from autocontext.training.autoresearch.prepare import (
             assess_strategy_quality,
             create_dataloader,
-            format_example,
             train_tokenizer,
         )
 
@@ -469,16 +459,7 @@ def _run_mlx_training(
 
     token_ids: list[int] = []
     for record in records:
-        token_ids.extend(
-            tokenizer.encode(
-                format_example(
-                    scenario=str(record["scenario"]),
-                    context=json.dumps(record.get("context", {}), sort_keys=True),
-                    strategy_json=json.dumps(record["strategy"], sort_keys=True),
-                    score=float(record["score"]),
-                )
-            )
-        )
+        token_ids.extend(tokenizer.encode(TrainingExample.from_record(record).to_sequence()))
 
     batches = list(create_dataloader(token_ids, seq_len=seq_len, batch_size=batch_size))
     if not batches:
