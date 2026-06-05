@@ -33,6 +33,7 @@ from autocontext.cli_runtime_overrides import (
     apply_judge_runtime_overrides,
     format_runtime_provider_error,
 )
+from autocontext.cli_self_improve import register_self_improve_command
 from autocontext.cli_solve import register_solve_command
 from autocontext.cli_train import register_train_command
 from autocontext.cli_worker import register_worker_command
@@ -1481,6 +1482,7 @@ register_run_inspect_commands(app, console=console)
 register_solve_command(app, console=console)
 register_probes_command(app, console=console)
 register_queue_command(app, console=console)
+register_self_improve_command(app, console)
 register_train_command(app, console)
 register_worker_command(app, console=console)
 

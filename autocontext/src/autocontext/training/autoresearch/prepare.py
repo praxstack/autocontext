@@ -297,6 +297,7 @@ if HAS_MLX:
         top_k: int = 0,
         seed_base: int = 0,
         target_quality: int | None = None,
+        collect_path: Path | None = None,
     ) -> dict[str, float]:
         """Assess model quality by generating strategies and scoring them.
 
@@ -330,6 +331,7 @@ if HAS_MLX:
         """
         scores: list[float] = []
         valid_count = 0
+        collected: list[dict[str, Any]] = []  # (strategy, score) for the self-improving loop
 
         is_game = hasattr(scenario, "execute_match")
 
@@ -350,15 +352,17 @@ if HAS_MLX:
                     valid_count += 1
                     if is_game:
                         result = scenario.execute_match(strategy, seed=i)
-                        scores.append(result.score)
                     else:
-                        # Agent task scenario
-                        result = scenario.evaluate_output(
-                            output=json.dumps(strategy),
-                        )
-                        scores.append(result.score)
+                        result = scenario.evaluate_output(output=json.dumps(strategy))
+                    scores.append(result.score)
+                    if collect_path is not None:
+                        collected.append({"strategy": strategy, "score": float(result.score)})
             except Exception:
                 logger.debug("training.autoresearch.prepare: suppressed Exception", exc_info=True)
+
+        if collect_path is not None:
+            collect_path.parent.mkdir(parents=True, exist_ok=True)
+            collect_path.write_text("\n".join(json.dumps(s) for s in collected) + "\n", encoding="utf-8")
 
         avg_score = sum(scores) / len(scores) if scores else 0.0
         valid_rate = valid_count / n_samples if n_samples > 0 else 0.0
