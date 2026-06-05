@@ -69,6 +69,37 @@ Use absolute paths for `--data`. The CLI resolves relative paths from the curren
 
 The training loop writes its workspace under `runs/train_<scenario>/` and produces a checkpoint bundle that `MLXProvider` can load for local inference.
 
+### Pretrained fine-tuning (`--backend mlxlm`)
+
+The default `mlx` backend trains a small GPT from scratch. The `mlxlm` backend instead
+LoRA/DoRA-fine-tunes a _pretrained_ [mlx-lm](https://github.com/ml-explore/mlx-lm)
+model on the curated (and optionally score-conditioned) records, so the model starts
+from a strong prior over JSON / numbers / structure. It uses the base model's own
+tokenizer with a natural-language prompt/completion and completion-only loss
+(`--mask-prompt`).
+
+Install the extra: `uv sync --group dev --extra mlxlm`.
+
+| Flag               | Default                                    | Effect                                                           |
+| ------------------ | ------------------------------------------ | ---------------------------------------------------------------- |
+| `--backend mlxlm`  | `mlx`                                      | Select the pretrained-finetune backend.                          |
+| `--base-model`     | `mlx-community/Qwen2.5-0.5B-Instruct-4bit` | Pretrained mlx-lm model (HF repo or local path).                 |
+| `--fine-tune-type` | `lora`                                     | `lora`, `dora` (weight-decomposed, usually stronger), or `full`. |
+| `--num-layers`     | `8`                                        | Number of layers to fine-tune (fewer = less memory).             |
+
+```bash
+uv run autoctx train --backend mlxlm \
+  --data /absolute/path/to/training/grid_ctf.jsonl \
+  --base-model mlx-community/Qwen2.5-0.5B-Instruct-4bit \
+  --fine-tune-type dora --num-layers 8 \
+  --elite-fraction 0.3 --score-conditioned
+```
+
+Curation (`--elite-fraction` / `--dedupe`) and `--score-conditioned` apply to this
+backend too (score-conditioning is expressed as a natural-language quality directive
+in the prompt rather than the `<|quality|>` token). The fine-tuned adapters are written
+under the run's `adapters/` directory.
+
 ### Record curation (optional)
 
 These flags curate the training records before tokenization (defaults are a no-op,
