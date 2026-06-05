@@ -65,6 +65,7 @@ class TrainingConfig:
     score_conditioned: bool = False  # emit a quality control token + generate conditioned on the top bucket
     loss_weight_mode: str = "uniform"  # reward-weighted regression: uniform | linear | softmax (mlx/cuda)
     loss_weight_temperature: float = 1.0  # softmax loss-weight temperature (lower = sharper toward top scores)
+    augmenter_spec: str = ""  # record augmenter 'package.module:function' for symmetry/transform expansion
     base_model: str = ""  # mlxlm backend: pretrained base model (empty = backend default)
     fine_tune_type: str = "lora"  # mlxlm backend: lora | dora | full
     num_layers: int = 8  # mlxlm backend: number of layers to fine-tune
@@ -112,6 +113,10 @@ class TrainingRunner:
     def __init__(self, config: TrainingConfig, *, work_dir: Path) -> None:
         self.config = config
         self.work_dir = work_dir
+        # Capture the invocation cwd before any subprocess runs from the workspace, so a
+        # consumer-repo augmenter module (importable from where the user ran the command)
+        # stays importable in the subprocess (which runs from runs/train_<scenario>).
+        self._invocation_cwd = Path.cwd()
         self._best_score = float("-inf")
         self._best_experiment_index = -1
         self._backend = self._resolve_backend()
@@ -281,7 +286,10 @@ class TrainingRunner:
 
     def _experiment_env(self) -> dict[str, str]:
         env = os.environ.copy()
-        python_path_parts = [str(_REPO_ROOT)]
+        # autocontext repo root first (so its own modules win), then the invocation cwd
+        # (so a consumer-repo augmenter importable from where the user ran the command
+        # resolves once the subprocess runs from the workspace), then any pre-set path.
+        python_path_parts = [str(_REPO_ROOT), str(self._invocation_cwd)]
         existing = env.get("PYTHONPATH")
         if existing:
             python_path_parts.append(existing)
@@ -393,6 +401,8 @@ class TrainingRunner:
             command += ["--loss-weight-by-score", self.config.loss_weight_mode]
         if self.config.loss_weight_temperature != 1.0:
             command += ["--loss-weight-temperature", str(self.config.loss_weight_temperature)]
+        if self.config.augmenter_spec:
+            command += ["--augmenter", self.config.augmenter_spec]
         if self.config.base_model:
             command += ["--base-model", self.config.base_model]
         if self.config.fine_tune_type != "lora":
@@ -568,6 +578,7 @@ class TrainingRunner:
             "score_conditioned": 1.0 if self.config.score_conditioned else 0.0,
             "loss_weight_mode": self.config.loss_weight_mode,
             "loss_weight_temperature": float(self.config.loss_weight_temperature),
+            "augmenter_spec": self.config.augmenter_spec,
         }
         try:
             line_count = sum(1 for _ in self.config.data_path.open(encoding="utf-8"))
