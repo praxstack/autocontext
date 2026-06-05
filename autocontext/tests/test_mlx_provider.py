@@ -4,6 +4,7 @@ Tests the MLXProvider that loads trained MLX model checkpoints and generates
 strategies via autoregressive sampling.  All tests mock the MLX/safetensors
 dependencies so they run without MLX installed.
 """
+
 from __future__ import annotations
 
 import json
@@ -62,14 +63,18 @@ def _write_fake_checkpoint(model_dir: Path) -> None:
     """Write a minimal fake checkpoint structure."""
     model_dir.mkdir(parents=True, exist_ok=True)
     # Config file
-    (model_dir / "config.json").write_text(json.dumps({
-        "depth": 4,
-        "aspect_ratio": 64,
-        "head_dim": 64,
-        "n_kv_heads": 4,
-        "vocab_size": 8197,
-        "seq_len": 2048,
-    }))
+    (model_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "depth": 4,
+                "aspect_ratio": 64,
+                "head_dim": 64,
+                "n_kv_heads": 4,
+                "vocab_size": 8197,
+                "seq_len": 2048,
+            }
+        )
+    )
     # Fake weights file
     (model_dir / "model.safetensors").write_bytes(b"FAKE_WEIGHTS")
     # Fake tokenizer
@@ -83,6 +88,7 @@ class TestMLXProviderImport:
     def test_provider_module_importable(self) -> None:
         """mlx_provider module should always be importable."""
         from autocontext.providers import mlx_provider
+
         assert hasattr(mlx_provider, "MLXProvider")
 
     def test_graceful_error_when_mlx_not_installed(self, tmp_path: Path) -> None:
@@ -275,18 +281,21 @@ class TestConfiguration:
 class TestSettingsConfig:
     def test_settings_has_mlx_model_path(self) -> None:
         from autocontext.config.settings import AppSettings
+
         settings = AppSettings()
         assert hasattr(settings, "mlx_model_path")
         assert settings.mlx_model_path == ""
 
     def test_settings_has_mlx_temperature(self) -> None:
         from autocontext.config.settings import AppSettings
+
         settings = AppSettings()
         assert hasattr(settings, "mlx_temperature")
         assert settings.mlx_temperature == 0.8
 
     def test_settings_has_mlx_max_tokens(self) -> None:
         from autocontext.config.settings import AppSettings
+
         settings = AppSettings()
         assert hasattr(settings, "mlx_max_tokens")
         assert settings.mlx_max_tokens == 512
@@ -299,6 +308,7 @@ class TestAutoRegressiveSampling:
     def test_generate_function_exists(self) -> None:
         """The _generate method should exist on the provider."""
         from autocontext.providers.mlx_provider import MLXProvider
+
         assert hasattr(MLXProvider, "_generate")
 
     @patch("autocontext.providers.mlx_provider._load_model_and_tokenizer")
@@ -513,7 +523,8 @@ class TestBundleCompatibility:
         assert "mergeable_ranks" in payload
         assert "pat_str" in payload
 
-    @patch("autocontext.training.autoresearch.train.save_checkpoint")
+    # save_inference_bundle lives in model.py and calls model.save_checkpoint; patch it there.
+    @patch("autocontext.training.autoresearch.model.save_checkpoint")
     def test_save_inference_bundle_writes_provider_artifacts(self, mock_save_checkpoint: MagicMock, tmp_path: Path) -> None:
         from autocontext.training.autoresearch.train import ModelConfig, save_inference_bundle
 

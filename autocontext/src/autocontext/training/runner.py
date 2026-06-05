@@ -136,7 +136,9 @@ class TrainingRunner:
         """Copy template files, create git branch, render program.md, init results.tsv."""
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
-        for filename in ("train.py", "prepare.py"):
+        # model.py is copied as read-only architecture context (train.py imports it and the
+        # LLM agent prompt includes it); train.py remains the single file the agent rewrites.
+        for filename in ("train.py", "prepare.py", "model.py"):
             src = _TEMPLATE_DIR / filename
             if src.exists():
                 shutil.copy2(src, self.work_dir / filename)
@@ -331,10 +333,12 @@ class TrainingRunner:
         return response_text.strip()
 
     def _deterministic_train_py_variant(self, current_source: str, experiment_index: int) -> str:
+        # Tune the model-shape knobs in train.py (the architecture moved to model.py, but
+        # these MODEL_* overrides stay in train.py precisely so this loop can edit shape).
         variants = [
-            (r"depth: int = \d+", "depth: int = 5"),
-            (r"aspect_ratio: int = \d+", "aspect_ratio: int = 48"),
-            (r"head_dim: int = \d+", "head_dim: int = 32"),
+            (r"MODEL_DEPTH = \d+", "MODEL_DEPTH = 5"),
+            (r"MODEL_ASPECT_RATIO = \d+", "MODEL_ASPECT_RATIO = 48"),
+            (r"MODEL_HEAD_DIM = \d+", "MODEL_HEAD_DIM = 32"),
         ]
         pattern, replacement = variants[(experiment_index - 1) % len(variants)]
         updated, count = re.subn(pattern, replacement, current_source, count=1)
@@ -347,12 +351,22 @@ class TrainingRunner:
         if self.config.agent_provider == "deterministic":
             return self._deterministic_train_py_variant(current_source, experiment_index)
 
+        # The GPT architecture lives in the read-only model.py; expose it so the agent can
+        # see what it is tuning (model shape is controlled by the MODEL_* knobs in train.py).
+        model_src = ""
+        model_path = self.work_dir / "model.py"
+        if model_path.exists():
+            model_src = (
+                "Read-only model architecture (model.py; edit shape via the MODEL_* constants in train.py):\n"
+                f"```python\n{model_path.read_text(encoding='utf-8')}\n```\n\n"
+            )
         prompt = (
             "You are revising train.py for an autoresearch training loop.\n"
             "Return the complete updated contents of train.py only, wrapped in one ```python block.\n\n"
             f"Program instructions:\n{(self.work_dir / 'program.md').read_text(encoding='utf-8')}\n\n"
             f"Recent experiment log:\n{self._recent_results_tail()}\n\n"
             f"Consecutive discards: {consecutive_discards}\n\n"
+            f"{model_src}"
             "Current train.py:\n"
             "```python\n"
             f"{current_source}\n"

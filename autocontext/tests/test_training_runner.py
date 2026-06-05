@@ -114,7 +114,21 @@ class TestWorkspaceSetup:
         workspace = tmp_path / "workspace"
         assert (workspace / "train.py").exists()
         assert (workspace / "prepare.py").exists()
+        assert (workspace / "model.py").exists()  # architecture context for the agent loop
         assert (workspace / "program.md").exists()
+
+    def test_deterministic_variant_tunes_model_shape_in_train_py(self, tmp_path: Path) -> None:
+        """The deterministic agent path must still mutate model shape after the architecture
+        moved to model.py: the MODEL_* knobs live in train.py exactly so this keeps working."""
+        cfg = TrainingConfig(scenario="grid_ctf", data_path=tmp_path / "data.jsonl")
+        (tmp_path / "data.jsonl").write_text("{}\n")
+        runner = TrainingRunner(cfg, work_dir=tmp_path / "workspace")
+
+        source = "MODEL_DEPTH = 4\nMODEL_ASPECT_RATIO = 64\nMODEL_HEAD_DIM = 64\n"
+        variant = runner._deterministic_train_py_variant(source, experiment_index=1)
+        assert variant != source
+        assert "MODEL_DEPTH = 5" in variant  # actually changed shape, not just appended a comment
+        assert "# experiment-" not in variant
 
     def test_creates_git_branch(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
