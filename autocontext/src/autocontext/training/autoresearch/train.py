@@ -33,8 +33,14 @@ from autocontext.training.autoresearch.sequence_format import NUM_QUALITY_BUCKET
 
 logger = logging.getLogger(__name__)
 
-if HAS_MLX:
-    pass  # type: ignore[import-not-found]
+# Model-shape hyperparameters. Deliberately kept in train.py (the model architecture
+# itself lives in model.py) so the training agent's revision loop can tune model shape:
+# the deterministic variant regex-edits these and the LLM agent sees + edits them. They
+# override the ModelConfig defaults where the model is constructed.
+MODEL_DEPTH = 4
+MODEL_ASPECT_RATIO = 64
+MODEL_HEAD_DIM = 64
+MODEL_N_KV_HEADS = 4
 
 
 # === Summary formatting (always available) ===
@@ -220,7 +226,15 @@ def _run_mlx_training(
     val_batches = _masked_batches(val_records)
 
     # Size the model head/embedding to the tokenizer (grows one slot only when score-conditioned).
-    cfg = ModelConfig(seq_len=seq_len, vocab_size=int(tokenizer.vocab_size))
+    # Model shape comes from the MODEL_* knobs above (kept in train.py so the agent loop can tune it).
+    cfg = ModelConfig(
+        depth=MODEL_DEPTH,
+        aspect_ratio=MODEL_ASPECT_RATIO,
+        head_dim=MODEL_HEAD_DIM,
+        n_kv_heads=MODEL_N_KV_HEADS,
+        seq_len=seq_len,
+        vocab_size=int(tokenizer.vocab_size),
+    )
     model = GPTModel(cfg)
     optimizer = optim.AdamW(learning_rate=learning_rate)
     loss_and_grad = nn.value_and_grad(model, compute_loss)
