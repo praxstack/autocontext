@@ -73,6 +73,7 @@ UNCONTRACTED_TOP_LEVEL_ALLOWLIST: frozenset[str] = frozenset(
         "investigate",
         "probes",
         "resume",
+        "self-improve",
         "simulate",
         "train",
         "tui",
