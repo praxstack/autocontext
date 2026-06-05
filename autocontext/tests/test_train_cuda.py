@@ -117,6 +117,10 @@ def test_run_training_rejects_custom_vocab_size_on_mlxlm(tmp_path: Path) -> None
         ({"elite_fraction": -1.0}, "elite_fraction"),
         ({"dedupe_near_threshold": 0.0}, "dedupe_near_threshold"),
         ({"dedupe_near_threshold": 1.5}, "dedupe_near_threshold"),
+        # vocab_size lower bound is enforced in run_training (not just the Typer wrapper), so
+        # direct Python callers + `python train.py --vocab-size 100` are guarded too.
+        ({"vocab_size": 100}, "vocab_size must be >= 256"),
+        ({"vocab_size": 0}, "vocab_size must be >= 256"),
     ],
 )
 def test_run_training_rejects_out_of_range_curation(tmp_path: Path, kwargs: dict, match: str) -> None:

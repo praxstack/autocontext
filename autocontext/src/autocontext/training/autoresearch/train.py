@@ -369,6 +369,11 @@ def run_training(
         raise ValueError(f"elite_fraction must be in (0, 1], got {elite_fraction}")
     if not 0.0 < dedupe_near_threshold <= 1.0:
         raise ValueError(f"dedupe_near_threshold must be in (0, 1], got {dedupe_near_threshold}")
+    # Enforce the BPE vocab lower bound here (the public API + subprocess entry), not only in the
+    # Typer wrapper, so direct callers and `python train.py --vocab-size N` can't flow a too-small
+    # base vocab into the tokenizer (special-token ids would collide with / fall below the byte base).
+    if vocab_size < 256:
+        raise ValueError(f"vocab_size must be >= 256 (the byte-level BPE base), got {vocab_size}")
 
     normalized_backend = backend.strip().lower()
     # Shared args; backend extras added per dispatch (each entry runs its own dep preflight).
