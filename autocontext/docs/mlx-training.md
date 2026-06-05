@@ -145,6 +145,10 @@ duplicates and select the elite over the augmented pool. A malformed spec or an
 augmenter that returns a non-list/empty result fails fast. Applies to all backends;
 the chosen spec is recorded in `data_stats`.
 
+The module must be importable from where you run `autoctx train` (that directory is
+added to the training subprocess `PYTHONPATH`) or otherwise installed / on
+`PYTHONPATH`, since the subprocess runs from a generated workspace, not your cwd.
+
 ```bash
 uv run autoctx train \
   --scenario cap_set \

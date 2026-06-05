@@ -113,6 +113,10 @@ class TrainingRunner:
     def __init__(self, config: TrainingConfig, *, work_dir: Path) -> None:
         self.config = config
         self.work_dir = work_dir
+        # Capture the invocation cwd before any subprocess runs from the workspace, so a
+        # consumer-repo augmenter module (importable from where the user ran the command)
+        # stays importable in the subprocess (which runs from runs/train_<scenario>).
+        self._invocation_cwd = Path.cwd()
         self._best_score = float("-inf")
         self._best_experiment_index = -1
         self._backend = self._resolve_backend()
@@ -282,7 +286,10 @@ class TrainingRunner:
 
     def _experiment_env(self) -> dict[str, str]:
         env = os.environ.copy()
-        python_path_parts = [str(_REPO_ROOT)]
+        # autocontext repo root first (so its own modules win), then the invocation cwd
+        # (so a consumer-repo augmenter importable from where the user ran the command
+        # resolves once the subprocess runs from the workspace), then any pre-set path.
+        python_path_parts = [str(_REPO_ROOT), str(self._invocation_cwd)]
         existing = env.get("PYTHONPATH")
         if existing:
             python_path_parts.append(existing)

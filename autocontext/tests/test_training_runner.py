@@ -819,6 +819,21 @@ class TestCurationSubprocess:
     def test_augmenter_spec_omitted_by_default(self, tmp_path: Path) -> None:
         assert "--augmenter" not in self._capture_command(tmp_path)
 
+    def test_experiment_env_includes_invocation_cwd_for_consumer_augmenters(self, tmp_path: Path) -> None:
+        """The subprocess PYTHONPATH must carry the invocation cwd so a consumer-repo
+        augmenter (importable from where the user ran the command) resolves once the
+        subprocess runs from the workspace, not just the autocontext repo root."""
+        import os
+        from pathlib import Path as _Path
+
+        from autocontext.training.runner import _REPO_ROOT
+
+        cfg = TrainingConfig(scenario="grid_ctf", data_path=tmp_path / "data.jsonl", augmenter_spec="my_pkg:expand")
+        runner = TrainingRunner(cfg, work_dir=tmp_path / "workspace")
+        parts = runner._experiment_env()["PYTHONPATH"].split(os.pathsep)
+        assert str(_REPO_ROOT) in parts  # autocontext's own modules still resolve
+        assert str(_Path.cwd()) in parts  # and the caller's cwd (where the augmenter lives)
+
 
 class TestDataStatsProvenance:
     """Published data_stats records the curation settings + raw/curated counts."""
