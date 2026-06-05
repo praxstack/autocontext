@@ -52,7 +52,7 @@ def _load_model_and_tokenizer(model_dir: Path) -> tuple[Any, Any]:
 
         import mlx.core as mx
 
-        from autocontext.training.autoresearch.train import GPTModel, ModelConfig, load_checkpoint
+        from autocontext.training.autoresearch.model import GPTModel, ModelConfig, load_checkpoint
     except ImportError as exc:
         raise ProviderError(f"MLX dependencies not available: {exc}. Install with: uv sync --group dev --extra mlx") from exc
 
