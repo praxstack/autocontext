@@ -306,6 +306,13 @@ else:
         def __init__(self, cfg: ModelConfig) -> None:
             raise ImportError("MLX is required. Install with: uv sync --group dev --extra mlx")
 
+    def compute_loss(  # type: ignore[no-redef]
+        model: GPTModel, x: Any, y: Any, loss_mask: Any = None, example_weights: Any = None
+    ) -> Any:
+        # Stub so the name is importable/re-exportable without MLX; only ever called
+        # from the MLX training loop, which requires MLX.
+        raise ImportError("MLX is required. Install with: uv sync --group dev --extra mlx")
+
     def save_checkpoint(model: GPTModel, path: Path) -> None:  # type: ignore[no-redef]
         raise ImportError("MLX is required. Install with: uv sync --group dev --extra mlx")
 
