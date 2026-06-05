@@ -151,6 +151,41 @@ uv run autoctx train \
   --score-conditioned --elite-fraction 0.3
 ```
 
+### Self-improving loop (ReST-EM / Expert Iteration)
+
+`autoctx self-improve` runs the outer loop that turns one-shot distillation into
+ReST-EM (a.k.a. expert iteration / PatternBoost): each round trains on the current
+dataset, samples constructions from the trained model and scores them in-scenario,
+keeps the highest-scoring elite, appends them as new training records, and retrains
+on the grown dataset. The model generates its own training data, biased toward the
+best of what it can already produce, so quality compounds across rounds. This is the
+self-training analogue of rejection-sampling fine-tuning, lifted from a single fit to
+an iterated one.
+
+Sampling uses a positive temperature so the collected constructions are diverse
+(greedy decoding would collect identical samples and stall the loop). Sample
+collection is MLX-only for now, so the loop drives the `mlx` backend.
+
+| Flag                  | Default | Meaning                                                 |
+| --------------------- | ------- | ------------------------------------------------------- |
+| `--rounds`            | `3`     | Number of generate -> filter -> retrain rounds.         |
+| `--samples-per-round` | `16`    | Constructions sampled and scored each round.            |
+| `--elite-fraction`    | `0.25`  | Top fraction of each round's samples kept and appended. |
+| `--train-steps`       | `100`   | Training steps per round.                               |
+| `--score-conditioned` | off     | Carry score-conditioning through every round.           |
+
+```bash
+uv run autoctx self-improve \
+  --scenario grid_ctf \
+  --data /absolute/path/to/training/grid_ctf.jsonl \
+  --output-dir runs/self_improve \
+  --rounds 3 --samples-per-round 16 --elite-fraction 0.25
+```
+
+The command prints a per-round table (avg_score, samples generated, elite kept,
+growing dataset size) and writes the final accumulated dataset to
+`<output-dir>/final_dataset.jsonl`. Pass `--json` for the structured `history`.
+
 ## Automating Host Training for Sandboxed Agents
 
 For sandboxed agents, especially OpenClaw agents running in Docker, the cleanest low-risk approach is a file-based host-training bridge.

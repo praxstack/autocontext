@@ -453,6 +453,7 @@ def _run_mlx_training(
     dedupe: bool = False,
     dedupe_near_threshold: float = 1.0,
     score_conditioned: bool = False,
+    collect_samples_path: Path | None = None,
 ) -> dict[str, float]:
     _preflight_backend_deps("mlx")
     if not HAS_MLX:
@@ -593,6 +594,7 @@ def _run_mlx_training(
         top_k=assess_top_k,
         # condition on the top quality bucket when trained score-conditioned
         target_quality=(NUM_QUALITY_BUCKETS - 1) if score_conditioned else None,
+        collect_path=collect_samples_path,
     )
     save_inference_bundle(model, cfg, tokenizer, output_dir)
 
@@ -655,6 +657,7 @@ def run_training(
     base_model: str = "",
     fine_tune_type: str = "lora",
     num_layers: int = 8,
+    collect_samples_path: Path | None = None,
     backend: str = "mlx",
 ) -> dict[str, float]:
     # Reject out-of-range curation values before any training work: select_top_fraction
@@ -684,7 +687,15 @@ def run_training(
         score_conditioned=score_conditioned,
     )
     if normalized_backend == "mlx":
-        return _run_mlx_training(**common, seq_len=seq_len, assess_top_k=assess_top_k, val_select=val_select)
+        return _run_mlx_training(
+            **common,
+            seq_len=seq_len,
+            assess_top_k=assess_top_k,
+            val_select=val_select,
+            collect_samples_path=collect_samples_path,
+        )
+    if collect_samples_path is not None:
+        raise NotImplementedError("collect_samples_path (self-improving loop) is currently MLX-only")
     if normalized_backend == "cuda":
         if val_select:
             raise ValueError("val_select is currently MLX-only; omit it for the cuda backend")
