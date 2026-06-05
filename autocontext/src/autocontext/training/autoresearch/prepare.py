@@ -258,8 +258,8 @@ if HAS_MLX:
         pad_token_id: int,
         strategy_token_id: int,
         weights: list[float] | None = None,
-    ) -> Iterator[tuple[Any, Any, Any]]:
-        """Yield ``(x, y, loss_mask)`` batches of per-example, completion-masked sequences.
+    ) -> Iterator[tuple[Any, Any, Any, Any]]:
+        """Yield ``(x, y, loss_mask, example_weights)`` per-example, completion-masked batches.
 
         Each example is encoded independently (no cross-example packing, so the model
         never predicts across a document boundary), right-truncated to keep the
@@ -268,13 +268,16 @@ if HAS_MLX:
         No batch is dropped: the final partial batch is yielded as-is.
 
         ``weights`` (reward-weighted regression) is an optional per-sequence list,
-        aligned with ``sequences``; each example's completion mask is scaled by its
-        weight so higher-weight examples contribute more to the loss. ``None`` (or all
-        ``1.0``) is byte-identical to unweighted training. Dropped sequences (too short
-        to form a pair) drop their weight too, keeping the alignment.
+        aligned with ``sequences``. It is returned as a per-example weight vector
+        ``example_weights`` (shape ``(batch,)``), NOT folded into the per-token mask,
+        so ``compute_loss`` can weight each example's *mean* completion loss (a long
+        completion can't drown out a short high-reward one). ``example_weights`` is
+        ``None`` when ``weights`` is ``None`` or all ``1.0`` (byte-identical, unweighted).
+        Dropped sequences (too short to form a pair) drop their weight too.
         """
+        do_weight = weights is not None and any(w != 1.0 for w in weights)
         ws = weights if weights is not None else [1.0] * len(sequences)
-        built: list[tuple[list[int], list[int], list[float]]] = []
+        built: list[tuple[list[int], list[int], list[int], float]] = []
         for tokens, w in zip(sequences, ws, strict=True):
             example = build_masked_example(
                 tokens,
@@ -284,15 +287,15 @@ if HAS_MLX:
             )
             if example is not None:
                 inp, tgt, mask = example
-                weighted: list[float] = [float(m) * w for m in mask]
-                built.append((inp, tgt, weighted))
+                built.append((inp, tgt, mask, w))
 
         for start in range(0, len(built), batch_size):
             chunk = built[start : start + batch_size]
             xs = mx.array([c[0] for c in chunk], dtype=mx.int32)
             ys = mx.array([c[1] for c in chunk], dtype=mx.int32)
             ms = mx.array([c[2] for c in chunk], dtype=mx.float32)
-            yield xs, ys, ms
+            wv = mx.array([c[3] for c in chunk], dtype=mx.float32) if do_weight else None
+            yield xs, ys, ms, wv
 
     # -----------------------------------------------------------------------
     # 5. Assessment oracle

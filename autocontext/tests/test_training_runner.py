@@ -689,9 +689,23 @@ class TestTrainCLI:
         from autocontext.cli import app
 
         runner = CliRunner()
-        result = runner.invoke(app, ["train", "--scenario", "grid_ctf", "--loss-weight-by-score", "bogus"])
+        # _run_training is patched so a non-zero exit can ONLY come from the BadParameter guard.
+        with patch("autocontext.cli_train._run_training") as mock_run:
+            result = runner.invoke(app, ["train", "--scenario", "grid_ctf", "--loss-weight-by-score", "bogus"])
         assert result.exit_code != 0
-        assert "loss-weight-by-score" in result.output
+        mock_run.assert_not_called()
+
+    def test_softmax_zero_temperature_rejected(self) -> None:
+        from autocontext.cli import app
+
+        runner = CliRunner()
+        with patch("autocontext.cli_train._run_training") as mock_run:
+            result = runner.invoke(
+                app,
+                ["train", "--scenario", "grid_ctf", "--loss-weight-by-score", "softmax", "--loss-weight-temperature", "0"],
+            )
+        assert result.exit_code != 0
+        mock_run.assert_not_called()
 
     def test_missing_data_uses_default(self) -> None:
         from autocontext.cli import app

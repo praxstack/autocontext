@@ -190,23 +190,30 @@ if HAS_MLX:
             h = self.norm(h)
             return self.head(h)
 
-    def compute_loss(model: GPTModel, x: Any, y: Any, loss_mask: Any = None) -> Any:
+    def compute_loss(model: GPTModel, x: Any, y: Any, loss_mask: Any = None, example_weights: Any = None) -> Any:
         """Cross-entropy loss for next-token prediction.
 
         When ``loss_mask`` is provided (same shape as ``y``, 1.0 = train / 0.0 =
         ignore) the loss is averaged over only the unmasked positions, giving the
         completion-only objective. With ``loss_mask=None`` it averages over all
         positions (legacy behavior; keeps existing callers byte-identical).
+
+        ``example_weights`` (shape ``(batch,)``, RWR) weights each example's *mean*
+        completion loss before averaging, so the score weight is per-example and a long
+        completion can't dominate. ``None`` keeps the byte-identical token-level average.
         """
         logits = model(x)
         batch, seq_len, vocab = logits.shape
-        logits_flat = logits.reshape(-1, vocab)
-        targets_flat = y.reshape(-1)
-        per_token = nn.losses.cross_entropy(logits_flat, targets_flat)
+        per_token = nn.losses.cross_entropy(logits.reshape(-1, vocab), y.reshape(-1))
         if loss_mask is None:
             return mx.mean(per_token)
-        mask_flat = loss_mask.reshape(-1)
-        return (per_token * mask_flat).sum() / mx.maximum(mask_flat.sum(), 1.0)
+        if example_weights is None:
+            mask_flat = loss_mask.reshape(-1)
+            return (per_token * mask_flat).sum() / mx.maximum(mask_flat.sum(), 1.0)
+        m = loss_mask.reshape(batch, seq_len)
+        per_ex = (per_token.reshape(batch, seq_len) * m).sum(axis=1) / mx.maximum(m.sum(axis=1), 1.0)
+        w = example_weights.reshape(-1)
+        return (per_ex * w).sum() / mx.maximum(w.sum(), 1.0)
 
     def save_checkpoint(model: GPTModel, path: Path) -> None:
         """Save model weights to safetensors format."""
@@ -332,8 +339,7 @@ def save_inference_bundle(
             for key in ("depth", "aspect_ratio", "head_dim", "n_kv_heads", "vocab_size", "seq_len")
             if hasattr(cfg, key)
         }
-    # Persist the conditioning contract so the serving path (MLXProvider) applies the
-    # same top-bucket quality prompt the model was trained with.
+    # Persist the conditioning contract so serving (MLXProvider) applies the same top-bucket prompt.
     score_conditioned = bool(getattr(tokenizer, "include_quality", False))
     config_payload["score_conditioned"] = score_conditioned
     if score_conditioned:
@@ -492,17 +498,14 @@ def _run_mlx_training(
     if scenario_name not in SCENARIO_REGISTRY:
         raise ValueError(f"unknown scenario: {scenario_name}")
 
-    # Hold out the validation split (previously loaded then discarded): the tokenizer
-    # and training use the train split only; val drives the validation loss + optional
-    # best-checkpoint selection / early stopping.
+    # Hold out the validation split: train uses the train split; val drives val_loss + best-checkpoint selection.
     train_records, val_records = load_jsonl(data_path)
     if not train_records:
         train_records, val_records = list(val_records), []
     if not train_records:
         raise ValueError(f"no training records found in {data_path}")
 
-    # Curate the TRAIN split only (val stays held out untouched): dedupe duplicate
-    # constructions and keep the highest-scoring elite fraction.
+    # Curate the TRAIN split only (val stays held out): dedupe + keep the elite fraction.
     train_records = curate_records(
         train_records,
         elite_fraction=elite_fraction,
@@ -532,8 +535,7 @@ def _run_mlx_training(
         raise ValueError("not enough tokenized training data for a single batch")
     val_batches = _masked_batches(val_records)
 
-    # Size the model head/embedding to the tokenizer (grows by one slot only when
-    # score-conditioned, so the default architecture is unchanged).
+    # Size the model head/embedding to the tokenizer (grows one slot only when score-conditioned).
     cfg = ModelConfig(seq_len=seq_len, vocab_size=int(tokenizer.vocab_size))
     model = GPTModel(cfg)
     optimizer = optim.AdamW(learning_rate=learning_rate)
@@ -543,7 +545,7 @@ def _run_mlx_training(
         if not val_batches:
             return None
         total = 0.0
-        for vx, vy, vmask in val_batches:
+        for vx, vy, vmask, _vw in val_batches:  # val stays unweighted (comparable val_loss)
             vloss = compute_loss(model, vx, vy, vmask)
             mx.eval(vloss)  # noqa: S307
             total += float(vloss.item())
@@ -559,8 +561,8 @@ def _run_mlx_training(
     for step in range(train_steps):
         if time.perf_counter() >= deadline:
             break
-        x, y, loss_mask = batches[step % len(batches)]
-        loss, grads = loss_and_grad(model, x, y, loss_mask)
+        x, y, loss_mask, ex_weights = batches[step % len(batches)]
+        loss, grads = loss_and_grad(model, x, y, loss_mask, ex_weights)
         optimizer.update(model, grads)
         mx.eval(model.parameters(), optimizer.state, loss)  # noqa: S307
         steps_completed += 1
@@ -661,16 +663,14 @@ def run_training(
     collect_samples_path: Path | None = None,
     backend: str = "mlx",
 ) -> dict[str, float]:
-    # Reject out-of-range curation values before any training work: select_top_fraction
-    # otherwise clamps and silently collapses the dataset to the single top record.
+    # Reject out-of-range curation before any work (select_top_fraction would clamp to one record).
     if not 0.0 < elite_fraction <= 1.0:
         raise ValueError(f"elite_fraction must be in (0, 1], got {elite_fraction}")
     if not 0.0 < dedupe_near_threshold <= 1.0:
         raise ValueError(f"dedupe_near_threshold must be in (0, 1], got {dedupe_near_threshold}")
 
     normalized_backend = backend.strip().lower()
-    # Shared args; backend-specific extras are added per dispatch. Each backend entry
-    # runs its own dependency preflight so routing stays importable without the extras.
+    # Shared args; backend extras added per dispatch (each entry runs its own dep preflight).
     common: dict[str, Any] = dict(
         scenario_name=scenario_name,
         data_path=data_path,

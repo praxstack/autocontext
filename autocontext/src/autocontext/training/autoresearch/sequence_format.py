@@ -116,10 +116,10 @@ def score_loss_weights(scores: list[float], *, mode: str = "uniform", temperatur
 
     Soft counterpart to elite filtering: instead of dropping low-scoring records
     (curation) or tagging them (score-conditioning), every record is kept but its
-    loss is scaled by a weight derived from its score, so the gradient leans toward
-    high-reward constructions. Used as the per-example value of the completion loss
-    mask, so ``compute_loss``'s ``(per_token * mask).sum() / mask.sum()`` becomes a
-    score-weighted average with no change to the loss code.
+    per-example loss is scaled by a weight derived from its score, so the gradient
+    leans toward high-reward constructions. The weight is applied per training
+    example (each example's mean completion loss is weighted, then averaged), so a
+    long completion cannot drown out a short high-reward one.
 
     Modes (all but ``uniform`` are mean-normalized to 1.0, so they change the
     *relative* emphasis across examples, not the overall step size):
@@ -129,7 +129,7 @@ def score_loss_weights(scores: list[float], *, mode: str = "uniform", temperatur
       A mild, interpretable tilt toward better examples.
     - ``softmax``: ``softmax(score / temperature)`` then normalized. ``temperature``
       is a continuous knob: large flattens toward ``uniform``, small concentrates on
-      the top example (soft elite selection).
+      the top example (soft elite selection). It must be ``> 0``.
 
     No score spread (all scores equal) falls back to ``uniform`` for every mode.
     """
@@ -140,6 +140,8 @@ def score_loss_weights(scores: list[float], *, mode: str = "uniform", temperatur
         return [1.0] * n
     if mode not in LOSS_WEIGHT_MODES:
         raise ValueError(f"unknown loss-weight mode: {mode!r} (expected one of {LOSS_WEIGHT_MODES})")
+    if mode == "softmax" and temperature <= 0:
+        raise ValueError(f"softmax loss-weight temperature must be > 0, got {temperature}")
 
     lo, hi = min(scores), max(scores)
     if hi <= lo:  # no spread to weight by
@@ -149,10 +151,8 @@ def score_loss_weights(scores: list[float], *, mode: str = "uniform", temperatur
         raw = [LOSS_WEIGHT_FLOOR + (1.0 - LOSS_WEIGHT_FLOOR) * (s - lo) / (hi - lo) for s in scores]
         return _mean_normalize(raw)
 
-    # softmax
-    temp = temperature if temperature > 0 else 1.0
-    # subtract max for numerical stability (shift-invariant after normalization)
-    exps = [math.exp((s - hi) / temp) for s in scores]
+    # softmax (subtract max for numerical stability; shift-invariant after normalization)
+    exps = [math.exp((s - hi) / temperature) for s in scores]
     return _mean_normalize(exps)
 
 

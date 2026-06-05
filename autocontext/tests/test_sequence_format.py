@@ -335,6 +335,17 @@ def test_score_loss_weights_softmax_high_temperature_approaches_uniform() -> Non
         assert abs(wi - 1.0) < 1e-3
 
 
+def test_score_loss_weights_softmax_rejects_non_positive_temperature() -> None:
+    """softmax temperature <= 0 is rejected (no silent coercion to 1.0)."""
+    from autocontext.training.autoresearch.sequence_format import score_loss_weights
+
+    for bad in (0.0, -1.0):
+        with pytest.raises(ValueError, match="temperature must be > 0"):
+            score_loss_weights([0.0, 1.0], mode="softmax", temperature=bad)
+    # linear/uniform do not use temperature, so a 0.0 there is harmless
+    assert score_loss_weights([0.0, 1.0], mode="linear", temperature=0.0)
+
+
 def test_score_loss_weights_softmax_low_temperature_concentrates_on_max() -> None:
     """Small temperature concentrates weight on the top-scoring example (soft elite)."""
     from autocontext.training.autoresearch.sequence_format import score_loss_weights

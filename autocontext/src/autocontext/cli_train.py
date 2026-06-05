@@ -80,6 +80,8 @@ def register_train_command(app: typer.Typer, console: Console) -> None:
             raise typer.BadParameter(f"--dedupe-near-threshold must be in (0, 1], got {dedupe_near_threshold}")
         if loss_weight_by_score not in ("uniform", "linear", "softmax"):
             raise typer.BadParameter(f"--loss-weight-by-score must be uniform|linear|softmax, got {loss_weight_by_score!r}")
+        if loss_weight_by_score == "softmax" and loss_weight_temperature <= 0:
+            raise typer.BadParameter(f"--loss-weight-temperature must be > 0 for softmax, got {loss_weight_temperature}")
 
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
