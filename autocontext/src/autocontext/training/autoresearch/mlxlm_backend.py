@@ -8,8 +8,8 @@ starts from a strong prior over JSON / numbers / structure rather than learning 
 format from scratch.
 
 Reuses the shared record curation (``data_selection``), the scenario interface
-(``get_task_prompt`` / ``evaluate_output`` / ``execute_match``), the strategy parser
-(``extract_strategy``), and the quality bucketing (``score_to_quality_bucket``). It
+(``get_task_prompt`` / ``evaluate_output`` / ``execute_match``), the robust strategy
+parser (``extract_json_object``), and the quality bucketing (``score_to_quality_bucket``). It
 does NOT use the autoresearch ``<|...|>`` BPE token contract.
 
 Gated behind the ``mlxlm`` optional-dependency extra (``mlx-lm``).
@@ -27,7 +27,7 @@ from typing import Any
 
 from autocontext.training.autoresearch.sequence_format import (
     NUM_QUALITY_BUCKETS,
-    extract_strategy,
+    extract_json_object,
     resolve_scenario_context,
     score_to_quality_bucket,
 )
@@ -56,13 +56,18 @@ def build_completion_record(
     strategy_json: str,
     quality: int | None = None,
     num_buckets: int = NUM_QUALITY_BUCKETS,
+    reasoning: str | None = None,
 ) -> dict[str, str]:
     """Build one mlx-lm ``{"prompt", "completion"}`` record.
 
     The prompt is the scenario task instruction (optionally prefixed with a quality
-    directive for score-conditioned training); the completion is the strategy JSON.
+    directive for score-conditioned training). The completion is the strategy JSON,
+    optionally preceded by the teacher's rationale (reason-then-construct): with
+    completion-only loss the model trains to produce the reasoning and then the
+    construction. A falsy ``reasoning`` yields the bare strategy JSON (answer-only).
     """
-    return {"prompt": _quality_prefix(quality, num_buckets) + task_prompt, "completion": strategy_json}
+    completion = f"{reasoning}\n{strategy_json}" if reasoning else strategy_json
+    return {"prompt": _quality_prefix(quality, num_buckets) + task_prompt, "completion": completion}
 
 
 def records_to_completions(
@@ -82,6 +87,7 @@ def records_to_completions(
                 strategy_json=json.dumps(record["strategy"], sort_keys=True),
                 quality=quality,
                 num_buckets=num_buckets,
+                reasoning=str(record.get("reasoning") or "") or None,
             )
         )
     return out
@@ -255,7 +261,9 @@ def _assess_mlxlm(
         try:
             text = generate(model, tokenizer, prompt=prompt, max_tokens=512, verbose=False, sampler=sampler)
             if is_game:
-                strategy = extract_strategy(text)
+                # Reason-trained models emit `rationale\n{...}`; extract the trailing
+                # JSON object robustly (a bare extract_strategy returns None on prose).
+                strategy = extract_json_object(text)
                 if strategy is None:
                     continue
                 valid += 1
