@@ -324,6 +324,7 @@ def _preflight_backend_deps(backend: str) -> None:
         "cuda": ["torch", "numpy", "safetensors"],
         "mlxlm": ["mlx_lm"],
         "grpo": ["mlx_lm_lora"],
+        "opd": ["mlx_lm"],
     }.get(backend, [])
     missing = [m for m in required if importlib.util.find_spec(m) is None]
     if missing:
@@ -332,6 +333,7 @@ def _preflight_backend_deps(backend: str) -> None:
             "cuda": "CUDA (torch) is required for local training",
             "mlxlm": "mlx-lm is required for the pretrained-finetune backend",
             "grpo": "mlx-lm-lora is required for the GRPO/GSPO RLVR backend",
+            "opd": "mlx-lm is required for the on-policy distillation backend",
         }.get(backend, f"missing dependencies for '{backend}' training backend")
         # grpo is not yet a declared extra (its lock bump is a separate maintainer step), so
         # point at a direct install; the from-scratch/mlxlm backends use the packaged extras.
@@ -340,6 +342,7 @@ def _preflight_backend_deps(backend: str) -> None:
             "cuda": "uv sync --group dev --extra cuda",
             "mlxlm": "uv sync --group dev --extra mlxlm",
             "grpo": "uv pip install mlx-lm-lora",
+            "opd": "uv sync --group dev --extra mlxlm",
         }.get(backend, f"uv sync --group dev --extra {backend}")
         raise RuntimeError(f"{lead}; missing: {', '.join(missing)}. Install with: {install}")
 
@@ -368,6 +371,7 @@ def run_training(
     augmenter_spec: str = "",
     vocab_size: int = BASE_VOCAB_SIZE,
     base_model: str = "",
+    teacher_model: str = "",  # opd backend: distillation teacher (empty = backend default)
     fine_tune_type: str = "lora",
     num_layers: int = 8,
     collect_samples_path: Path | None = None,
@@ -457,7 +461,31 @@ def run_training(
             time_budget=time_budget,
             memory_limit_mb=memory_limit_mb,
         )
-    raise ValueError("unsupported training backend: expected 'mlx', 'cuda', 'mlxlm', or 'grpo'")
+    if normalized_backend == "opd":
+        if loss_weight_mode != "uniform" or vocab_size != BASE_VOCAB_SIZE:
+            raise NotImplementedError("loss-weighting / --vocab-size apply to the from-scratch backends, not opd")
+        # Preflight BEFORE importing the module: on_policy_distill imports mlx at module top,
+        # so a missing dep must surface as the actionable install hint, not a raw ImportError.
+        _preflight_backend_deps("opd")
+        from autocontext.training.autoresearch.on_policy_distill import run_on_policy_distillation
+
+        # On-policy distillation samples on-policy (no SFT dataset): generic train args map as
+        # base_model -> student, train_steps -> iters; empty teacher/student fall back to the
+        # backend defaults (same-family Qwen2.5). A tokenizer mismatch is rejected in the runner.
+        return run_on_policy_distillation(
+            scenario_name=scenario_name,
+            output_dir=output_dir,
+            student_model=base_model,
+            teacher_model=teacher_model,
+            iters=train_steps,
+            learning_rate=learning_rate,
+            num_layers=num_layers,
+            assess_samples=assess_samples,
+            assess_temperature=assess_temperature,
+            time_budget=time_budget,
+            memory_limit_mb=memory_limit_mb,
+        )
+    raise ValueError("unsupported training backend: expected 'mlx', 'cuda', 'mlxlm', 'grpo', or 'opd'")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -465,7 +493,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scenario", required=True)
     parser.add_argument("--data", required=True)
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--backend", choices=("mlx", "cuda", "mlxlm", "grpo"), default="mlx")
+    parser.add_argument("--backend", choices=("mlx", "cuda", "mlxlm", "grpo", "opd"), default="mlx")
     parser.add_argument("--time-budget", type=int, default=300)
     parser.add_argument("--memory-limit", type=int, default=16384)
     parser.add_argument("--train-steps", type=int, default=8)
@@ -485,6 +513,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--augmenter", default="", help="record augmenter spec 'module:function' (empty = none)")
     parser.add_argument("--vocab-size", type=int, default=BASE_VOCAB_SIZE, help="BPE tokenizer target vocab (mlx/cuda)")
     parser.add_argument("--base-model", default="", help="mlxlm backend: pretrained base model (empty = default)")
+    parser.add_argument("--teacher-model", default="", help="opd backend: distillation teacher (empty = default)")
     parser.add_argument("--fine-tune-type", choices=("lora", "dora", "full"), default="lora", help="mlxlm backend")
     parser.add_argument("--num-layers", type=int, default=8, help="mlxlm backend: layers to fine-tune")
     return parser
@@ -517,6 +546,7 @@ def main(argv: list[str] | None = None) -> int:
             augmenter_spec=args.augmenter,
             vocab_size=args.vocab_size,
             base_model=args.base_model,
+            teacher_model=args.teacher_model,
             fine_tune_type=args.fine_tune_type,
             num_layers=args.num_layers,
             backend=args.backend,

@@ -73,7 +73,9 @@ def register_train_command(app: typer.Typer, console: Console) -> None:
         max_experiments: int = typer.Option(0, "--max-experiments", help="Max iterations (0 = unlimited)"),
         memory_limit: int = typer.Option(16384, "--memory-limit", help="Peak memory cap in MB"),
         backend: str = typer.Option(
-            "mlx", "--backend", help="Training backend (mlx, cuda, mlxlm, grpo). grpo = GSPO/GRPO RLVR (needs mlx-lm-lora)"
+            "mlx",
+            "--backend",
+            help="Training backend: mlx, cuda, mlxlm, grpo (GSPO/GRPO RLVR), opd (on-policy distillation)",
         ),
         agent_provider: str = typer.Option("anthropic", "--agent-provider", help="LLM provider for training agent"),
         agent_model: str = typer.Option("", "--agent-model", help="Model for training agent (empty = provider default)"),
@@ -108,7 +110,12 @@ def register_train_command(app: typer.Typer, console: Console) -> None:
         vocab_size: int = typer.Option(
             BASE_VOCAB_SIZE, "--vocab-size", help="BPE tokenizer target vocab size (mlx/cuda from-scratch backends)"
         ),
-        base_model: str = typer.Option("", "--base-model", help="mlxlm backend: pretrained base model (empty = default)"),
+        base_model: str = typer.Option(
+            "", "--base-model", help="mlxlm/grpo/opd: pretrained base (opd: the student; empty = default)"
+        ),
+        teacher_model: str = typer.Option(
+            "", "--teacher-model", help="opd backend: distillation teacher; must share the student's tokenizer (empty = default)"
+        ),
         fine_tune_type: str = typer.Option("lora", "--fine-tune-type", help="mlxlm backend: lora | dora | full"),
         num_layers: int = typer.Option(8, "--num-layers", help="mlxlm backend: layers to fine-tune"),
         json_output: bool = typer.Option(False, "--json", help="Output structured JSON"),
@@ -149,6 +156,7 @@ def register_train_command(app: typer.Typer, console: Console) -> None:
             augmenter_spec=augmenter,
             vocab_size=vocab_size,
             base_model=base_model,
+            teacher_model=teacher_model,
             fine_tune_type=fine_tune_type,
             num_layers=num_layers,
         )
