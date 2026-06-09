@@ -38,6 +38,17 @@ def test_records_to_completions_buckets_by_score() -> None:
     assert all("Target quality" not in c["prompt"] for c in plain)
 
 
+def test_records_to_completions_uses_text_strategy_verbatim_for_agent_tasks() -> None:
+    """Agent-task scenarios carry the raw text output as the strategy; it must be the completion
+    verbatim, not json.dumps'd (which would wrap/escape it and break the self-improving loop)."""
+    text = "The answer is 42.\n#### 42"
+    comps = mb.records_to_completions([{"strategy": text, "score": 1.0}], task_prompt="Solve it.")
+    assert comps[0]["completion"] == text  # verbatim, not '"The answer is 42...."'
+    # a dict strategy (game scenario) still serializes to JSON
+    game = mb.records_to_completions([{"strategy": {"a": 1}, "score": 1.0}], task_prompt="T")
+    assert game[0]["completion"] == '{"a": 1}'
+
+
 def test_write_completion_dataset_writes_train_and_valid(tmp_path: Path) -> None:
     records = [{"strategy": {"a": i}, "score": i / 10} for i in range(10)]
     data_dir = tmp_path / "data"
@@ -191,3 +202,31 @@ def test_format_assess_prompt_falls_back_to_raw_without_chat_template() -> None:
             raise ValueError("no chat template")
 
     assert mb.format_assess_prompt(_Tok(), "raw text", score_conditioned=False) == "raw text"
+
+
+def test_scenario_task_prompt_and_state_resolves_agent_task_state() -> None:
+    """Agent-task scenarios must return the state the prompt was built from, so evaluate_output
+    gets that same state at scoring time (calling it without state raises and is swallowed)."""
+
+    class _Agent:
+        def initial_state(self, seed=None):
+            return {"n": 3}
+
+        def get_task_prompt(self, state):
+            return f"solve n={state['n']}"
+
+    prompt, state = mb.scenario_task_prompt_and_state(_Agent())
+    assert prompt == "solve n=3"
+    assert state == {"n": 3}
+
+
+def test_scenario_task_prompt_and_state_none_for_game_scenarios() -> None:
+    class _Game:
+        def describe_strategy_interface(self):
+            return "Return JSON."
+
+    prompt, state = mb.scenario_task_prompt_and_state(_Game())
+    assert state is None  # games score via execute_match, which takes no state
+    assert "Return JSON." in prompt
+    # the state-agnostic alias still returns just the prompt
+    assert mb.scenario_task_prompt(_Game()) == prompt
