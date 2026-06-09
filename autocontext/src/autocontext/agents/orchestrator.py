@@ -14,7 +14,7 @@ from autocontext.agents.architect import ArchitectRunner, parse_architect_harnes
 from autocontext.agents.coach import CoachRunner, parse_coach_sections
 from autocontext.agents.competitor import CompetitorRunner
 from autocontext.agents.curator import KnowledgeCurator
-from autocontext.agents.llm_client import LanguageModelClient, build_client_from_settings
+from autocontext.agents.llm_client import DeferredMLXClient, LanguageModelClient, build_client_from_settings
 from autocontext.agents.model_router import ModelRouter, TierConfig
 from autocontext.agents.parsers import parse_analyst_output, parse_architect_output, parse_coach_output, parse_competitor_output
 from autocontext.agents.role_router import ProviderClass, RoleRouter, RoutingContext
@@ -210,7 +210,16 @@ class AgentOrchestrator:
         sqlite: Any | None = None,
         hook_bus: HookBus | None = None,
     ) -> AgentOrchestrator:
-        client: LanguageModelClient = build_client_from_settings(settings)
+        try:
+            client: LanguageModelClient = build_client_from_settings(settings)
+        except ValueError:
+            # mlx agent provider with no explicit path: the model is resolved per-scenario at
+            # role execution (the recursive loop). Defer here so the scenario-agnostic
+            # orchestrator can be constructed; a genuine no-model misconfig still errors on use.
+            if settings.agent_provider == "mlx" and not settings.mlx_model_path:
+                client = DeferredMLXClient()
+            else:
+                raise
 
         orch = cls(client=client, settings=settings, artifacts=artifacts, sqlite=sqlite, hook_bus=hook_bus)
 
@@ -265,36 +274,9 @@ class AgentOrchestrator:
         *,
         scenario_name: str,
     ) -> LanguageModelClient | None:
-        if provider_type not in {"pi", "pi-rpc"} or not scenario_name:
-            return None
+        from autocontext.agents.scenario_bound_clients import scenario_bound_runtime_client
 
-        from autocontext.agents.provider_bridge import create_role_client
-
-        call_settings, is_budgeted = settings_for_budgeted_role_call(
-            self.settings,
-            provider_type,
-            role,
-            self._active_generation_deadline,
-        )
-        key = (provider_type.lower(), None, scenario_name, role)
-        if not is_budgeted:
-            cached = self._routed_clients.get(key)
-            if cached is not None:
-                return cached
-
-        client = create_role_client(
-            provider_type,
-            call_settings,
-            scenario_name=scenario_name,
-            role=role,
-        )
-        if client is not None:
-            client = self._wrap_client(client, provider_name=f"{provider_type}:{role}")
-            if is_budgeted:
-                self._mark_disposable_client(client)
-            else:
-                self._routed_clients[key] = client
-        return client
+        return scenario_bound_runtime_client(self, provider_type, role, scenario_name=scenario_name)
 
     def _scenario_bound_override_client(
         self,
