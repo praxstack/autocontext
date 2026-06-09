@@ -203,6 +203,12 @@ def create_app(
             if isinstance(value, str):
                 (base / fname).write_text(value, encoding="utf-8")
                 written.append(fname)
+        if "hints.md" in written:
+            # ArtifactStore.read_hints prefers structured hint_state.json over
+            # flat hints.md. The operator's edit overwrites hint state, so drop
+            # the structured snapshot; readers fall back to the flat file and
+            # read_hint_manager lazily rebuilds structure from it.
+            (base / "hint_state.json").unlink(missing_ok=True)
         return {"scenario": scenario, "written": written}
 
     @application.get("/api/runs/{run_id}/replay/{generation}")

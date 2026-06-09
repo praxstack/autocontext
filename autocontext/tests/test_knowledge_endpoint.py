@@ -43,6 +43,51 @@ def test_put_writes_only_provided_string_fields(client: TestClient, tmp_path: Pa
     assert not (base / "playbook.md").exists()
 
 
+def test_put_hints_overrides_structured_hint_state(client: TestClient, tmp_path: Path) -> None:
+    # ArtifactStore.read_hints prefers hint_state.json over hints.md, so an
+    # edit that only wrote hints.md would be silently ignored by the loop
+    # (reviewer P2 on PR #1059). Seed structured state, then PUT new hints.
+    from autocontext.knowledge.hint_volume import HintManager, HintVolumePolicy
+    from autocontext.storage.artifacts import ArtifactStore
+
+    knowledge_root = tmp_path / "knowledge"
+    store = ArtifactStore(
+        runs_root=tmp_path / "runs",
+        knowledge_root=knowledge_root,
+        skills_root=tmp_path / "skills",
+        claude_skills_path=tmp_path / "claude_skills",
+    )
+    manager = HintManager.from_hint_text("- old structured hint", policy=HintVolumePolicy())
+    store.write_hint_manager("grid_ctf", manager)
+    assert (knowledge_root / "grid_ctf" / "hint_state.json").exists()
+    assert "old structured hint" in store.read_hints("grid_ctf")
+
+    response = client.put("/api/knowledge/grid_ctf", json={"hints": "- edited hint"})
+    assert response.status_code == 200
+
+    assert not (knowledge_root / "grid_ctf" / "hint_state.json").exists()
+    assert store.read_hints("grid_ctf") == "- edited hint"
+
+
+def test_put_without_hints_preserves_hint_state(client: TestClient, tmp_path: Path) -> None:
+    from autocontext.knowledge.hint_volume import HintManager, HintVolumePolicy
+    from autocontext.storage.artifacts import ArtifactStore
+
+    knowledge_root = tmp_path / "knowledge"
+    store = ArtifactStore(
+        runs_root=tmp_path / "runs",
+        knowledge_root=knowledge_root,
+        skills_root=tmp_path / "skills",
+        claude_skills_path=tmp_path / "claude_skills",
+    )
+    store.write_hint_manager("grid_ctf", HintManager.from_hint_text("- keep me", policy=HintVolumePolicy()))
+
+    response = client.put("/api/knowledge/grid_ctf", json={"playbook": "## Plan only"})
+    assert response.status_code == 200
+    assert (knowledge_root / "grid_ctf" / "hint_state.json").exists()
+    assert "keep me" in store.read_hints("grid_ctf")
+
+
 def test_put_rejects_invalid_scenario_ids(client: TestClient) -> None:
     assert client.put("/api/knowledge/bad!name", json={"hints": "x"}).status_code == 400
     assert client.put("/api/knowledge/dots..dots", json={"hints": "x"}).status_code == 400
