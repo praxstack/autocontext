@@ -147,7 +147,7 @@ Start the API server:
 uv run autoctx serve --host 127.0.0.1 --port 8000
 ```
 
-Inspect `http://127.0.0.1:8000/` for the API index after the server starts. For an interactive terminal UI, use the TypeScript package: `npx autoctx tui`.
+Inspect `http://127.0.0.1:8000/` for the API index after the server starts. Browser-based GUI clients calling the HTTP API cross-origin are allowed via CORS for local app origins by default (the cowork desktop webview and dev servers); set `AUTOCONTEXT_CORS_ORIGINS` to a comma-separated origin list for remote or custom GUI deployments. For an interactive terminal UI, use the TypeScript package: `npx autoctx tui`.
 
 Run a persistent queue worker beside the API server:
 
