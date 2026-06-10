@@ -38,19 +38,25 @@ def register_share_command(app: typer.Typer, *, console: Console) -> None:
         knowledge_root: Annotated[Path, typer.Option("--knowledge-root", help="Knowledge root directory")] = Path("knowledge"),
         output: Annotated[
             Path | None,
-            typer.Option("--output", help="Directory for the prepared bundle + report (default: cwd)"),
+            typer.Option(
+                "--output",
+                help="Directory for the prepared bundle + report (default: cwd; bundle written only when not --dry-run)",
+            ),
         ] = None,
         license_spdx: Annotated[str, typer.Option("--license", help="SPDX license id asserted for sharing")] = "CC-BY-4.0",
         dry_run: Annotated[bool, typer.Option("--dry-run", help="Scan and report only; never write a bundle")] = False,
         json_output: Annotated[bool, typer.Option("--json", help="Print the prepare report as JSON")] = False,
     ) -> None:
         """Scan a run's shareable files locally and prepare a redacted bundle."""
+        # A non-dry-run with no --output still writes the bundle, to cwd; dry-run
+        # never writes a bundle regardless.
+        bundle_output = output if output is not None else (None if dry_run else Path.cwd())
         result = prepare_share(
             runs_root=runs_root,
             knowledge_root=knowledge_root,
             run_id=run_id,
             scenario_name=scenario,
-            output_dir=output,
+            output_dir=bundle_output,
             dry_run=dry_run,
             license_spdx=license_spdx,
         )

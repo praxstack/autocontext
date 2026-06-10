@@ -121,11 +121,11 @@ def prepare_share(
 
     for artifact in artifacts:
         try:
-            bundle_path = normalize_bundle_path(artifact.name)
+            bundle_path = normalize_bundle_path(artifact.bundle_path)
         except ValueError as error:
             file_reports.append(
                 PrepareFileReport(
-                    path=artifact.name,
+                    path=artifact.bundle_path,
                     kind="report",
                     verdict="rejected",
                     intake_rejected=str(error),
@@ -221,6 +221,19 @@ def prepare_share(
     )
 
     if not dry_run and not refused and output_dir is not None and redacted_payloads:
+        # local_scan reflects whether the local scan actually found anything —
+        # NOT the routing verdict. `needs_human_review` covers both clean
+        # bundles and ones with review-level findings (e.g. an IPv4), so deriving
+        # it from the verdict would mislabel flagged bundles as "passed".
+        local_scan = (
+            "flagged"
+            if total_redactions > 0
+            or any(
+                report.finding_count > 0 or any(state == "flagged" for state in report.scanner_results.values())
+                for report in file_reports
+            )
+            else "passed"
+        )
         result.bundle_dir = _write_bundle(
             output_dir=output_dir,
             run_id=run_id,
@@ -230,7 +243,7 @@ def prepare_share(
             manifest_files=manifest_files,
             redacted_payloads=redacted_payloads,
             total_redactions=total_redactions,
-            overall=overall,
+            local_scan=local_scan,
         )
 
     return result
@@ -246,7 +259,7 @@ def _write_bundle(
     manifest_files: list[dict[str, Any]],
     redacted_payloads: list[tuple[str, str]],
     total_redactions: int,
-    overall: ReviewState,
+    local_scan: str,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -266,7 +279,7 @@ def _write_bundle(
         rights_attestation=False,
         files=manifest_files,
         cli_version=_cli_version(),
-        local_scan="flagged" if overall != "needs_human_review" else "passed",
+        local_scan=local_scan,
         local_redactions=total_redactions,
     )
     (output_dir / "bundle.manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")

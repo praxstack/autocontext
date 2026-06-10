@@ -21,7 +21,7 @@ MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_LINE_LENGTH = 10_000
 
 ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
-    {".json", ".jsonl", ".md", ".txt", ".csv", ".yaml", ".yml", ".py", ".ts", ".js", ".sql"}
+    {".json", ".jsonl", ".ndjson", ".md", ".txt", ".csv", ".yaml", ".yml", ".py", ".ts", ".js", ".sql"}
 )
 
 _SOURCE_EXTENSIONS: frozenset[str] = frozenset({".py", ".ts", ".js", ".sql"})
