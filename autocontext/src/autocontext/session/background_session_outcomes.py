@@ -31,6 +31,7 @@ _OUTCOME_KINDS: set[str] = {
     "dataset",
     "verification_result",
 }
+_OUTCOME_STATUSES: set[str] = {"available", "pending", "unavailable"}
 
 
 def build_session_outcome(
@@ -49,6 +50,7 @@ def build_session_outcome(
     metadata: Mapping[str, Any] | None = None,
 ) -> SessionOutcome:
     _assert_outcome_kind(kind)
+    _assert_outcome_status(status)
     return {
         "outcome_id": outcome_id or _derive_outcome_id(kind=kind, ref=ref, sha=sha, path=path, url=url, title=title),
         "session_id": session_id,
@@ -93,6 +95,7 @@ def build_missing_host_capability_outcome(
 
 
 def session_outcome_to_artifact(outcome: Mapping[str, Any]) -> BackgroundSessionArtifact:
+    _assert_available_outcome(outcome, "artifacts")
     return {
         "artifact_id": _read_str(outcome, "outcome_id"),
         "kind": _read_str(outcome, "kind"),
@@ -108,6 +111,7 @@ def build_session_outcome_artifact_event(
     sequence: int,
     timestamp: str,
 ) -> NormalizedSessionEvent:
+    _assert_available_outcome(outcome, "artifact events")
     return build_artifact_created_session_event(
         session_id=_read_str(outcome, "session_id"),
         sequence=sequence,
@@ -174,7 +178,20 @@ def _label_for_kind(kind: SessionOutcomeKind) -> str:
     return "Verification result"
 
 
+def _assert_available_outcome(outcome: Mapping[str, Any], target: str) -> None:
+    kind = _read_str(outcome, "kind")
+    status = _read_str(outcome, "status")
+    _assert_outcome_kind(kind)
+    _assert_outcome_status(status)
+    if status != "available":
+        raise ValueError(f"Only available session outcomes can be converted to {target}")
+
+
 def _assert_outcome_kind(kind: str) -> None:
     if kind not in _OUTCOME_KINDS:
         raise ValueError(f"Unsupported session outcome kind: {kind}")
 
+
+def _assert_outcome_status(status: str) -> None:
+    if status not in _OUTCOME_STATUSES:
+        raise ValueError(f"Unsupported session outcome status: {status}")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from autocontext.session.background_session_outcomes import (
     build_missing_host_capability_outcome,
     build_session_outcome,
@@ -196,12 +198,14 @@ def test_session_outcomes_serialize_portable_artifact_kinds_without_provider_pay
 
 
 def test_missing_host_capability_outcome_matches_typescript_contract() -> None:
-    assert build_missing_host_capability_outcome(
+    unavailable = build_missing_host_capability_outcome(
         session_id=_SESSION_ID,
         kind="pull_request",
         required_capability="hosted_pull_request_creation",
         created_at=_CREATED_AT,
-    ) == {
+    )
+
+    assert unavailable == {
         "outcome_id": "pull_request:missing:hosted_pull_request_creation",
         "session_id": _SESSION_ID,
         "kind": "pull_request",
@@ -218,6 +222,41 @@ def test_missing_host_capability_outcome_matches_typescript_contract() -> None:
             "required_capability": "hosted_pull_request_creation",
         },
     }
+    with pytest.raises(ValueError, match="Only available session outcomes can be converted to artifacts"):
+        session_outcome_to_artifact(unavailable)
+    with pytest.raises(ValueError, match="Only available session outcomes can be converted to artifact events"):
+        build_session_outcome_artifact_event(
+            unavailable,
+            sequence=71,
+            timestamp="2026-06-01T00:09:10.000Z",
+        )
+
+
+def test_invalid_outcome_kind_and_status_values_are_rejected() -> None:
+    with pytest.raises(ValueError, match="Unsupported session outcome kind: video"):
+        build_session_outcome(
+            session_id=_SESSION_ID,
+            kind="video",  # type: ignore[arg-type]
+            title="Unsupported video",
+            created_at=_CREATED_AT,
+        )
+
+    with pytest.raises(ValueError, match="Unsupported session outcome status: failed"):
+        build_session_outcome(
+            session_id=_SESSION_ID,
+            kind="report",
+            status="failed",  # type: ignore[arg-type]
+            title="Invalid status",
+            created_at=_CREATED_AT,
+        )
+
+    with pytest.raises(ValueError, match="Unsupported session outcome kind: video"):
+        build_missing_host_capability_outcome(
+            session_id=_SESSION_ID,
+            kind="video",  # type: ignore[arg-type]
+            required_capability="hosted_video_creation",
+            created_at=_CREATED_AT,
+        )
 
 
 def test_session_outcome_artifact_and_event_are_sanitized() -> None:

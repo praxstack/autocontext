@@ -196,14 +196,14 @@ describe("background session outcome artifacts", () => {
   });
 
   it("represents missing hosted capabilities instead of creating provider-specific outcomes", () => {
-    expect(
-      buildMissingHostCapabilityOutcome({
-        sessionId,
-        kind: "pull_request",
-        requiredCapability: "hosted_pull_request_creation",
-        createdAt,
-      }),
-    ).toEqual({
+    const unavailable = buildMissingHostCapabilityOutcome({
+      sessionId,
+      kind: "pull_request",
+      requiredCapability: "hosted_pull_request_creation",
+      createdAt,
+    });
+
+    expect(unavailable).toEqual({
       outcome_id: "pull_request:missing:hosted_pull_request_creation",
       session_id: sessionId,
       kind: "pull_request",
@@ -220,9 +220,48 @@ describe("background session outcome artifacts", () => {
         required_capability: "hosted_pull_request_creation",
       },
     });
+    expect(() => sessionOutcomeToArtifact(unavailable)).toThrow(
+      "Only available session outcomes can be converted to artifacts",
+    );
+    expect(() =>
+      buildSessionOutcomeArtifactEvent(unavailable, {
+        sequence: 71,
+        timestamp: "2026-06-01T00:09:10.000Z",
+      }),
+    ).toThrow("Only available session outcomes can be converted to artifact events");
   });
 
-  it("converts outcomes to sanitized artifacts and normalized artifact_created events", () => {
+  it("rejects invalid outcome kind and status values from dynamic callers", () => {
+    expect(() =>
+      buildSessionOutcome({
+        sessionId,
+        kind: "video" as never,
+        title: "Unsupported video",
+        createdAt,
+      }),
+    ).toThrow("Unsupported session outcome kind: video");
+
+    expect(() =>
+      buildSessionOutcome({
+        sessionId,
+        kind: "report",
+        status: "failed" as never,
+        title: "Invalid status",
+        createdAt,
+      }),
+    ).toThrow("Unsupported session outcome status: failed");
+
+    expect(() =>
+      buildMissingHostCapabilityOutcome({
+        sessionId,
+        kind: "video" as never,
+        requiredCapability: "hosted_video_creation",
+        createdAt,
+      }),
+    ).toThrow("Unsupported session outcome kind: video");
+  });
+
+  it("converts available outcomes to sanitized artifacts and normalized artifact_created events", () => {
     const report = buildSessionOutcome({
       sessionId,
       kind: "report",

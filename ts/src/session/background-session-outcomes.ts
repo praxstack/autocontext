@@ -60,11 +60,14 @@ export interface SessionOutcomeArtifactEventInput {
 }
 
 export function buildSessionOutcome(input: SessionOutcomeInput): SessionOutcome {
+  assertSessionOutcomeKind(input.kind);
+  const status = input.status ?? "available";
+  assertSessionOutcomeStatus(status);
   const normalized: SessionOutcome = {
     outcome_id: input.outcomeId || deriveOutcomeId(input),
     session_id: input.sessionId,
     kind: input.kind,
-    status: input.status ?? "available",
+    status,
     title: input.title || labelForKind(input.kind),
     created_at: input.createdAt,
     url: input.url ?? "",
@@ -80,6 +83,7 @@ export function buildSessionOutcome(input: SessionOutcomeInput): SessionOutcome 
 export function buildMissingHostCapabilityOutcome(
   input: MissingHostCapabilityOutcomeInput,
 ): SessionOutcome {
+  assertSessionOutcomeKind(input.kind);
   return {
     outcome_id: `${input.kind}:missing:${input.requiredCapability}`,
     session_id: input.sessionId,
@@ -100,6 +104,7 @@ export function buildMissingHostCapabilityOutcome(
 }
 
 export function sessionOutcomeToArtifact(outcome: SessionOutcome): BackgroundSessionArtifact {
+  assertAvailableSessionOutcome(outcome, "artifacts");
   return {
     artifact_id: outcome.outcome_id,
     kind: outcome.kind as BackgroundSessionArtifactKind,
@@ -113,6 +118,7 @@ export function buildSessionOutcomeArtifactEvent(
   outcome: SessionOutcome,
   input: SessionOutcomeArtifactEventInput,
 ): NormalizedSessionEvent {
+  assertAvailableSessionOutcome(outcome, "artifact events");
   return buildArtifactCreatedSessionEvent({
     sessionId: outcome.session_id,
     sequence: input.sequence,
@@ -148,6 +154,39 @@ function isSensitiveKey(key: string): boolean {
   return ["secret", "token", "password", "credential", "api_key", "apikey", "private_key"].some(
     (marker) => normalized.includes(marker),
   );
+}
+
+function assertAvailableSessionOutcome(outcome: SessionOutcome, target: string): void {
+  assertSessionOutcomeKind(outcome.kind);
+  assertSessionOutcomeStatus(outcome.status);
+  if (outcome.status !== "available") {
+    throw new RangeError(`Only available session outcomes can be converted to ${target}`);
+  }
+}
+
+const SESSION_OUTCOME_KINDS = new Set<string>([
+  "branch",
+  "commit",
+  "pull_request",
+  "screenshot",
+  "report",
+  "trace",
+  "dataset",
+  "verification_result",
+]);
+
+function assertSessionOutcomeKind(kind: unknown): asserts kind is SessionOutcomeKind {
+  if (typeof kind !== "string" || !SESSION_OUTCOME_KINDS.has(kind)) {
+    throw new RangeError(`Unsupported session outcome kind: ${String(kind)}`);
+  }
+}
+
+const SESSION_OUTCOME_STATUSES = new Set<string>(["available", "pending", "unavailable"]);
+
+function assertSessionOutcomeStatus(status: unknown): asserts status is SessionOutcomeStatus {
+  if (typeof status !== "string" || !SESSION_OUTCOME_STATUSES.has(status)) {
+    throw new RangeError(`Unsupported session outcome status: ${String(status)}`);
+  }
 }
 
 function labelForKind(kind: SessionOutcomeKind): string {
