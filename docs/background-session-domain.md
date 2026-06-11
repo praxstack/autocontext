@@ -69,6 +69,12 @@ The first normalized vocabulary should be intentionally small:
 | `session_status`        | status transition, skip, pause, cancellation             |
 | `session_completed`     | completed, failed, canceled, or skipped terminal result  |
 
+## SessionOutcome artifact contract
+
+Portable `SessionOutcome` artifacts describe durable results without embedding provider credentials or hosted workflow behavior. The OSS contract currently covers: `branch`, `commit`, `pull_request`, `screenshot`, `report`, `trace`, `dataset`, and `verification_result`.
+
+Each outcome serializes the same JSON fields in Python and TypeScript: `outcome_id`, `session_id`, `kind`, `status`, `title`, `created_at`, `url`, `path`, `ref`, `sha`, `summary`, and sanitized scalar `metadata`. Outcome helpers can convert these records into background-session artifacts and normalized `artifact_created` events. Missing hosted capabilities, such as managed pull-request creation, are represented as `status: "unavailable"` outcomes with `reason: "missing_host_capability"`; the OSS package does not perform GitHub App/OAuth PR creation.
+
 ## Lifecycle hook contract
 
 The OSS lifecycle slice defines adapter-neutral setup/start hooks only:
