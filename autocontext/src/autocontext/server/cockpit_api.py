@@ -20,7 +20,9 @@ from autocontext.providers.registry import create_provider
 from autocontext.providers.retry import RetryProvider
 from autocontext.server.changelog import build_changelog
 from autocontext.server.writeup import generate_writeup, generate_writeup_html
-from autocontext.session.runtime_events import RuntimeSessionEventStore
+from autocontext.session.background_session_events import normalize_background_session_timeline
+from autocontext.session.background_session_read_model import build_background_session_detail, build_background_session_summary
+from autocontext.session.runtime_events import RuntimeSessionEventLog, RuntimeSessionEventStore
 from autocontext.session.runtime_session_ids import runtime_session_id_for_run
 from autocontext.session.runtime_session_read_model import (
     RuntimeSessionSummary,
@@ -96,6 +98,20 @@ def _runtime_session_discovery(
 
 def _runtime_session_not_found(message: str, session_id: str) -> HTTPException:
     return HTTPException(status_code=404, detail={"detail": message, "session_id": session_id})
+
+
+def _background_session_not_found(message: str, session_id: str) -> HTTPException:
+    return HTTPException(status_code=404, detail={"detail": message, "session_id": session_id})
+
+
+def _background_session_summary(
+    runtime_store: RuntimeSessionEventStore,
+    runtime_session: RuntimeSessionEventLog,
+) -> dict[str, str | int]:
+    return build_background_session_summary(
+        runtime_session=runtime_session,
+        child_sessions=runtime_store.list_children(runtime_session.session_id),
+    )
 
 
 class NotebookUpdateBody(BaseModel):
@@ -220,6 +236,52 @@ def cockpit_delete_notebook(session_id: str, request: Request) -> dict[str, str]
                 channel="cockpit",
             )
     return {"status": "deleted", "session_id": session_id}
+
+
+# ---------------------------------------------------------------------------
+# Background-session endpoints (operator-facing read model)
+# ---------------------------------------------------------------------------
+
+
+@cockpit_router.get("/background-sessions")
+def list_background_sessions(request: Request, limit: int = 50) -> dict[str, Any]:
+    """List operator-facing background-session summaries."""
+    if limit <= 0:
+        raise HTTPException(status_code=422, detail="limit must be a positive integer")
+    runtime_store = _get_runtime_session_store(request)
+    try:
+        return {
+            "sessions": [
+                _background_session_summary(runtime_store, runtime_session) for runtime_session in runtime_store.list(limit=limit)
+            ]
+        }
+    finally:
+        runtime_store.close()
+
+
+@cockpit_router.get("/background-sessions/{session_id}")
+def get_background_session(session_id: str, request: Request) -> dict[str, Any]:
+    """Read an operator-facing background-session detail by session id."""
+    clean_session_id = session_id.strip()
+    if not clean_session_id:
+        raise HTTPException(status_code=422, detail="session_id is required")
+    runtime_store = _get_runtime_session_store(request)
+    try:
+        log = read_runtime_session_by_id(runtime_store, clean_session_id)
+        if log is None:
+            raise _background_session_not_found(
+                f"Background session '{clean_session_id}' not found",
+                clean_session_id,
+            )
+        return {
+            **build_background_session_detail(
+                runtime_session=log,
+                child_sessions=runtime_store.list_children(log.session_id),
+            ),
+            "normalized_events": normalize_background_session_timeline(log),
+        }
+    finally:
+        runtime_store.close()
 
 
 # ---------------------------------------------------------------------------
@@ -348,17 +410,19 @@ def list_runs(request: Request) -> list[dict[str, Any]]:
             best_elo = max((g["elo"] for g in gen_rows), default=0.0)
             total_duration = sum(g["duration_seconds"] or 0.0 for g in gen_rows)
 
-            result.append({
-                "run_id": run_id,
-                "scenario_name": scenario,
-                "generations_completed": generations_completed,
-                "best_score": best_score,
-                "best_elo": best_elo,
-                "status": run_dict["status"],
-                "created_at": run_dict["created_at"],
-                "duration_seconds": round(total_duration, 1),
-                **_runtime_session_discovery(runtime_store, run_id),
-            })
+            result.append(
+                {
+                    "run_id": run_id,
+                    "scenario_name": scenario,
+                    "generations_completed": generations_completed,
+                    "best_score": best_score,
+                    "best_elo": best_elo,
+                    "status": run_dict["status"],
+                    "created_at": run_dict["created_at"],
+                    "duration_seconds": round(total_duration, 1),
+                    **_runtime_session_discovery(runtime_store, run_id),
+                }
+            )
     finally:
         runtime_store.close()
 
@@ -372,8 +436,7 @@ def run_status(run_id: str, request: Request) -> dict[str, Any]:
 
     with store.connect() as conn:
         run_row = conn.execute(
-            "SELECT run_id, scenario, target_generations, status, created_at "
-            "FROM runs WHERE run_id = ?",
+            "SELECT run_id, scenario, target_generations, status, created_at FROM runs WHERE run_id = ?",
             (run_id,),
         ).fetchone()
 
@@ -393,17 +456,19 @@ def run_status(run_id: str, request: Request) -> dict[str, Any]:
     generations = []
     for g in gen_rows:
         gd = dict(g)
-        generations.append({
-            "generation": gd["generation_index"],
-            "mean_score": gd["mean_score"],
-            "best_score": gd["best_score"],
-            "elo": gd["elo"],
-            "wins": gd["wins"],
-            "losses": gd["losses"],
-            "gate_decision": gd["gate_decision"],
-            "status": gd["status"],
-            "duration_seconds": gd["duration_seconds"],
-        })
+        generations.append(
+            {
+                "generation": gd["generation_index"],
+                "mean_score": gd["mean_score"],
+                "best_score": gd["best_score"],
+                "elo": gd["elo"],
+                "wins": gd["wins"],
+                "losses": gd["losses"],
+                "gate_decision": gd["gate_decision"],
+                "status": gd["status"],
+                "duration_seconds": gd["duration_seconds"],
+            }
+        )
 
     runtime_store = _get_runtime_session_store(request)
     try:
@@ -513,8 +578,7 @@ def resume_info(run_id: str, request: Request) -> dict[str, Any]:
 
     with store.connect() as conn:
         gen_rows = conn.execute(
-            "SELECT generation_index, gate_decision FROM generations "
-            "WHERE run_id = ? ORDER BY generation_index DESC LIMIT 1",
+            "SELECT generation_index, gate_decision FROM generations WHERE run_id = ? ORDER BY generation_index DESC LIMIT 1",
             (run_id,),
         ).fetchall()
 
