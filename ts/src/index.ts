@@ -347,6 +347,12 @@ export {
   executeLifecycleHook,
 } from "./session/background-session-lifecycle-hooks.js";
 export {
+  buildMissingHostCapabilityOutcome,
+  buildSessionOutcome,
+  buildSessionOutcomeArtifactEvent,
+  sessionOutcomeToArtifact,
+} from "./session/background-session-outcomes.js";
+export {
   RUNTIME_CONTEXT_LAYER_KEYS,
   RUNTIME_CONTEXT_LAYERS,
   RuntimeContextAssemblyRequest,
@@ -420,6 +426,15 @@ export type {
   LifecycleHookRunner,
   LifecycleHookRunnerResult,
 } from "./session/background-session-lifecycle-hooks.js";
+export type {
+  MissingHostCapabilityOutcomeInput,
+  SessionOutcome,
+  SessionOutcomeArtifactEventInput,
+  SessionOutcomeInput,
+  SessionOutcomeKind,
+  SessionOutcomeMetadataValue,
+  SessionOutcomeStatus,
+} from "./session/background-session-outcomes.js";
 export type {
   RuntimeSessionChildTaskTimelineItem,
   RuntimeSessionGenericTimelineItem,
