@@ -4,6 +4,7 @@ export type AutomationDecisionKind = "start" | "skip";
 export type AutomationDecisionReason =
   | "accepted"
   | "automation_paused"
+  | "trigger_kind_mismatch"
   | "duplicate_idempotency_key"
   | "filter_mismatch"
   | "active_run_exists";
@@ -96,8 +97,12 @@ export function evaluateAutomationGuardrail(
   trigger: AutomationTrigger,
 ): AutomationGuardrailDecision {
   assertMatchingAutomation(policy, state);
+  if (trigger.trigger_kind !== policy.trigger_kind) {
+    const triggerContext = buildTriggerContext(trigger, []);
+    return buildDecision(policy, trigger, triggerContext, "skip", "trigger_kind_mismatch", "");
+  }
   const filterResults = evaluateFilters(policy.filters ?? [], trigger.payload ?? {});
-  const triggerContext = buildTriggerContext(policy, trigger, filterResults);
+  const triggerContext = buildTriggerContext(trigger, filterResults);
   const idempotencyKey = trigger.idempotency_key ?? "";
 
   if (state.paused) {
@@ -139,11 +144,17 @@ export function recordAutomationRunOutcome(
       ...state,
       consecutive_failures: consecutiveFailures,
       paused: shouldPause ? true : state.paused,
-      paused_reason: shouldPause ? "failure_threshold_exceeded" : state.paused_reason ?? "",
+      paused_reason: shouldPause ? "failure_threshold_exceeded" : (state.paused_reason ?? ""),
     };
   }
   if (outcome.status === "completed") {
-    return { ...state, consecutive_failures: 0, paused: false, paused_reason: "" };
+    const paused = state.paused;
+    return {
+      ...state,
+      consecutive_failures: 0,
+      paused,
+      paused_reason: paused ? (state.paused_reason ?? "") : "",
+    };
   }
   return { ...state, paused_reason: state.paused_reason ?? "" };
 }
@@ -154,7 +165,9 @@ export function resumeAutomationPolicyState(
   return { ...state, paused: false, consecutive_failures: 0, paused_reason: "" };
 }
 
-export function renderAutomationPayloadContext(trigger: AutomationTrigger): AutomationPayloadContext {
+export function renderAutomationPayloadContext(
+  trigger: AutomationTrigger,
+): AutomationPayloadContext {
   return {
     warning: AUTOMATION_UNTRUSTED_PAYLOAD_WARNING,
     content_type: "application/json",
@@ -188,7 +201,6 @@ function buildDecision(
 }
 
 function buildTriggerContext(
-  policy: AutomationPolicy,
   trigger: AutomationTrigger,
   filterResults: readonly AutomationFilterResult[],
 ): AutomationTriggerContext {
@@ -253,7 +265,10 @@ function redactValue(value: unknown, key = ""): unknown {
   }
   if (isRecord(value)) {
     return Object.fromEntries(
-      Object.entries(value).map(([entryKey, entryValue]) => [entryKey, redactValue(entryValue, entryKey)]),
+      Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        redactValue(entryValue, entryKey),
+      ]),
     );
   }
   return value;
@@ -269,7 +284,17 @@ function assertMatchingAutomation(policy: AutomationPolicy, state: AutomationGua
 
 function isSensitiveKey(key: string): boolean {
   const normalized = key.toLowerCase();
-  return ["secret", "token", "password", "credential", "api_key", "apikey", "private_key"].some(
+  return [
+    "secret",
+    "token",
+    "password",
+    "credential",
+    "api_key",
+    "apikey",
+    "private_key",
+    "authorization",
+    "cookie",
+  ].some(
     (marker) => normalized.includes(marker),
   );
 }
