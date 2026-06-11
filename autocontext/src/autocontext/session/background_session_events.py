@@ -40,16 +40,15 @@ def normalize_runtime_session_event(event: RuntimeSessionEvent) -> NormalizedSes
         return _base_event(
             event,
             normalized_event="runtime_event",
-            status="completed",
+            status="failed" if _has_failure_payload(event.payload) else "completed",
             title="Assistant message",
             payload_summary=_pick_payload(event.payload, {"request_id": "requestId", "role": "role"}),
         )
     if event.event_type == "shell_command":
-        exit_code = event.payload.get("exitCode")
         return _base_event(
             event,
             normalized_event="runtime_event",
-            status="running" if not isinstance(exit_code, int) else "completed" if exit_code == 0 else "failed",
+            status=_runtime_action_status(event.payload, "running"),
             title="Shell command",
             payload_summary=_pick_payload(event.payload, {"command": "command", "cwd": "cwd", "exit_code": "exitCode"}),
         )
@@ -57,7 +56,7 @@ def normalize_runtime_session_event(event: RuntimeSessionEvent) -> NormalizedSes
         return _base_event(
             event,
             normalized_event="runtime_event",
-            status="failed" if event.payload.get("isError") is True else "completed",
+            status=_runtime_action_status(event.payload, "completed"),
             title="Tool call",
             payload_summary=_pick_payload(event.payload, {"tool": "tool", "name": "name"}),
         )
@@ -208,3 +207,42 @@ def _sanitize_summary(value: Mapping[str, Any]) -> dict[str, NormalizedSessionEv
         if isinstance(key, str) and isinstance(item, str | int | float | bool):
             summary[key] = item
     return summary
+
+
+def _runtime_action_status(
+    payload: Mapping[str, Any],
+    default_status: NormalizedSessionEventStatus,
+) -> NormalizedSessionEventStatus:
+    if _has_failure_payload(payload):
+        return "failed"
+    if _has_completed_payload(payload):
+        return "completed"
+    return default_status
+
+
+def _has_failure_payload(payload: Mapping[str, Any]) -> bool:
+    exit_code = _read_exit_code(payload)
+    return (
+        payload.get("isError") is True
+        or (exit_code is not None and exit_code != 0)
+        or _read_non_empty_string(payload.get("error")) != ""
+        or _read_phase(payload) in {"error", "failed", "failure", "timeout", "timed_out"}
+    )
+
+
+def _has_completed_payload(payload: Mapping[str, Any]) -> bool:
+    exit_code = _read_exit_code(payload)
+    return exit_code == 0 or _read_phase(payload) in {"completed", "complete", "success", "succeeded"}
+
+
+def _read_phase(payload: Mapping[str, Any]) -> str:
+    return _read_non_empty_string(payload.get("phase")).lower().replace("-", "_")
+
+
+def _read_non_empty_string(value: Any) -> str:
+    return value.strip() if isinstance(value, str) and value.strip() else ""
+
+
+def _read_exit_code(payload: Mapping[str, Any]) -> int | None:
+    value = payload.get("exitCode")
+    return value if isinstance(value, int) else None

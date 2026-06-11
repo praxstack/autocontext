@@ -215,6 +215,7 @@ export class InteractiveServer {
     });
     const backgroundSessionApi = buildBackgroundSessionApiRoutes({
       openStore: () => new RuntimeSessionEventStore(this.#runManager.getDbPath()),
+      openSourceStore: () => this.#openStore(),
     });
     const runtimeSessionApi = buildRuntimeSessionApiRoutes({
       openStore: () => new RuntimeSessionEventStore(this.#runManager.getDbPath()),

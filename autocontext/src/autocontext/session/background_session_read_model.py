@@ -12,6 +12,7 @@ BackgroundSessionSummary: TypeAlias = dict[str, str | int]
 BackgroundSessionArtifact: TypeAlias = dict[str, str]
 BackgroundSessionDetail: TypeAlias = dict[str, Any]
 TaskQueueRowLike: TypeAlias = Mapping[str, Any]
+RunRowLike: TypeAlias = Mapping[str, Any]
 ArtifactLike: TypeAlias = Mapping[str, Any]
 
 
@@ -19,27 +20,30 @@ def build_background_session_summary(
     *,
     runtime_session: RuntimeSessionEventLog | None = None,
     task: TaskQueueRowLike | None = None,
+    run: RunRowLike | None = None,
     artifacts: Sequence[ArtifactLike] | None = None,
     child_sessions: Sequence[RuntimeSessionEventLog] | None = None,
 ) -> BackgroundSessionSummary:
     artifacts = artifacts or []
     child_sessions = child_sessions or []
     session_id = runtime_session.session_id if runtime_session else _task_session_id(task)
-    created_at = runtime_session.created_at if runtime_session else _task_str(task, "created_at")
-    updated_at = _updated_at(runtime_session, task)
+    created_at = (
+        runtime_session.created_at if runtime_session else _task_str(task, "created_at") or _run_str(run, "created_at")
+    )
+    updated_at = _updated_at(runtime_session, task, run)
     status = _normalize_status(
-        _metadata_str(runtime_session, "status") or _task_str(task, "status"),
+        _metadata_str(runtime_session, "status") or _task_str(task, "status") or _run_str(run, "status"),
         has_runtime_session=runtime_session is not None,
     )
 
     return {
         "session_id": session_id,
         "runtime_session_id": runtime_session.session_id if runtime_session else "",
-        "run_id": _metadata_str(runtime_session, "runId"),
+        "run_id": _metadata_str(runtime_session, "runId") or _run_str(run, "run_id"),
         "task_id": runtime_session.task_id if runtime_session and runtime_session.task_id else _task_str(task, "id"),
         "parent_session_id": runtime_session.parent_session_id if runtime_session else "",
         "status": status,
-        "goal": _metadata_str(runtime_session, "goal") or _task_str(task, "spec_name"),
+        "goal": _metadata_str(runtime_session, "goal") or _task_str(task, "spec_name") or _run_str(run, "scenario"),
         "event_count": len(runtime_session.events) if runtime_session else 0,
         "artifact_count": len(artifacts),
         "child_session_count": len(child_sessions),
@@ -54,6 +58,7 @@ def build_background_session_detail(
     *,
     runtime_session: RuntimeSessionEventLog | None = None,
     task: TaskQueueRowLike | None = None,
+    run: RunRowLike | None = None,
     artifacts: Sequence[ArtifactLike] | None = None,
     child_sessions: Sequence[RuntimeSessionEventLog] | None = None,
 ) -> BackgroundSessionDetail:
@@ -61,6 +66,7 @@ def build_background_session_detail(
         "summary": build_background_session_summary(
             runtime_session=runtime_session,
             task=task,
+            run=run,
             artifacts=artifacts,
             child_sessions=child_sessions,
         ),
@@ -129,10 +135,19 @@ def _normalize_status(raw: str, *, has_runtime_session: bool) -> BackgroundSessi
     return "running" if has_runtime_session else "unknown"
 
 
-def _updated_at(runtime_session: RuntimeSessionEventLog | None, task: TaskQueueRowLike | None) -> str:
+def _updated_at(
+    runtime_session: RuntimeSessionEventLog | None,
+    task: TaskQueueRowLike | None,
+    run: RunRowLike | None,
+) -> str:
     if runtime_session:
         return runtime_session.updated_at or runtime_session.created_at
-    return _task_str(task, "updated_at") or _task_str(task, "created_at")
+    return (
+        _task_str(task, "updated_at")
+        or _task_str(task, "created_at")
+        or _run_str(run, "updated_at")
+        or _run_str(run, "created_at")
+    )
 
 
 def _task_session_id(task: TaskQueueRowLike | None) -> str:
@@ -147,6 +162,11 @@ def _metadata_str(runtime_session: RuntimeSessionEventLog | None, key: str) -> s
 
 def _task_str(task: TaskQueueRowLike | None, key: str) -> str:
     value = task.get(key) if task else None
+    return value if isinstance(value, str) else ""
+
+
+def _run_str(run: RunRowLike | None, key: str) -> str:
+    value = run.get(key) if run else None
     return value if isinstance(value, str) else ""
 
 

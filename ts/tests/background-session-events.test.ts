@@ -131,6 +131,62 @@ describe("background session normalized events", () => {
     expect(JSON.stringify(events)).not.toContain("SECRET_VALUE");
   });
 
+  it("marks failed runtime payloads from assistants and grants as failed", () => {
+    const log = RuntimeSessionEventLog.fromJSON({
+      sessionId: "run:failed-runtime:runtime",
+      parentSessionId: "",
+      taskId: "task-failed",
+      workerId: "worker-1",
+      metadata: { goal: "autoctx run failed grants", runId: "failed-runtime" },
+      createdAt: "2026-06-01T01:00:00.000Z",
+      updatedAt: "2026-06-01T01:00:04.000Z",
+      events: [
+        {
+          eventId: "assistant-failed",
+          sessionId: "run:failed-runtime:runtime",
+          sequence: 0,
+          eventType: RuntimeSessionEventType.ASSISTANT_MESSAGE,
+          timestamp: "2026-06-01T01:00:01.000Z",
+          payload: { requestId: "req-failed", role: "competitor", isError: true, error: "SECRET_VALUE" },
+          parentSessionId: "",
+          taskId: "task-failed",
+          workerId: "worker-1",
+        },
+        {
+          eventId: "tool-failed",
+          sessionId: "run:failed-runtime:runtime",
+          sequence: 1,
+          eventType: RuntimeSessionEventType.TOOL_CALL,
+          timestamp: "2026-06-01T01:00:02.000Z",
+          payload: { tool: "workspace.write", phase: "error", error: "SECRET_VALUE" },
+          parentSessionId: "",
+          taskId: "task-failed",
+          workerId: "worker-1",
+        },
+        {
+          eventId: "shell-failed",
+          sessionId: "run:failed-runtime:runtime",
+          sequence: 2,
+          eventType: RuntimeSessionEventType.SHELL_COMMAND,
+          timestamp: "2026-06-01T01:00:03.000Z",
+          payload: { command: "npm test", cwd: "/workspace", phase: "error", error: "SECRET_VALUE" },
+          parentSessionId: "",
+          taskId: "task-failed",
+          workerId: "worker-1",
+        },
+      ],
+    });
+
+    const events = normalizeBackgroundSessionTimeline(log);
+
+    expect(events.map((event) => [event.event_id, event.status, event.payload_summary])).toEqual([
+      ["assistant-failed", "failed", { request_id: "req-failed", role: "competitor" }],
+      ["tool-failed", "failed", { tool: "workspace.write" }],
+      ["shell-failed", "failed", { command: "npm test", cwd: "/workspace" }],
+    ]);
+    expect(JSON.stringify(events)).not.toContain("SECRET_VALUE");
+  });
+
   it("builds artifact, lifecycle, and terminal status events from non-runtime sources", () => {
     expect(
       buildLifecycleSessionEvent({

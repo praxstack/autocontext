@@ -1,5 +1,5 @@
 import type { RuntimeSessionEventLog } from "./runtime-events.js";
-import type { TaskQueueRow } from "../storage/index.js";
+import type { RunRow, TaskQueueRow } from "../storage/index.js";
 
 export type BackgroundSessionStatus =
   | "queued"
@@ -66,6 +66,7 @@ export interface BackgroundSessionDetail {
 export interface BackgroundSessionSource {
   readonly runtimeSession?: RuntimeSessionEventLog | null;
   readonly task?: TaskQueueRow | null;
+  readonly run?: RunRow | null;
   readonly artifacts?: BackgroundSessionArtifactInput[] | null;
   readonly childSessions?: RuntimeSessionEventLog[] | null;
 }
@@ -73,6 +74,7 @@ export interface BackgroundSessionSource {
 type NormalizedBackgroundSessionSource = {
   runtimeSession: RuntimeSessionEventLog | null;
   task: TaskQueueRow | null;
+  run: RunRow | null;
   artifacts: BackgroundSessionArtifactInput[];
   childSessions: RuntimeSessionEventLog[];
 };
@@ -87,7 +89,7 @@ export function buildBackgroundSessionSummary(
   return {
     session_id: sessionId,
     runtime_session_id: runtimeSessionId,
-    run_id: readMetadataString(normalized.runtimeSession?.metadata, "runId"),
+    run_id: readMetadataString(normalized.runtimeSession?.metadata, "runId") || normalized.run?.run_id || "",
     task_id: readTaskId(normalized),
     parent_session_id: normalized.runtimeSession?.parentSessionId ?? "",
     status: readBackgroundSessionStatus(normalized),
@@ -133,6 +135,7 @@ function normalizeSource(source: BackgroundSessionSource): NormalizedBackgroundS
   return {
     runtimeSession: source.runtimeSession ?? null,
     task: source.task ?? null,
+    run: source.run ?? null,
     artifacts: source.artifacts ?? [],
     childSessions: source.childSessions ?? [],
   };
@@ -150,25 +153,35 @@ function readBackgroundSessionStatus(
   source: NormalizedBackgroundSessionSource,
 ): BackgroundSessionStatus {
   return normalizeStatus(
-    readMetadataString(source.runtimeSession?.metadata, "status") || source.task?.status || "",
+    readMetadataString(source.runtimeSession?.metadata, "status") ||
+      source.task?.status ||
+      source.run?.status ||
+      "",
     Boolean(source.runtimeSession),
   );
 }
 
 function readGoal(source: NormalizedBackgroundSessionSource): string {
   return (
-    readMetadataString(source.runtimeSession?.metadata, "goal") || source.task?.spec_name || ""
+    readMetadataString(source.runtimeSession?.metadata, "goal") ||
+    source.task?.spec_name ||
+    source.run?.scenario ||
+    ""
   );
 }
 
 function readCreatedAt(source: NormalizedBackgroundSessionSource): string {
-  return source.runtimeSession?.createdAt || source.task?.created_at || "";
+  return source.runtimeSession?.createdAt || source.task?.created_at || source.run?.created_at || "";
 }
 
 function readUpdatedAt(source: NormalizedBackgroundSessionSource): string {
   return source.runtimeSession
     ? source.runtimeSession.updatedAt || source.runtimeSession.createdAt
-    : source.task?.updated_at || source.task?.created_at || "";
+    : source.task?.updated_at ||
+        source.task?.created_at ||
+        source.run?.updated_at ||
+        source.run?.created_at ||
+        "";
 }
 
 function sanitizeArtifact(artifact: BackgroundSessionArtifactInput): BackgroundSessionArtifact {

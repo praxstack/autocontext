@@ -8,7 +8,6 @@ from autocontext.session.background_session_read_model import (
     build_background_session_summary,
     runtime_session_url,
 )
-
 from autocontext.session.runtime_events import RuntimeSessionEventLog, RuntimeSessionEventType
 
 

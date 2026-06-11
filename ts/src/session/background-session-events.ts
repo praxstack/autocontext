@@ -94,18 +94,17 @@ export function normalizeRuntimeSessionEvent(event: RuntimeSessionEvent): Normal
     case "assistant_message":
       return baseEvent(event, {
         normalizedEvent: "runtime_event",
-        status: "completed",
+        status: hasFailurePayload(event.payload) ? "failed" : "completed",
         title: "Assistant message",
         payloadSummary: pickPayload(event.payload, {
           request_id: "requestId",
           role: "role",
         }),
       });
-    case "shell_command": {
-      const exitCode = readNumber(event.payload.exitCode);
+    case "shell_command":
       return baseEvent(event, {
         normalizedEvent: "runtime_event",
-        status: exitCode === null ? "running" : exitCode === 0 ? "completed" : "failed",
+        status: runtimeActionStatus(event.payload, "running"),
         title: "Shell command",
         payloadSummary: pickPayload(event.payload, {
           command: "command",
@@ -113,11 +112,10 @@ export function normalizeRuntimeSessionEvent(event: RuntimeSessionEvent): Normal
           exit_code: "exitCode",
         }),
       });
-    }
     case "tool_call":
       return baseEvent(event, {
         normalizedEvent: "runtime_event",
-        status: readBoolean(event.payload.isError) ? "failed" : "completed",
+        status: runtimeActionStatus(event.payload, "completed"),
         title: "Tool call",
         payloadSummary: pickPayload(event.payload, {
           tool: "tool",
@@ -271,6 +269,45 @@ function sanitizeSummary(
     }
   }
   return summary;
+}
+
+function runtimeActionStatus(
+  payload: Record<string, unknown>,
+  defaultStatus: NormalizedSessionEventStatus,
+): NormalizedSessionEventStatus {
+  if (hasFailurePayload(payload)) {
+    return "failed";
+  }
+  if (hasCompletedPayload(payload)) {
+    return "completed";
+  }
+  return defaultStatus;
+}
+
+function hasFailurePayload(payload: Record<string, unknown>): boolean {
+  const exitCode = readNumber(payload.exitCode);
+  return (
+    readBoolean(payload.isError) ||
+    (exitCode !== null && exitCode !== 0) ||
+    readNonEmptyString(payload.error) !== "" ||
+    new Set(["error", "failed", "failure", "timeout", "timed_out"]).has(readPhase(payload))
+  );
+}
+
+function hasCompletedPayload(payload: Record<string, unknown>): boolean {
+  const exitCode = readNumber(payload.exitCode);
+  return (
+    exitCode === 0 ||
+    new Set(["completed", "complete", "success", "succeeded"]).has(readPhase(payload))
+  );
+}
+
+function readPhase(payload: Record<string, unknown>): string {
+  return readNonEmptyString(payload.phase).toLowerCase().replace(/-/g, "_");
+}
+
+function readNonEmptyString(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
 function readNumber(value: unknown): number | null {

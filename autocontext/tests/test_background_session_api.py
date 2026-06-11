@@ -11,7 +11,8 @@ from fastapi.testclient import TestClient
 
 from autocontext.config.settings import AppSettings
 from autocontext.server.cockpit_api import cockpit_router
-from autocontext.storage.sqlite_store import SQLiteStore
+from autocontext.session.runtime_events import RuntimeSessionEventLog, RuntimeSessionEventStore, RuntimeSessionEventType
+from autocontext.storage.sqlite_store import SQLiteStore  # type: ignore[import-untyped]
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
 
@@ -23,24 +24,51 @@ def _make_store(tmp_path: Path) -> SQLiteStore:
 
 
 def _persist_background_sessions(db_path: Path) -> None:
-    from autocontext.session.runtime_events import RuntimeSessionEventLog, RuntimeSessionEventStore, RuntimeSessionEventType
+    app_store = SQLiteStore(db_path)
+    app_store.create_run("test-run-1", "grid_ctf", 1, "local")
+    app_store.enqueue_task("task-1", "autoctx run grid_ctf")
+    app_store.complete_task("task-1", 1.0, "ok", 1, True)
+    app_store.enqueue_task("queued-1", "autoctx run queued")
 
-    log = RuntimeSessionEventLog.create(
-        session_id="run:test-run-1:runtime",
-        task_id="task-1",
-        worker_id="worker-1",
-        metadata={"goal": "autoctx run grid_ctf", "runId": "test-run-1", "status": "running"},
+    log = RuntimeSessionEventLog.from_dict(
+        {
+            "sessionId": "run:test-run-1:runtime",
+            "parentSessionId": "",
+            "taskId": "task-1",
+            "workerId": "worker-1",
+            "metadata": {"goal": "autoctx run grid_ctf", "runId": "test-run-1"},
+            "createdAt": "2026-06-01T00:00:00.000Z",
+            "updatedAt": "2026-06-01T00:00:02.000Z",
+            "events": [
+                {
+                    "eventId": "event-1",
+                    "sessionId": "run:test-run-1:runtime",
+                    "sequence": 0,
+                    "eventType": RuntimeSessionEventType.PROMPT_SUBMITTED.value,
+                    "timestamp": "2026-06-01T00:00:01.000Z",
+                    "payload": {
+                        "requestId": "req-1",
+                        "role": "competitor",
+                        "prompt": "SECRET_VALUE",
+                    },
+                    "parentSessionId": "",
+                    "taskId": "task-1",
+                    "workerId": "worker-1",
+                }
+            ],
+        }
     )
-    log.append(
-        RuntimeSessionEventType.PROMPT_SUBMITTED,
-        {"requestId": "req-1", "role": "competitor", "prompt": "SECRET_VALUE"},
-    )
-    child = RuntimeSessionEventLog.create(
-        session_id="task:run:test-run-1:runtime:child-1",
-        parent_session_id="run:test-run-1:runtime",
-        task_id="child-1",
-        worker_id="worker-child",
-        metadata={"goal": "Inspect failing test", "runId": "test-run-1", "status": "completed"},
+    child = RuntimeSessionEventLog.from_dict(
+        {
+            "sessionId": "task:run:test-run-1:runtime:child-1",
+            "parentSessionId": "run:test-run-1:runtime",
+            "taskId": "child-1",
+            "workerId": "worker-child",
+            "metadata": {"goal": "Inspect failing test", "runId": "test-run-1", "status": "completed"},
+            "createdAt": "2026-06-01T00:00:03.000Z",
+            "updatedAt": "2026-06-01T00:00:04.000Z",
+            "events": [],
+        }
     )
     store = RuntimeSessionEventStore(db_path)
     try:
@@ -75,40 +103,55 @@ def test_cockpit_lists_background_sessions(cockpit_env: dict[str, Any]) -> None:
     response = cockpit_env["client"].get("/api/cockpit/background-sessions?limit=5")
 
     assert response.status_code == 200
-    assert response.json()["sessions"] == [
-        {
-            "session_id": "task:run:test-run-1:runtime:child-1",
-            "runtime_session_id": "task:run:test-run-1:runtime:child-1",
-            "run_id": "test-run-1",
-            "task_id": "child-1",
-            "parent_session_id": "run:test-run-1:runtime",
-            "status": "completed",
-            "goal": "Inspect failing test",
-            "event_count": 0,
-            "artifact_count": 0,
-            "child_session_count": 0,
-            "created_at": response.json()["sessions"][0]["created_at"],
-            "updated_at": response.json()["sessions"][0]["updated_at"],
-            "result_url": "/api/cockpit/background-sessions/task%3Arun%3Atest-run-1%3Aruntime%3Achild-1",
-            "runtime_session_url": "/api/cockpit/runtime-sessions/task%3Arun%3Atest-run-1%3Aruntime%3Achild-1",
-        },
-        {
-            "session_id": "run:test-run-1:runtime",
-            "runtime_session_id": "run:test-run-1:runtime",
-            "run_id": "test-run-1",
-            "task_id": "task-1",
-            "parent_session_id": "",
-            "status": "running",
-            "goal": "autoctx run grid_ctf",
-            "event_count": 1,
-            "artifact_count": 0,
-            "child_session_count": 1,
-            "created_at": response.json()["sessions"][1]["created_at"],
-            "updated_at": response.json()["sessions"][1]["updated_at"],
-            "result_url": "/api/cockpit/background-sessions/run%3Atest-run-1%3Aruntime",
-            "runtime_session_url": "/api/cockpit/runtime-sessions/run%3Atest-run-1%3Aruntime",
-        },
-    ]
+    sessions = {session["session_id"]: session for session in response.json()["sessions"]}
+    assert sessions["task:run:test-run-1:runtime:child-1"] == {
+        "session_id": "task:run:test-run-1:runtime:child-1",
+        "runtime_session_id": "task:run:test-run-1:runtime:child-1",
+        "run_id": "test-run-1",
+        "task_id": "child-1",
+        "parent_session_id": "run:test-run-1:runtime",
+        "status": "completed",
+        "goal": "Inspect failing test",
+        "event_count": 0,
+        "artifact_count": 0,
+        "child_session_count": 0,
+        "created_at": "2026-06-01T00:00:03.000Z",
+        "updated_at": "2026-06-01T00:00:04.000Z",
+        "result_url": "/api/cockpit/background-sessions/task%3Arun%3Atest-run-1%3Aruntime%3Achild-1",
+        "runtime_session_url": "/api/cockpit/runtime-sessions/task%3Arun%3Atest-run-1%3Aruntime%3Achild-1",
+    }
+    assert sessions["run:test-run-1:runtime"] == {
+        "session_id": "run:test-run-1:runtime",
+        "runtime_session_id": "run:test-run-1:runtime",
+        "run_id": "test-run-1",
+        "task_id": "task-1",
+        "parent_session_id": "",
+        "status": "completed",
+        "goal": "autoctx run grid_ctf",
+        "event_count": 1,
+        "artifact_count": 0,
+        "child_session_count": 1,
+        "created_at": "2026-06-01T00:00:00.000Z",
+        "updated_at": "2026-06-01T00:00:02.000Z",
+        "result_url": "/api/cockpit/background-sessions/run%3Atest-run-1%3Aruntime",
+        "runtime_session_url": "/api/cockpit/runtime-sessions/run%3Atest-run-1%3Aruntime",
+    }
+    assert sessions["task:queued-1"] | {"created_at": "", "updated_at": ""} == {
+        "session_id": "task:queued-1",
+        "runtime_session_id": "",
+        "run_id": "",
+        "task_id": "queued-1",
+        "parent_session_id": "",
+        "status": "queued",
+        "goal": "autoctx run queued",
+        "event_count": 0,
+        "artifact_count": 0,
+        "child_session_count": 0,
+        "created_at": "",
+        "updated_at": "",
+        "result_url": "/api/cockpit/background-sessions/task%3Aqueued-1",
+        "runtime_session_url": "",
+    }
 
 
 def test_cockpit_reads_background_session_detail(cockpit_env: dict[str, Any]) -> None:
@@ -120,6 +163,7 @@ def test_cockpit_reads_background_session_detail(cockpit_env: dict[str, Any]) ->
     assert response.status_code == 200
     body: dict[str, Any] = response.json()
     assert body["summary"]["session_id"] == "run:test-run-1:runtime"
+    assert body["summary"]["status"] == "completed"
     assert body["child_sessions"][0]["session_id"] == "task:run:test-run-1:runtime:child-1"
     assert body["normalized_events"] == [
         {
@@ -135,6 +179,19 @@ def test_cockpit_reads_background_session_detail(cockpit_env: dict[str, Any]) ->
         }
     ]
     assert "SECRET_VALUE" not in str(body)
+
+
+def test_cockpit_reads_queued_task_background_session(cockpit_env: dict[str, Any]) -> None:
+    _persist_background_sessions(cockpit_env["settings"].db_path)
+    session_id = quote("task:queued-1", safe="")
+
+    response = cockpit_env["client"].get(f"/api/cockpit/background-sessions/{session_id}")
+
+    assert response.status_code == 200
+    body: dict[str, Any] = response.json()
+    assert body["summary"]["session_id"] == "task:queued-1"
+    assert body["summary"]["status"] == "queued"
+    assert body["normalized_events"] == []
 
 
 def test_cockpit_background_session_validation_and_not_found(cockpit_env: dict[str, Any]) -> None:

@@ -6,7 +6,6 @@ from autocontext.session.background_session_events import (
     build_session_status_event,
     normalize_background_session_timeline,
 )
-
 from autocontext.session.runtime_events import RuntimeSessionEventLog, RuntimeSessionEventType
 
 
@@ -130,6 +129,74 @@ def test_background_session_events_match_typescript_contract_without_raw_payload
             "title": "Child session failed",
             "payload_summary": {"task_id": "child-1"},
         },
+    ]
+    assert "SECRET_VALUE" not in str(events)
+
+
+def test_failed_runtime_payloads_from_assistants_and_grants_are_marked_failed() -> None:
+    log = RuntimeSessionEventLog.from_dict(
+        {
+            "sessionId": "run:failed-runtime:runtime",
+            "parentSessionId": "",
+            "taskId": "task-failed",
+            "workerId": "worker-1",
+            "metadata": {"goal": "autoctx run failed grants", "runId": "failed-runtime"},
+            "createdAt": "2026-06-01T01:00:00.000Z",
+            "updatedAt": "2026-06-01T01:00:04.000Z",
+            "events": [
+                {
+                    "eventId": "assistant-failed",
+                    "sessionId": "run:failed-runtime:runtime",
+                    "sequence": 0,
+                    "eventType": RuntimeSessionEventType.ASSISTANT_MESSAGE.value,
+                    "timestamp": "2026-06-01T01:00:01.000Z",
+                    "payload": {
+                        "requestId": "req-failed",
+                        "role": "competitor",
+                        "isError": True,
+                        "error": "SECRET_VALUE",
+                    },
+                    "parentSessionId": "",
+                    "taskId": "task-failed",
+                    "workerId": "worker-1",
+                },
+                {
+                    "eventId": "tool-failed",
+                    "sessionId": "run:failed-runtime:runtime",
+                    "sequence": 1,
+                    "eventType": RuntimeSessionEventType.TOOL_CALL.value,
+                    "timestamp": "2026-06-01T01:00:02.000Z",
+                    "payload": {"tool": "workspace.write", "phase": "error", "error": "SECRET_VALUE"},
+                    "parentSessionId": "",
+                    "taskId": "task-failed",
+                    "workerId": "worker-1",
+                },
+                {
+                    "eventId": "shell-failed",
+                    "sessionId": "run:failed-runtime:runtime",
+                    "sequence": 2,
+                    "eventType": RuntimeSessionEventType.SHELL_COMMAND.value,
+                    "timestamp": "2026-06-01T01:00:03.000Z",
+                    "payload": {
+                        "command": "npm test",
+                        "cwd": "/workspace",
+                        "phase": "error",
+                        "error": "SECRET_VALUE",
+                    },
+                    "parentSessionId": "",
+                    "taskId": "task-failed",
+                    "workerId": "worker-1",
+                },
+            ],
+        }
+    )
+
+    events = normalize_background_session_timeline(log)
+
+    assert [(event["event_id"], event["status"], event["payload_summary"]) for event in events] == [
+        ("assistant-failed", "failed", {"request_id": "req-failed", "role": "competitor"}),
+        ("tool-failed", "failed", {"tool": "workspace.write"}),
+        ("shell-failed", "failed", {"command": "npm test", "cwd": "/workspace"}),
     ]
     assert "SECRET_VALUE" not in str(events)
 
