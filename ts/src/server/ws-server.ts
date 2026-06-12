@@ -61,11 +61,25 @@ import { SQLiteStore } from "../storage/index.js";
 import { ArtifactStore } from "../knowledge/artifact-store.js";
 import { SolveManager } from "../knowledge/solver.js";
 import type { LLMProvider } from "../types/index.js";
+import { userAuthConfigFromEnv } from "./user-auth/config.js";
+import {
+  createJwksVerifier,
+  type TokenVerifier,
+  type VerifiedIdentity,
+} from "./user-auth/token-verifier.js";
+import { commandRequiresAuth, httpRequiresAuth } from "./user-auth/enforcement.js";
 
 export interface InteractiveServerOpts {
   runManager: RunManager;
   port?: number;
   host?: string;
+  /**
+   * Optional injected token verifier. When provided, it overrides the
+   * env-derived verifier (used by tests). When omitted, the server derives a
+   * verifier from `userAuthConfigFromEnv(process.env)`; if that returns null,
+   * user-auth enforcement is disabled (today's local-mode behavior).
+   */
+  userVerifier?: TokenVerifier;
 }
 
 export class PortInUseError extends Error {
@@ -97,9 +111,17 @@ export class InteractiveServer {
   #httpServer: HttpServer | null = null;
   #wsServer: WebSocketServer | null = null;
   #boundPort = 0;
+  readonly #userVerifier: TokenVerifier | null;
+  readonly #identities = new Map<WebSocket, VerifiedIdentity>();
 
   constructor(opts: InteractiveServerOpts) {
     this.#runManager = opts.runManager;
+    if (opts.userVerifier) {
+      this.#userVerifier = opts.userVerifier;
+    } else {
+      const userAuthConfig = userAuthConfigFromEnv(process.env);
+      this.#userVerifier = userAuthConfig ? createJwksVerifier(userAuthConfig) : null;
+    }
     this.#missionEvents = new MissionEventEmitter();
     this.#missionManager = new MissionManager(this.#runManager.getDbPath(), {
       events: this.#missionEvents,
@@ -256,6 +278,28 @@ export class InteractiveServer {
       res.writeHead(204);
       res.end();
       return;
+    }
+
+    // User-auth gate for mutating HTTP methods (only when configured). OPTIONS
+    // is naturally exempt (handled above; httpRequiresAuth("OPTIONS") is false).
+    // When the verifier is null, this is skipped entirely (today's behavior).
+    if (this.#userVerifier !== null && httpRequiresAuth(method)) {
+      const authorization = req.headers.authorization ?? "";
+      const match = /^Bearer (.+)$/.exec(authorization);
+      let authenticated = false;
+      if (match) {
+        try {
+          await this.#userVerifier.verify(match[1]!);
+          authenticated = true;
+        } catch {
+          authenticated = false;
+        }
+      }
+      if (!authenticated) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "authentication required" }));
+        return;
+      }
     }
 
     const json = (status: number, body: unknown) => {
@@ -1332,6 +1376,7 @@ export class InteractiveServer {
       this.#runManager.unsubscribeEvents(eventCallback);
       this.#runManager.unsubscribeState(stateCallback);
       unsubscribeMissionProgress();
+      this.#identities.delete(ws);
     });
   }
 
@@ -1380,7 +1425,29 @@ export class InteractiveServer {
   }
 
   async #handleClientMessage(ws: WebSocket, msg: ClientMessage): Promise<void> {
+    // User-auth gate (only when configured). When disabled, this is skipped
+    // entirely and behavior is byte-for-byte today's local-mode behavior.
+    if (this.#userVerifier !== null && commandRequiresAuth(msg.type) && !this.#identities.has(ws)) {
+      this.#send(ws, buildClientErrorMessage(new Error("authentication required"), msg));
+      return;
+    }
+
     switch (msg.type) {
+      case "authenticate": {
+        if (this.#userVerifier === null) {
+          // Auth disabled: no-op accept so clients can probe uniformly.
+          this.#send(ws, { type: "ack", action: "authenticate" });
+          return;
+        }
+        try {
+          const identity = await this.#userVerifier.verify(msg.token);
+          this.#identities.set(ws, identity);
+          this.#send(ws, { type: "ack", action: "authenticate" });
+        } catch (err) {
+          this.#send(ws, buildClientErrorMessage(err, msg));
+        }
+        return;
+      }
       case "pause":
       case "resume":
       case "inject_hint":
