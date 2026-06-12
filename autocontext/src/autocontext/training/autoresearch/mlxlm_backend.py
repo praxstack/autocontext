@@ -303,7 +303,12 @@ def _mlxlm_generate_texts(
         try:
             from mlx_lm import batch_generate  # type: ignore[import-not-found]
 
-            token_ids = [tokenizer.encode(p) for p in prompts]
+            # Mirror mlx_lm.generate/stream_generate's special-token handling: a chat template that
+            # already renders the tokenizer BOS must be encoded with add_special_tokens=False, else
+            # encode() prepends a SECOND BOS and the batch path scores a different prompt than the
+            # sequential generate() it replaces (e.g. Mistral '<s> [INST]...' -> ids [1, 1, ...]).
+            bos = getattr(tokenizer, "bos_token", None)
+            token_ids = [tokenizer.encode(p, add_special_tokens=(bos is None or not p.startswith(bos))) for p in prompts]
             resp = batch_generate(model, tokenizer, token_ids, max_tokens=max_tokens, sampler=sampler, verbose=False)
             texts = list(resp.texts)
             if len(texts) == n:
