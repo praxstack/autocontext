@@ -65,18 +65,10 @@ describe("TUI run inspection command planner", () => {
     });
   });
 
-  it("plans runtime timeline and trace-finding commands with the same target rules", () => {
+  it("plans runtime timeline commands with the same target rules", () => {
     expect(planTuiRunInspectionCommand("/timeline", "run-active")).toEqual({
       kind: "timeline",
       runId: "run-active",
-    });
-    expect(planTuiRunInspectionCommand("/findings", "run-active")).toEqual({
-      kind: "findings",
-      runId: "run-active",
-    });
-    expect(planTuiRunInspectionCommand("/trace-gates run-123", "run-active")).toEqual({
-      kind: "findings",
-      runId: "run-123",
     });
   });
 
@@ -84,10 +76,6 @@ describe("TUI run inspection command planner", () => {
     expect(planTuiRunInspectionCommand("/timeline", null)).toEqual({
       kind: "usage",
       usageLine: "usage: /timeline <run-id>",
-    });
-    expect(planTuiRunInspectionCommand("/findings", null)).toEqual({
-      kind: "usage",
-      usageLine: "usage: /findings <run-id>",
     });
     expect(planTuiRunInspectionCommand("/show", "")).toEqual({
       kind: "usage",
@@ -107,12 +95,10 @@ describe("TUI run inspection command planner", () => {
   it("does not read active run state for non-run-inspection commands", () => {
     let readCount = 0;
 
-    expect(
-      planTuiRunInspectionCommand("/login anthropic", () => {
-        readCount += 1;
-        return "run-active";
-      }),
-    ).toEqual({
+    expect(planTuiRunInspectionCommand("/login anthropic", () => {
+      readCount += 1;
+      return "run-active";
+    })).toEqual({
       kind: "unhandled",
     });
     expect(readCount).toBe(0);
@@ -125,37 +111,25 @@ describe("TUI run inspection command executor", () => {
       renderStatus: vi.fn(async () => ["status line"]),
       renderShow: vi.fn(async () => ["show line"]),
       renderTimeline: vi.fn(),
-      renderTraceGates: vi.fn(),
     };
 
-    await expect(
-      executeTuiRunInspectionCommandPlan(
-        {
-          kind: "status",
-          runId: "run-123",
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
+    await expect(executeTuiRunInspectionCommandPlan({
+      kind: "status",
+      runId: "run-123",
+    }, effects)).resolves.toEqual({
       logLines: ["status line"],
     });
-    await expect(
-      executeTuiRunInspectionCommandPlan(
-        {
-          kind: "show",
-          runId: "run-123",
-          best: true,
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
+    await expect(executeTuiRunInspectionCommandPlan({
+      kind: "show",
+      runId: "run-123",
+      best: true,
+    }, effects)).resolves.toEqual({
       logLines: ["show line"],
     });
 
     expect(effects.renderStatus).toHaveBeenCalledWith("run-123");
     expect(effects.renderShow).toHaveBeenCalledWith("run-123", true);
     expect(effects.renderTimeline).not.toHaveBeenCalled();
-    expect(effects.renderTraceGates).not.toHaveBeenCalled();
   });
 
   it("prepends the watching line while reusing status rendering", async () => {
@@ -163,60 +137,35 @@ describe("TUI run inspection command executor", () => {
       renderStatus: vi.fn(async () => ["status line"]),
       renderShow: vi.fn(),
       renderTimeline: vi.fn(),
-      renderTraceGates: vi.fn(),
     };
 
-    await expect(
-      executeTuiRunInspectionCommandPlan(
-        {
-          kind: "watch",
-          runId: "run-123",
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
+    await expect(executeTuiRunInspectionCommandPlan({
+      kind: "watch",
+      runId: "run-123",
+    }, effects)).resolves.toEqual({
       logLines: ["watching run-123", "status line"],
     });
 
     expect(effects.renderStatus).toHaveBeenCalledWith("run-123");
     expect(effects.renderShow).not.toHaveBeenCalled();
     expect(effects.renderTimeline).not.toHaveBeenCalled();
-    expect(effects.renderTraceGates).not.toHaveBeenCalled();
   });
 
-  it("routes timeline and trace-finding plans through dedicated renderers", async () => {
+  it("routes timeline plans through the timeline renderer", async () => {
     const effects = {
       renderStatus: vi.fn(),
       renderShow: vi.fn(),
       renderTimeline: vi.fn(async () => ["timeline line"]),
-      renderTraceGates: vi.fn(async () => ["trace gate line"]),
     };
 
-    await expect(
-      executeTuiRunInspectionCommandPlan(
-        {
-          kind: "timeline",
-          runId: "run-123",
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
+    await expect(executeTuiRunInspectionCommandPlan({
+      kind: "timeline",
+      runId: "run-123",
+    }, effects)).resolves.toEqual({
       logLines: ["timeline line"],
-    });
-    await expect(
-      executeTuiRunInspectionCommandPlan(
-        {
-          kind: "findings",
-          runId: "run-123",
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
-      logLines: ["trace gate line"],
     });
 
     expect(effects.renderTimeline).toHaveBeenCalledWith("run-123");
-    expect(effects.renderTraceGates).toHaveBeenCalledWith("run-123");
     expect(effects.renderStatus).not.toHaveBeenCalled();
     expect(effects.renderShow).not.toHaveBeenCalled();
   });
@@ -226,28 +175,19 @@ describe("TUI run inspection command executor", () => {
       renderStatus: vi.fn(),
       renderShow: vi.fn(),
       renderTimeline: vi.fn(),
-      renderTraceGates: vi.fn(),
     };
 
-    await expect(
-      executeTuiRunInspectionCommandPlan(
-        {
-          kind: "usage",
-          usageLine: "usage: /status <run-id>",
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
+    await expect(executeTuiRunInspectionCommandPlan({
+      kind: "usage",
+      usageLine: "usage: /status <run-id>",
+    }, effects)).resolves.toEqual({
       logLines: ["usage: /status <run-id>"],
     });
-    await expect(
-      executeTuiRunInspectionCommandPlan({ kind: "unhandled" }, effects),
-    ).resolves.toBeNull();
+    await expect(executeTuiRunInspectionCommandPlan({ kind: "unhandled" }, effects)).resolves.toBeNull();
 
     expect(effects.renderStatus).not.toHaveBeenCalled();
     expect(effects.renderShow).not.toHaveBeenCalled();
     expect(effects.renderTimeline).not.toHaveBeenCalled();
-    expect(effects.renderTraceGates).not.toHaveBeenCalled();
   });
 
   it("maps render failures to log lines", async () => {
@@ -257,18 +197,12 @@ describe("TUI run inspection command executor", () => {
       }),
       renderShow: vi.fn(),
       renderTimeline: vi.fn(),
-      renderTraceGates: vi.fn(),
     };
 
-    await expect(
-      executeTuiRunInspectionCommandPlan(
-        {
-          kind: "status",
-          runId: "missing",
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
+    await expect(executeTuiRunInspectionCommandPlan({
+      kind: "status",
+      runId: "missing",
+    }, effects)).resolves.toEqual({
       logLines: ["run 'missing' not found"],
     });
   });
@@ -320,16 +254,11 @@ describe("TUI start run command executor", () => {
       startRun: vi.fn(async () => "run-123"),
     };
 
-    await expect(
-      executeTuiStartRunCommandPlan(
-        {
-          kind: "start",
-          scenario: "support_triage",
-          iterations: 3,
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
+    await expect(executeTuiStartRunCommandPlan({
+      kind: "start",
+      scenario: "support_triage",
+      iterations: 3,
+    }, effects)).resolves.toEqual({
       logLines: ["accepted run run-123"],
     });
     expect(effects.startRun).toHaveBeenCalledWith("support_triage", 3);
@@ -351,16 +280,11 @@ describe("TUI start run command executor", () => {
       }),
     };
 
-    await expect(
-      executeTuiStartRunCommandPlan(
-        {
-          kind: "start",
-          scenario: "missing",
-          iterations: 5,
-        },
-        effects,
-      ),
-    ).resolves.toEqual({
+    await expect(executeTuiStartRunCommandPlan({
+      kind: "start",
+      scenario: "missing",
+      iterations: 5,
+    }, effects)).resolves.toEqual({
       logLines: ["scenario not found"],
     });
   });

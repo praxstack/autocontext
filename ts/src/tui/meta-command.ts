@@ -65,7 +65,6 @@ export function formatTuiCommandHelp(): string[] {
     "/show <run-id> --best",
     "/watch <run-id>",
     "/timeline <run-id>",
-    "/findings <run-id> (alias: /trace-gates <run-id>)",
     TUI_ACTIVITY_USAGE,
     "/pause or /resume",
     "/hint <text>",
