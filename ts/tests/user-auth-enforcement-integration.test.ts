@@ -166,3 +166,82 @@ describe("user-auth enforcement (ws integration)", () => {
     }
   }, 15000);
 });
+
+describe("user-auth enforcement (HTTP integration)", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = makeTempDir();
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  async function makeServer(opts: { withVerifier: boolean }) {
+    const { RunManager, InteractiveServer } = await import("../src/server/index.js");
+    const mgr = new RunManager({
+      dbPath: join(dir, "test.db"),
+      migrationsDir: join(__dirname, "..", "migrations"),
+      runsRoot: join(dir, "runs"),
+      knowledgeRoot: join(dir, "knowledge"),
+      providerType: "deterministic",
+    });
+    const server = new InteractiveServer({
+      runManager: mgr,
+      port: 0,
+      ...(opts.withVerifier ? { userVerifier: stubVerifier } : {}),
+    });
+    await server.start();
+    return server;
+  }
+
+  // A real mutating route the server serves: PUT /api/notebooks/:sessionId.
+  const mutatingRoute = (server: { port: number }) =>
+    `http://localhost:${server.port}/api/notebooks/test-session`;
+
+  it("returns 401 for a mutating request without Authorization when auth is enabled", async () => {
+    const server = await makeServer({ withVerifier: true });
+    try {
+      const res = await fetch(mutatingRoute(server), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(401);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.error).toBe("authentication required");
+    } finally {
+      await server.stop();
+    }
+  }, 15000);
+
+  it("does not return 401 for a mutating request with a valid Bearer token", async () => {
+    const server = await makeServer({ withVerifier: true });
+    try {
+      const res = await fetch(mutatingRoute(server), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer good" },
+        body: JSON.stringify({}),
+      });
+      // The auth gate passed; any other status from the route is acceptable.
+      expect(res.status).not.toBe(401);
+    } finally {
+      await server.stop();
+    }
+  }, 15000);
+
+  it("does not gate mutating HTTP requests when no verifier is configured", async () => {
+    const server = await makeServer({ withVerifier: false });
+    try {
+      const res = await fetch(mutatingRoute(server), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      // Today's behavior: no auth gate, so not a gate-level 401.
+      expect(res.status).not.toBe(401);
+    } finally {
+      await server.stop();
+    }
+  }, 15000);
+});
