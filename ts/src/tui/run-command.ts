@@ -7,13 +7,7 @@ export type TuiRunCommandTarget =
       readonly kind: "missing";
     };
 
-type TuiRunInspectionCommandName =
-  | "status"
-  | "show"
-  | "watch"
-  | "timeline"
-  | "findings"
-  | "trace-gates";
+type TuiRunInspectionCommandName = "status" | "show" | "watch" | "timeline";
 type TuiActiveRunIdSource = string | null | undefined | (() => string | null | undefined);
 
 const TUI_RUN_INSPECTION_USAGES: Record<TuiRunInspectionCommandName, string> = {
@@ -21,8 +15,6 @@ const TUI_RUN_INSPECTION_USAGES: Record<TuiRunInspectionCommandName, string> = {
   show: "/show <run-id> [--best]",
   watch: "/watch <run-id>",
   timeline: "/timeline <run-id>",
-  findings: "/findings <run-id>",
-  "trace-gates": "/trace-gates <run-id>",
 };
 
 export type TuiRunInspectionCommandPlan =
@@ -49,17 +41,12 @@ export type TuiRunInspectionCommandPlan =
   | {
       readonly kind: "timeline";
       readonly runId: string;
-    }
-  | {
-      readonly kind: "findings";
-      readonly runId: string;
     };
 
 export interface TuiRunInspectionCommandEffects {
   renderStatus(runId: string): Promise<string[]>;
   renderShow(runId: string, best: boolean): Promise<string[]>;
   renderTimeline(runId: string): Promise<string[]>;
-  renderTraceGates(runId: string): Promise<string[]>;
 }
 
 export interface TuiRunInspectionCommandExecutionResult {
@@ -160,7 +147,7 @@ export function planTuiRunInspectionCommand(
     };
   }
   return {
-    kind: command === "trace-gates" ? "findings" : command,
+    kind: command,
     runId: target.runId,
   };
 }
@@ -188,8 +175,6 @@ export async function executeTuiRunInspectionCommandPlan(
         };
       case "timeline":
         return { logLines: await effects.renderTimeline(plan.runId) };
-      case "findings":
-        return { logLines: await effects.renderTraceGates(plan.runId) };
     }
   } catch (err) {
     return { logLines: [err instanceof Error ? err.message : String(err)] };
@@ -197,7 +182,7 @@ export async function executeTuiRunInspectionCommandPlan(
 }
 
 function readTuiRunInspectionCommandName(raw: string): TuiRunInspectionCommandName | null {
-  const match = raw.trim().match(/^\/(status|show|watch|timeline|findings|trace-gates)(?:\s|$)/);
+  const match = raw.trim().match(/^\/(status|show|watch|timeline)(?:\s|$)/);
   return match ? (match[1] as TuiRunInspectionCommandName) : null;
 }
 
