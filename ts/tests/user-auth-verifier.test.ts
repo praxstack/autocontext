@@ -44,6 +44,31 @@ describe("identityFromClaims", () => {
       groups: [],
     });
   });
+  it("defends against malformed claims", () => {
+    // non-array groups/roles -> []
+    expect(identityFromClaims({ sub: "u", groups: "admin" as unknown as string[] })).toEqual({
+      subject: "u",
+      email: undefined,
+      groups: [],
+    });
+    expect(identityFromClaims({ sub: "u", roles: 42 as unknown as string[] })).toEqual({
+      subject: "u",
+      email: undefined,
+      groups: [],
+    });
+    // non-string email -> undefined
+    expect(identityFromClaims({ sub: "u", email: 42 as unknown as string })).toEqual({
+      subject: "u",
+      email: undefined,
+      groups: [],
+    });
+    // array of non-strings -> stringified
+    expect(identityFromClaims({ sub: "u", groups: [1, 2] as unknown as string[] })).toEqual({
+      subject: "u",
+      email: undefined,
+      groups: ["1", "2"],
+    });
+  });
 });
 
 describe("verifier", () => {
