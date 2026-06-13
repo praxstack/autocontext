@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { AutoctxAgentContext, AutoctxAgentHandler } from "../src/agent-runtime/index.js";
 import {
   createAgentAppFetchHandler,
+  createEdgeInMemoryWorkspaceEnv,
   createStaticAgentAppCatalog,
 } from "../src/control-plane/agent-app-fetch/index.js";
 import {
@@ -140,6 +141,79 @@ describe("generic agent app Fetch adapter", () => {
         existedBefore: false,
       },
     });
+  });
+
+  it("keeps the edge in-memory workspace file and directory state coherent", async () => {
+    const workspace = createEdgeInMemoryWorkspaceEnv();
+
+    await workspace.writeFile("/a", "file");
+
+    await expect(workspace.writeFile("/a/b.txt", "child")).rejects.toThrow(
+      "Not a directory: /a",
+    );
+    await expect(workspace.readdir("/a")).rejects.toThrow("Directory not found: /a");
+    await expect(workspace.mkdir("/a")).rejects.toThrow("File exists: /a");
+    await expect(workspace.mkdir("/a/child", { recursive: true })).rejects.toThrow(
+      "Not a directory: /a",
+    );
+    await expect(workspace.mkdir("/missing/child")).rejects.toThrow(
+      "Parent directory not found: /missing",
+    );
+    await expect(workspace.exists("/missing")).resolves.toBe(false);
+
+    await workspace.mkdir("/missing/child", { recursive: true });
+
+    await expect(workspace.stat("/missing/child")).resolves.toMatchObject({
+      isDirectory: true,
+      isFile: false,
+    });
+  });
+
+  it("rejects streaming request bodies as soon as the byte limit is exceeded", async () => {
+    let pullCount = 0;
+    let canceled = false;
+    const chunk = new Uint8Array(1024 * 1024);
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pullCount += 1;
+        controller.enqueue(chunk);
+        if (pullCount >= 5) controller.close();
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const handler = createAgentAppFetchHandler({
+      maxBodyBytes: 1,
+      catalog: createStaticAgentAppCatalog([
+        {
+          name: "support",
+          relativePath: ".autoctx/agents/support.mjs",
+          extension: ".mjs",
+          handler: async () => ({ ok: true }),
+        },
+      ]),
+    });
+
+    const response = await handler(
+      new Request("https://agent-app.test/agents/support/invoke", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: stream,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" }),
+    );
+
+    expect(response.status).toBe(413);
+    expect(await jsonBody(response)).toEqual({
+      ok: false,
+      error: {
+        code: "AUTOCTX_AGENT_APP_REQUEST_TOO_LARGE",
+        message: "Request body is too large",
+      },
+    });
+    expect(canceled).toBe(true);
+    expect(pullCount).toBeLessThan(5);
   });
 
   it("supports runtime-backed handlers through explicit runtime and event-store capabilities", async () => {

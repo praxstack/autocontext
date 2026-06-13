@@ -426,7 +426,8 @@ class EdgeInMemoryWorkspaceEnv implements RuntimeWorkspaceEnv {
 
   constructor(state: EdgeMemoryState, cwd: string, tools?: readonly RuntimeToolGrant[]) {
     this.#state = state;
-    this.cwd = cwd;
+    this.cwd = normalizeVirtualPath(cwd, "/");
+    ensureDir(this.#state, this.cwd);
     this.tools = tools;
   }
 
@@ -439,13 +440,17 @@ class EdgeInMemoryWorkspaceEnv implements RuntimeWorkspaceEnv {
   }
 
   scope(options: RuntimeScopeOptions = {}): Promise<RuntimeWorkspaceEnv> {
-    return Promise.resolve(
-      new EdgeInMemoryWorkspaceEnv(
-        this.#state,
-        normalizeVirtualPath(options.cwd ?? this.cwd, this.cwd),
-        options.tools ?? this.tools,
-      ),
-    );
+    try {
+      return Promise.resolve(
+        new EdgeInMemoryWorkspaceEnv(
+          this.#state,
+          normalizeVirtualPath(options.cwd ?? this.cwd, this.cwd),
+          options.tools ?? this.tools,
+        ),
+      );
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   async readFile(filePath: string): Promise<string> {
@@ -459,13 +464,12 @@ class EdgeInMemoryWorkspaceEnv implements RuntimeWorkspaceEnv {
   }
 
   writeFile(filePath: string, content: string | Uint8Array): Promise<void> {
-    const resolved = this.resolvePath(filePath);
-    ensureDir(this.#state, parentDir(resolved));
-    this.#state.files.set(resolved, {
-      content: typeof content === "string" ? new TextEncoder().encode(content) : content.slice(),
-      mtime: new Date(),
-    });
-    return Promise.resolve();
+    try {
+      writeEdgeMemoryFile(this.#state, this.resolvePath(filePath), content);
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   stat(filePath: string): Promise<RuntimeFileStat> {
@@ -513,9 +517,27 @@ class EdgeInMemoryWorkspaceEnv implements RuntimeWorkspaceEnv {
     return Promise.resolve(this.#state.files.has(resolved) || this.#state.dirs.has(resolved));
   }
 
-  mkdir(dirPath: string, _options: { recursive?: boolean } = {}): Promise<void> {
-    ensureDir(this.#state, this.resolvePath(dirPath));
-    return Promise.resolve();
+  mkdir(dirPath: string, options: { recursive?: boolean } = {}): Promise<void> {
+    const resolved = this.resolvePath(dirPath);
+    const parent = parentDir(resolved);
+    if (this.#state.files.has(resolved)) {
+      return Promise.reject(new Error(`File exists: ${resolved}`));
+    }
+    if (this.#state.dirs.has(resolved)) {
+      return options.recursive
+        ? Promise.resolve()
+        : Promise.reject(new Error(`Directory exists: ${resolved}`));
+    }
+    if (!options.recursive && !this.#state.dirs.has(parent)) {
+      return Promise.reject(new Error(`Parent directory not found: ${parent}`));
+    }
+    try {
+      ensureDir(this.#state, options.recursive ? resolved : parent);
+      this.#state.dirs.set(resolved, new Date());
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   rm(filePath: string, options: { recursive?: boolean; force?: boolean } = {}): Promise<void> {
@@ -567,15 +589,8 @@ async function readJsonRequestBody(
   request: Request,
   maxBodyBytes: number,
 ): Promise<Record<string, unknown>> {
-  const text = await request.text();
+  const text = await readLimitedRequestText(request, maxBodyBytes);
   if (!text.trim()) return {};
-  if (new TextEncoder().encode(text).byteLength > maxBodyBytes) {
-    throw new AgentAppFetchRequestError(
-      413,
-      "AUTOCTX_AGENT_APP_REQUEST_TOO_LARGE",
-      "Request body is too large",
-    );
-  }
   try {
     const parsed: unknown = JSON.parse(text);
     if (!isRecord(parsed)) {
@@ -590,6 +605,70 @@ async function readJsonRequestBody(
       `Request body must be valid JSON: ${message}`,
     );
   }
+}
+
+async function readLimitedRequestText(request: Request, maxBodyBytes: number): Promise<string> {
+  const advertisedLength = readContentLength(request.headers.get("content-length"));
+  if (advertisedLength !== undefined && advertisedLength > maxBodyBytes) {
+    throw requestTooLargeError();
+  }
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBodyBytes) {
+        await cancelRequestReader(reader);
+        throw requestTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return decodeRequestChunks(chunks, totalBytes);
+}
+
+async function cancelRequestReader(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<void> {
+  try {
+    await reader.cancel("Request body is too large");
+  } catch {
+    // The adapter already knows the request is too large; ignore cancellation races.
+  }
+}
+
+function decodeRequestChunks(chunks: Uint8Array[], totalBytes: number): string {
+  if (chunks.length === 0) return "";
+  if (chunks.length === 1) return new TextDecoder().decode(chunks[0]);
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function readContentLength(value: string | null): number | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
+
+function requestTooLargeError(): AgentAppFetchRequestError {
+  return new AgentAppFetchRequestError(
+    413,
+    "AUTOCTX_AGENT_APP_REQUEST_TOO_LARGE",
+    "Request body is too large",
+  );
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -617,12 +696,30 @@ function createEdgeMemoryState(): EdgeMemoryState {
   return { files: new Map(), dirs: new Map([["/", new Date()]]) };
 }
 
+function writeEdgeMemoryFile(
+  state: EdgeMemoryState,
+  resolved: string,
+  content: string | Uint8Array,
+): void {
+  if (state.dirs.has(resolved)) {
+    throw new Error(`Is a directory: ${resolved}`);
+  }
+  ensureDir(state, parentDir(resolved));
+  state.files.set(resolved, {
+    content: typeof content === "string" ? new TextEncoder().encode(content) : content.slice(),
+    mtime: new Date(),
+  });
+}
+
 function ensureDir(state: EdgeMemoryState, dirPath: string): void {
   let current = "/";
   state.dirs.set(current, state.dirs.get(current) ?? new Date());
   for (const segment of dirPath.split("/")) {
     if (!segment) continue;
     current = current === "/" ? `/${segment}` : `${current}/${segment}`;
+    if (state.files.has(current)) {
+      throw new Error(`Not a directory: ${current}`);
+    }
     state.dirs.set(current, state.dirs.get(current) ?? new Date());
   }
 }
