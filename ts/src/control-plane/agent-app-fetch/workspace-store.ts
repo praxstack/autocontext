@@ -125,11 +125,12 @@ class AgentAppFetchWorkspaceEnv implements RuntimeWorkspaceEnv {
   }
 
   async readFileBytes(filePath: string): Promise<Uint8Array> {
-    return (await this.#store.readFile(this.resolvePath(filePath))).slice();
+    return cloneBytes(await this.#store.readFile(this.resolvePath(filePath)));
   }
 
   async writeFile(filePath: string, content: string | Uint8Array): Promise<void> {
-    const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content.slice();
+    const bytes =
+      typeof content === "string" ? new TextEncoder().encode(content) : cloneBytes(content);
     await this.#store.writeFile(this.resolvePath(filePath), bytes);
   }
 
@@ -180,7 +181,7 @@ class InMemoryAgentAppFetchWorkspaceStore implements AgentAppFetchWorkspaceStore
     const resolved = normalizeVirtualPath(path, "/");
     const file = this.#state.files.get(resolved);
     if (!file) return Promise.reject(new Error(`File not found: ${path}`));
-    return Promise.resolve(file.content.slice());
+    return Promise.resolve(cloneBytes(file.content));
   }
 
   writeFile(path: string, content: Uint8Array): Promise<void> {
@@ -260,25 +261,39 @@ class InMemoryAgentAppFetchWorkspaceStore implements AgentAppFetchWorkspaceStore
 
   rm(path: string, options: { recursive?: boolean; force?: boolean } = {}): Promise<void> {
     const resolved = normalizeVirtualPath(path, "/");
+    if (resolved === "/") return this.#rmRoot(path, options);
     if (this.#state.files.delete(resolved)) return Promise.resolve();
     if (this.#state.dirs.has(resolved)) {
+      const childPrefix = `${resolved}/`;
       const hasChildren = [...this.#state.files.keys(), ...this.#state.dirs.keys()].some(
-        (entryPath) => entryPath !== resolved && entryPath.startsWith(`${resolved}/`),
+        (entryPath) => entryPath !== resolved && entryPath.startsWith(childPrefix),
       );
       if (hasChildren && !options.recursive) {
         return Promise.reject(new Error(`Directory not empty: ${path}`));
       }
       for (const filePath of [...this.#state.files.keys()]) {
-        if (filePath.startsWith(`${resolved}/`)) this.#state.files.delete(filePath);
+        if (filePath.startsWith(childPrefix)) this.#state.files.delete(filePath);
       }
       for (const dirPath of [...this.#state.dirs.keys()]) {
-        if (dirPath !== "/" && (dirPath === resolved || dirPath.startsWith(`${resolved}/`))) {
+        if (dirPath !== "/" && (dirPath === resolved || dirPath.startsWith(childPrefix))) {
           this.#state.dirs.delete(dirPath);
         }
       }
       return Promise.resolve();
     }
     return options.force ? Promise.resolve() : Promise.reject(new Error(`Path not found: ${path}`));
+  }
+
+  #rmRoot(path: string, options: { recursive?: boolean; force?: boolean }): Promise<void> {
+    if (!options.recursive) {
+      return Promise.reject(new Error(`Directory not empty: ${path}`));
+    }
+    this.#state.files.clear();
+    for (const dirPath of [...this.#state.dirs.keys()]) {
+      if (dirPath !== "/") this.#state.dirs.delete(dirPath);
+    }
+    this.#state.dirs.set("/", new Date());
+    return Promise.resolve();
   }
 }
 
@@ -292,9 +307,13 @@ function writeEdgeMemoryFile(state: EdgeMemoryState, resolved: string, content: 
   }
   ensureDir(state, parentDir(resolved));
   state.files.set(resolved, {
-    content: content.slice(),
+    content: cloneBytes(content),
     mtime: new Date(),
   });
+}
+
+function cloneBytes(content: Uint8Array): Uint8Array {
+  return new Uint8Array(content);
 }
 
 function ensureDir(state: EdgeMemoryState, dirPath: string): void {

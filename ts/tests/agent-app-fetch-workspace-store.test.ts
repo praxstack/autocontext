@@ -138,6 +138,49 @@ describe("agent app Fetch workspace store contract", () => {
     await expect(workspace.rm("/missing", { force: true })).resolves.toBeUndefined();
   });
 
+  it("copies Buffer-backed bytes at env and store boundaries", async () => {
+    const store = createInMemoryAgentAppFetchWorkspaceStore();
+    const workspace = createAgentAppFetchWorkspaceEnv({ store });
+    const envBuffer = Buffer.from([1, 2, 3]);
+    const storeBuffer = Buffer.from([4, 5, 6]);
+
+    await workspace.writeFile("/env.bin", envBuffer);
+    envBuffer[0] = 9;
+    const envRead = await workspace.readFileBytes("/env.bin");
+    expect([...envRead]).toEqual([1, 2, 3]);
+    envRead[1] = 8;
+    await expect(workspace.readFileBytes("/env.bin")).resolves.toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
+
+    await store.writeFile("/store.bin", storeBuffer);
+    storeBuffer[0] = 9;
+    const storeRead = await store.readFile("/store.bin");
+    expect([...storeRead]).toEqual([4, 5, 6]);
+    storeRead[1] = 8;
+    await expect(store.readFile("/store.bin")).resolves.toEqual(new Uint8Array([4, 5, 6]));
+  });
+
+  it("clears non-root entries when recursively removing the workspace root", async () => {
+    const workspace = createAgentAppFetchWorkspaceEnv({
+      store: createInMemoryAgentAppFetchWorkspaceStore(),
+    });
+
+    await workspace.writeFile("/a/b.txt", "child");
+    await workspace.writeFile("/root.txt", "root");
+
+    await workspace.rm("/", { recursive: true });
+
+    await expect(workspace.stat("/")).resolves.toMatchObject({
+      isDirectory: true,
+      isFile: false,
+    });
+    await expect(workspace.exists("/a")).resolves.toBe(false);
+    await expect(workspace.exists("/a/b.txt")).resolves.toBe(false);
+    await expect(workspace.exists("/root.txt")).resolves.toBe(false);
+    await expect(workspace.readdir("/")).resolves.toEqual([]);
+  });
+
   it("scopes workspace store environments without granting shell execution", async () => {
     const edgeWorkspace = createEdgeInMemoryWorkspaceEnv({ cwd: "/repo" });
     await expect(edgeWorkspace.stat(".")).resolves.toMatchObject({
