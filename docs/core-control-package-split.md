@@ -136,10 +136,10 @@ handler/server boundary. The TypeScript control-plane Fetch adapter lives at
 wire shape without becoming a provider-specific deployment target. Its
 build-time catalog planner turns explicit `.autoctx/agents` entries into static
 module maps so edge-compatible bundles do not scan a filesystem at request time,
-and its generic entrypoint template wires those maps into a Fetch factory for
-host-created capabilities. Its workspace-store contract gives Fetch hosts a
-provider-neutral artifact
-persistence seam behind the existing runtime workspace API, while its session
+and its generic entrypoint template wires those maps plus a host capability
+manifest into a Fetch factory for host-created capabilities. Its workspace-store
+contract gives Fetch hosts a provider-neutral artifact persistence seam behind
+the existing runtime workspace API, while its session
 event-store contract gives hosts a provider-neutral append/replay seam for
 explicit runtime-session capabilities.
 Cloudflare Workers/Durable Objects may be reference environments. The spike

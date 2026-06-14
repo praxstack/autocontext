@@ -1,3 +1,4 @@
+import { createAgentAppFetchHostCapabilityManifest } from "./capability-manifest.js";
 import type { AgentAppFetchCatalogPlan } from "./catalog-planner.js";
 
 export interface RenderAgentAppFetchEntrypointTemplateOptions {
@@ -11,18 +12,21 @@ export function renderAgentAppFetchEntrypointTemplate(
   options: RenderAgentAppFetchEntrypointTemplateOptions = {},
 ): string {
   const packageSpecifier = options.packageSpecifier ?? DEFAULT_AGENT_APP_FETCH_PACKAGE_SPECIFIER;
+  const hostCapabilityManifest = createAgentAppFetchHostCapabilityManifest(plan);
+  const renderedHostCapabilityManifest = JSON.stringify(hostCapabilityManifest, null, 2);
   const moduleMapEntries = plan.entries.map(
     (entry) =>
       `  ${renderObjectKey(entry.name)}: () => import(${JSON.stringify(entry.importSpecifier)}),`,
   );
-  const imports = [
-    "createAgentAppFetchCatalogFromModuleMap",
-    "createAgentAppFetchHandler",
-  ].join(", ");
+  const imports = ["createAgentAppFetchCatalogFromModuleMap", "createAgentAppFetchHandler"].join(
+    ", ",
+  );
   return [
     `import { ${imports} } from ${JSON.stringify(packageSpecifier)};`,
     "",
     `export const agentAppFetchCatalogPlan = ${JSON.stringify(plan, null, 2)};`,
+    "",
+    `export const agentAppFetchHostCapabilityManifest = ${renderedHostCapabilityManifest};`,
     "",
     "export const agentAppFetchModuleMap = {",
     ...moduleMapEntries,

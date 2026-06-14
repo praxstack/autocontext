@@ -206,20 +206,28 @@ export default { fetch: createAgentAppFetchHandler({ catalog }) };
 ```
 
 For generated Fetch bundles, `renderAgentAppFetchEntrypointTemplate()` emits an
-ESM entrypoint with a static module map plus a `createAgentAppFetchEntrypoint()`
-factory. Host code can pass explicit capabilities such as `env`, `runtime`,
-`workspaceStore`, or `sessionEventStore`; the generated source does not read
-ambient env or add provider deployment wrappers:
+ESM entrypoint with a static module map, a machine-readable host capability
+manifest, and a `createAgentAppFetchEntrypoint()` factory. Host code can pass
+explicit capabilities such as `env`, `runtime`, `workspaceStore`, or
+`sessionEventStore`; the generated source does not read ambient env or add
+provider deployment wrappers:
 
 ```ts
 import {
   planAgentAppFetchCatalog,
   renderAgentAppFetchEntrypointTemplate,
+  renderAgentAppFetchHostCapabilityManifest,
 } from "autoctx/control-plane/agent-app-fetch";
 
 const plan = planAgentAppFetchCatalog({ entries });
 const source = renderAgentAppFetchEntrypointTemplate(plan);
+const manifestJson = renderAgentAppFetchHostCapabilityManifest(plan);
 ```
+
+The manifest lists routes, generated agents, accepted host capability keys, and
+unsupported defaults such as runtime filesystem discovery, ambient environment
+capture, and local shell execution. Provider wrappers can consume it when wiring
+host capabilities, but provider-specific deployment remains outside this package.
 
 Runtime-backed Fetch handlers can receive an explicit edge-safe session event
 store. The store appends idempotently by `eventId`, replays by per-session
