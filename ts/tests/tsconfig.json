@@ -7,6 +7,7 @@
   },
   "include": [
     "agent-app-fetch-adapter.test.ts",
+    "agent-app-fetch-capability-manifest.test.ts",
     "agent-app-fetch-catalog-planner.test.ts",
     "agent-app-fetch-entrypoint-template.test.ts",
     "agent-app-fetch-session-event-store.test.ts",
@@ -14,6 +15,7 @@
     "background-session-*.test.ts",
     "sandbox-adapter-contracts.test.ts",
     "../src/control-plane/agent-app-fetch/index.ts",
+    "../src/control-plane/agent-app-fetch/capability-manifest.ts",
     "../src/control-plane/agent-app-fetch/entrypoint-template.ts",
     "../src/control-plane/agent-app-fetch/workspace-store.ts",
     "../src/execution/sandbox-adapter-contracts.ts",
