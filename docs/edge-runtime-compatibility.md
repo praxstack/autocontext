@@ -136,8 +136,9 @@ manifest as standalone JSON for external/provider hosts, while
 `renderAgentAppFetchHostCapabilityManifestSchema()` expose the matching
 provider-neutral validation schema. See
 [`generated-fetch-packaging.md`](generated-fetch-packaging.md) for a generic
-Fetch/ESM packaging walkthrough. Provider wrappers remain external to that
-generated source.
+Fetch/ESM packaging walkthrough, and [`fetch-conformance.md`](fetch-conformance.md)
+for runner-agnostic checks host wrappers can use before exposing generated
+handlers. Provider wrappers remain external to that generated source.
 
 ### Explicit Environment And Runtime Capabilities
 
@@ -237,7 +238,9 @@ destructive for that store instance.
 The suite covers read-your-writes behavior, byte cloning, deterministic
 workspace listings, recursive root removal, fail-closed shell execution,
 session append idempotency by `eventId`, replay ordering by per-session
-`sequence`, metadata/payload cloning, and child-session linkage visibility.
+`sequence`, metadata/payload cloning, and child-session linkage visibility. See
+[`fetch-conformance.md`](fetch-conformance.md) for runner-agnostic case and
+one-shot runner examples.
 
 ### Fetch Invocation Conformance
 
@@ -247,7 +250,9 @@ suite validates `GET /manifest`, `GET /agents`, `POST /agents/:agent/invoke`,
 stable success/error envelopes, missing-agent behavior, invalid JSON, body-size
 limits, no handler loading during manifest reads, and explicit env/workspace /
 runtime capability wiring. The helper is runner-agnostic and does not add any
-provider deployment or storage binding.
+provider deployment or storage binding. See
+[`fetch-conformance.md`](fetch-conformance.md) for wrapper setup guidance and
+common failure modes.
 
 ## Reference Runtime Findings
 

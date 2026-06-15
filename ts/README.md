@@ -312,8 +312,10 @@ describe("host Fetch invocation", () => {
 });
 ```
 
-See [`docs/edge-runtime-compatibility.md`](../docs/edge-runtime-compatibility.md)
-and [`docs/core-control-package-split.md#agent-app-build-targets`](../docs/core-control-package-split.md#agent-app-build-targets)
+See [`docs/fetch-conformance.md`](../docs/fetch-conformance.md) for the full
+runner-agnostic conformance guide. See
+[`docs/edge-runtime-compatibility.md`](../docs/edge-runtime-compatibility.md) and
+[`docs/core-control-package-split.md#agent-app-build-targets`](../docs/core-control-package-split.md#agent-app-build-targets)
 for the OSS/proprietary boundary: provider deployment manifests, hosted secrets,
 fleet scheduling, billing, and tenant orchestration stay outside this OSS
 adapter.

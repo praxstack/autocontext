@@ -6,7 +6,9 @@ host still creates and passes runtime, workspace, storage, and grant
 capabilities explicitly.
 
 The same pattern is implemented as a typed repository example in
-`ts/examples/generated-fetch-packaging.ts`.
+`ts/examples/generated-fetch-packaging.ts`. After packaging, use the
+[`Fetch conformance guide`](fetch-conformance.md) to verify host-owned wrappers
+and stores before exposing the generated handler.
 
 ## Inputs
 
@@ -102,4 +104,6 @@ factory selection.
   explicitly supplies safe command grants.
 
 Use the manifest plus `agentAppFetchHostCapabilityManifestSchema` to validate
-host wiring before exposing the generated `fetch` handler.
+host wiring before exposing the generated `fetch` handler. Use
+[`fetch-conformance.md`](fetch-conformance.md) to run the workspace store,
+session event-store, and invocation checks against host-created capabilities.
