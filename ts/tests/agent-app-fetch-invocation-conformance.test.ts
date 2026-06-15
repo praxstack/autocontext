@@ -28,6 +28,18 @@ describe("agent app Fetch invocation conformance suite", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("fails when a host wrapper drops the supplied workspace store", async () => {
+    await expect(
+      runAgentAppFetchInvocationConformance({
+        createHandler: (options) => {
+          const { workspaceStore, ...delegatedOptions } = options;
+          void workspaceStore;
+          return createAgentAppFetchHandler(delegatedOptions);
+        },
+      }),
+    ).rejects.toThrow("expected supplied workspaceStore to be used");
+  });
+
   it("keeps invocation conformance helpers provider-neutral and test-runner agnostic", () => {
     const source = readFileSync(
       join(

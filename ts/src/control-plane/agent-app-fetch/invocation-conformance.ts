@@ -1,6 +1,7 @@
 import type { AutoctxAgentContext } from "../../agent-runtime/index.js";
 import type { AgentRuntime } from "../../runtimes/base.js";
 import type { AgentAppFetchHandlerOptions } from "./index.js";
+import type { AgentAppFetchWorkspaceStore } from "./workspace-store.js";
 import { createInMemoryAgentAppFetchWorkspaceStore } from "./workspace-store.js";
 
 export type AgentAppFetchInvocationConformanceHandler = (
@@ -104,12 +105,13 @@ async function assertManifestRoutesDoNotLoadHandlers(
 async function assertInvokeWiresEnvAndWorkspace(
   options: AgentAppFetchInvocationConformanceOptions,
 ): Promise<void> {
+  const workspaceStore = createRecordingWorkspaceStore();
   const handler = await options.createHandler({
     env: {
       CONFORMANCE_ENV_VALUE: "explicit-value",
       OMITTED_ENV_VALUE: undefined,
     },
-    workspaceStore: createInMemoryAgentAppFetchWorkspaceStore(),
+    workspaceStore,
     catalog: [
       {
         name: "support",
@@ -155,6 +157,11 @@ async function assertInvokeWiresEnvAndWorkspace(
       },
     },
     "expected POST /agents/:agent/invoke to wire payload, env, and workspace",
+  );
+  assert(
+    workspaceStore.calls.includes("writeFile:/scratch/result.txt") &&
+      workspaceStore.calls.includes("readFile:/scratch/result.txt"),
+    "expected supplied workspaceStore to be used",
   );
 }
 
@@ -337,6 +344,45 @@ function readErrorCodeEnvelope(body: unknown): unknown {
   return {
     ok: body.ok,
     error: { code: error.code },
+  };
+}
+
+function createRecordingWorkspaceStore(): AgentAppFetchWorkspaceStore & {
+  readonly calls: string[];
+} {
+  const delegate = createInMemoryAgentAppFetchWorkspaceStore();
+  const calls: string[] = [];
+  return {
+    capabilities: delegate.capabilities,
+    calls,
+    async readFile(path) {
+      calls.push(`readFile:${path}`);
+      return await delegate.readFile(path);
+    },
+    async writeFile(path, content) {
+      calls.push(`writeFile:${path}`);
+      await delegate.writeFile(path, content);
+    },
+    async stat(path) {
+      calls.push(`stat:${path}`);
+      return await delegate.stat(path);
+    },
+    async readdir(path) {
+      calls.push(`readdir:${path}`);
+      return await delegate.readdir(path);
+    },
+    async exists(path) {
+      calls.push(`exists:${path}`);
+      return await delegate.exists(path);
+    },
+    async mkdir(path, options) {
+      calls.push(`mkdir:${path}`);
+      await delegate.mkdir(path, options);
+    },
+    async rm(path, options) {
+      calls.push(`rm:${path}`);
+      await delegate.rm(path, options);
+    },
   };
 }
 
