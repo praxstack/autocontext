@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
 const troubleshootingDocPath = join(repoRoot, "docs", "fetch-troubleshooting.md");
+const docsIndexPath = join(repoRoot, "docs", "README.md");
 const apiReferencePath = join(repoRoot, "docs", "fetch-api-reference.md");
 const conformanceDocPath = join(repoRoot, "docs", "fetch-conformance.md");
 const packagingDocPath = join(repoRoot, "docs", "generated-fetch-packaging.md");
@@ -52,7 +53,13 @@ describe("Fetch troubleshooting documentation", () => {
   });
 
   it("links the troubleshooting guide from related Fetch docs", () => {
-    for (const path of [apiReferencePath, conformanceDocPath, packagingDocPath, tsReadmePath]) {
+    for (const path of [
+      docsIndexPath,
+      apiReferencePath,
+      conformanceDocPath,
+      packagingDocPath,
+      tsReadmePath,
+    ]) {
       expect(readFileSync(path, "utf-8")).toContain("fetch-troubleshooting.md");
     }
   });

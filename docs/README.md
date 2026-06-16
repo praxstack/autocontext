@@ -40,6 +40,7 @@ This directory is the maintainer-facing landing page for repository docs. Use it
 - [Fetch host capability manifest examples](fetch-host-capability-manifest.md)
 - [Generated Fetch packaging guide](generated-fetch-packaging.md)
 - [Fetch conformance guide](fetch-conformance.md)
+- [Fetch adapter troubleshooting guide](fetch-troubleshooting.md)
 - [Flue-inspired runtime decisions](flue-influences.md)
 - [Scenario parity matrix — Python & TypeScript](scenario-parity-matrix.md)
 - [Browser exploration contract](browser-exploration-contract.md)
