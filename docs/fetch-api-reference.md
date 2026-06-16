@@ -142,7 +142,9 @@ cases; one-shot runners execute the same cases without assuming a test runner.
 | `runAgentAppFetchInvocationConformance`                | One-shot invocation wrapper runner.  |
 
 See [`fetch-conformance.md`](fetch-conformance.md) for case details, failure
-modes, and runner examples.
+modes, and runner examples, and
+`ts/examples/fetch-conformance-host-wrapper.ts` for a typed executable wrapper
+example.
 
 ## Generated Entrypoint Contract
 

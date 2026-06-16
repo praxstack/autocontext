@@ -317,7 +317,9 @@ describe("host Fetch invocation", () => {
 ```
 
 See [`docs/fetch-conformance.md`](../docs/fetch-conformance.md) for the full
-runner-agnostic conformance guide. See
+runner-agnostic conformance guide and
+[`examples/fetch-conformance-host-wrapper.ts`](examples/fetch-conformance-host-wrapper.ts)
+for a typed executable wrapper example. See
 [`docs/edge-runtime-compatibility.md`](../docs/edge-runtime-compatibility.md) and
 [`docs/core-control-package-split.md#agent-app-build-targets`](../docs/core-control-package-split.md#agent-app-build-targets)
 for the OSS/proprietary boundary: provider deployment manifests, hosted secrets,
