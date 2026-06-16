@@ -135,10 +135,12 @@ manifest as standalone JSON for external/provider hosts, while
 `agentAppFetchHostCapabilityManifestSchema` and
 `renderAgentAppFetchHostCapabilityManifestSchema()` expose the matching
 provider-neutral validation schema. See
-[`generated-fetch-packaging.md`](generated-fetch-packaging.md) for a generic
-Fetch/ESM packaging walkthrough, and [`fetch-conformance.md`](fetch-conformance.md)
-for runner-agnostic checks host wrappers can use before exposing generated
-handlers. Provider wrappers remain external to that generated source.
+[`fetch-api-reference.md`](fetch-api-reference.md) for the exported Fetch API
+surface, [`generated-fetch-packaging.md`](generated-fetch-packaging.md) for a
+generic Fetch/ESM packaging walkthrough, and
+[`fetch-conformance.md`](fetch-conformance.md) for runner-agnostic checks host
+wrappers can use before exposing generated handlers. Provider wrappers remain
+external to that generated source.
 
 ### Explicit Environment And Runtime Capabilities
 
@@ -153,9 +155,10 @@ of the statically bundled factories.
 The Fetch host capability manifest is machine-readable and lists the supported
 routes (`GET /manifest`, `GET /agents`, and `POST /agents/:agent/invoke`), the
 accepted host capability keys (`env`, `runtime`, `runtimeFactory`,
-`runtimeFactoryName`, `workspace`, `workspaceStore`, `commands`, `tools`,
-`eventStore`, `sessionEventStore`, `eventSink`, and `maxBodyBytes`) plus
-unsupported defaults: runtime filesystem discovery, ambient environment capture,
+`runtimeFactoryName`, `runtimeFactoryPlan`, `runtimeFactoryModuleMap`,
+`workspace`, `workspaceStore`, `commands`, `tools`, `eventStore`,
+`sessionEventStore`, `eventSink`, and `maxBodyBytes`) plus unsupported defaults:
+runtime filesystem discovery, ambient environment capture,
 local shell execution, provider deployment config, and hosted orchestration.
 Provider hosts can use the manifest plus its JSON Schema to validate their
 wrapper wiring without adding provider code to the generic adapter.

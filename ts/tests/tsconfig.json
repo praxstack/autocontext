@@ -7,6 +7,7 @@
   },
   "include": [
     "agent-app-fetch-adapter.test.ts",
+    "agent-app-fetch-api-reference-docs.test.ts",
     "agent-app-fetch-capability-manifest.test.ts",
     "agent-app-fetch-catalog-planner.test.ts",
     "agent-app-fetch-conformance-docs.test.ts",
