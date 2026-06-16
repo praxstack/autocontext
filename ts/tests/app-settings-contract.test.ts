@@ -55,6 +55,7 @@ describe("AppSettings shared contract", () => {
       "consultation_enabled",
       "generation_time_budget_seconds",
       "monitor_heartbeat_timeout",
+      "simplicity_mode",
     ]));
     expect(typeScriptNames).toEqual(expect.arrayContaining([
       "browserAllowedDomains",
@@ -62,6 +63,7 @@ describe("AppSettings shared contract", () => {
       "consultationEnabled",
       "generationTimeBudgetSeconds",
       "monitorHeartbeatTimeout",
+      "simplicityMode",
     ]));
   });
 
@@ -92,6 +94,7 @@ describe("AppSettings shared contract", () => {
       { field: "claudeTimeout", value: 0 },
       { field: "browserProfileMode", value: "shared" },
       { field: "monitorMaxConditions", value: 0 },
+      { field: "simplicityMode", value: "strict" },
     ];
 
     for (const invalidCase of invalidCases) {

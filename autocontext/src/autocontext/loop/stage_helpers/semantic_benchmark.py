@@ -299,6 +299,7 @@ def prepare_generation_prompts(
         "architect_tool_usage_report": architect_tool_usage_report,
         "constraint_mode": constraint_mode,
         "context_budget_tokens": context_budget_tokens,
+        "simplicity_mode": ctx.settings.simplicity_mode,
         "notebook_contexts": notebook_contexts,
         "environment_snapshot": environment_snapshot,
         "evidence_manifest": evidence_manifest,

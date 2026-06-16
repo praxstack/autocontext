@@ -118,6 +118,7 @@ class ImprovementLoop:
         output_verifier: OutputVerifier | None = None,
         output_checkpointer: OutputVerifier | None = None,
         on_event: Callable[[ImprovementLoopEvent], None] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         self.task = task
         self.max_rounds = max(1, max_rounds)
@@ -140,6 +141,7 @@ class ImprovementLoop:
         # AC-752: optional per-round event sink so callers (e.g. `--ndjson`)
         # can stream progress without waiting for the final result blob.
         self._on_event: Callable[[ImprovementLoopEvent], None] = on_event or (lambda _e: None)
+        self.metadata = dict(metadata or {})
 
     def run(
         self,
@@ -230,6 +232,8 @@ class ImprovementLoop:
             )
 
         def _emit_final(final_result: ImprovementResult) -> ImprovementResult:
+            if self.metadata:
+                final_result.metadata.update(self.metadata)
             # AC-752: emit a single `final` event right before returning so
             # streaming consumers (CLI --ndjson) see the run's summary fields.
             self._on_event(

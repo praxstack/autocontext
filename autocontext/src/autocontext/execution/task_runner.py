@@ -49,6 +49,7 @@ from autocontext.harness.pipeline.objective_guardrail import (
 )
 from autocontext.providers.base import LLMProvider
 from autocontext.scenarios.agent_task import AgentTaskInterface, AgentTaskResult
+from autocontext.simplicity import normalize_simplicity_mode
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,7 @@ class TaskConfig:
     judge_temperature: float = 0.0
     judge_disagreement_threshold: float = 0.15
     judge_bias_probes_enabled: bool = False
+    simplicity_mode: str = "off"
 
     @classmethod
     def from_json(cls, data: str | None) -> TaskConfig:
@@ -98,6 +100,7 @@ class TaskConfig:
             judge_temperature=parsed.get("judge_temperature", 0.0),
             judge_disagreement_threshold=parsed.get("judge_disagreement_threshold", 0.15),
             judge_bias_probes_enabled=parsed.get("judge_bias_probes_enabled", False),
+            simplicity_mode=normalize_simplicity_mode(parsed.get("simplicity_mode")),
         )
 
 
@@ -351,6 +354,7 @@ class SimpleAgentTask(AgentTaskInterface):
         judge_temperature: float = 0.0,
         judge_disagreement_threshold: float = 0.15,
         judge_bias_probes_enabled: bool = False,
+        simplicity_mode: str = "off",
     ) -> None:
         self._task_prompt = task_prompt
         self._rubric = rubric
@@ -361,6 +365,7 @@ class SimpleAgentTask(AgentTaskInterface):
         self._judge_temperature = judge_temperature
         self._judge_disagreement_threshold = judge_disagreement_threshold
         self._judge_bias_probes_enabled = judge_bias_probes_enabled
+        self._simplicity_mode = normalize_simplicity_mode(simplicity_mode)
 
     def get_task_prompt(self, state: dict) -> str:
         return self._task_prompt
@@ -428,6 +433,7 @@ class SimpleAgentTask(AgentTaskInterface):
             task_prompt=self._task_prompt,
             reference_context=state.get("reference_context"),
             required_concepts=state.get("required_concepts"),
+            simplicity_mode=self._simplicity_mode,
         )
 
     def revise_output(self, output: str, judge_result: AgentTaskResult, state: dict) -> str:
@@ -447,6 +453,7 @@ class SimpleAgentTask(AgentTaskInterface):
                 if isinstance(objective_feedback, str)
                 else None
             ),
+            simplicity_mode=self._simplicity_mode,
         )
 
 
@@ -583,6 +590,7 @@ class TaskRunner:
                 judge_temperature=config.judge_temperature,
                 judge_disagreement_threshold=config.judge_disagreement_threshold,
                 judge_bias_probes_enabled=config.judge_bias_probes_enabled,
+                simplicity_mode=config.simplicity_mode,
             )
 
             # Generate initial output if not provided

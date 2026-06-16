@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from autocontext.providers.base import LLMProvider
 from autocontext.scenarios.agent_task import AgentTaskResult
+from autocontext.simplicity import append_simplicity_guidance
 
 
 def generate_simple_agent_task_output(
@@ -13,6 +14,7 @@ def generate_simple_agent_task_output(
     task_prompt: str,
     reference_context: str | None = None,
     required_concepts: list[str] | None = None,
+    simplicity_mode: str = "off",
 ) -> str:
     """Generate initial output for a simple queued task."""
     result = provider.complete(
@@ -21,6 +23,7 @@ def generate_simple_agent_task_output(
             task_prompt=task_prompt,
             reference_context=reference_context,
             required_concepts=required_concepts,
+            simplicity_mode=simplicity_mode,
         ),
         model=model,
     )
@@ -38,6 +41,7 @@ def revise_simple_agent_task_output(
     reference_context: str | None = None,
     required_concepts: list[str] | None = None,
     objective_feedback: str | None = None,
+    simplicity_mode: str = "off",
 ) -> str:
     """Revise output for a simple queued task."""
     result = provider.complete(
@@ -55,6 +59,7 @@ def revise_simple_agent_task_output(
             reference_context=reference_context,
             required_concepts=required_concepts,
             objective_feedback=objective_feedback,
+            simplicity_mode=simplicity_mode,
         ),
         model=model,
     )
@@ -66,10 +71,11 @@ def build_simple_agent_task_user_prompt(
     task_prompt: str,
     reference_context: str | None = None,
     required_concepts: list[str] | None = None,
+    simplicity_mode: str = "off",
 ) -> str:
     """Build the direct-generation prompt for a simple queued task."""
     blocks = [
-        task_prompt.strip(),
+        append_simplicity_guidance(task_prompt.strip(), simplicity_mode),
         _build_reference_context_block(reference_context),
         _build_required_concepts_block(required_concepts),
     ]
@@ -85,6 +91,7 @@ def build_simple_agent_task_revision_prompt(
     reference_context: str | None = None,
     required_concepts: list[str] | None = None,
     objective_feedback: str | None = None,
+    simplicity_mode: str = "off",
 ) -> str:
     """Build the revision prompt for a simple queued task."""
     instruction = revision_prompt or (
@@ -99,7 +106,7 @@ def build_simple_agent_task_revision_prompt(
         _build_objective_feedback_block(objective_feedback),
         _build_reference_context_block(reference_context),
         _build_required_concepts_block(required_concepts),
-        f"## Task\n{task_prompt}",
+        f"## Task\n{append_simplicity_guidance(task_prompt, simplicity_mode)}",
         "Produce an improved version:",
     ]
     return "\n\n".join(block for block in blocks if block)

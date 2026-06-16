@@ -48,6 +48,7 @@ from autocontext.loop.runner_hooks import initialize_hook_bus
 from autocontext.providers.base import ProviderError
 from autocontext.scenarios import SCENARIO_REGISTRY
 from autocontext.scenarios.agent_task import AgentTaskInterface
+from autocontext.simplicity import append_simplicity_guidance, simplicity_mode_metadata
 from autocontext.storage import ArtifactStore, SQLiteStore, artifact_store_from_settings
 from autocontext.util.json_io import read_json
 
@@ -69,6 +70,7 @@ class AgentTaskRunSummary:
     total_rounds: int
     met_threshold: bool
     termination_reason: str
+    optimizer_metadata: dict[str, str] | None = None
 
 
 app = typer.Typer(help="autocontext control-plane CLI", invoke_without_command=True)
@@ -267,7 +269,7 @@ def _run_agent_task(
     context_errors = task.validate_context(state)
     if context_errors:
         raise ValueError(f"Context validation failed: {'; '.join(context_errors)}")
-    prompt = task.get_task_prompt(state)
+    prompt = append_simplicity_guidance(task.get_task_prompt(state), settings.simplicity_mode)
 
     with active_hook_bus(hook_bus):
         initial_output = provider.complete(
@@ -276,7 +278,15 @@ def _run_agent_task(
             model=provider_model,
         ).text
 
-    loop = ImprovementLoop(task=task, max_rounds=max_rounds)
+    loop = ImprovementLoop(
+        task=task,
+        max_rounds=max_rounds,
+        metadata=(
+            simplicity_mode_metadata(settings.simplicity_mode)
+            if settings.simplicity_mode != "off"
+            else None
+        ),
+    )
     active_run_id = run_id or f"task_{uuid.uuid4().hex[:12]}"
     sqlite.create_run(
         active_run_id,
@@ -338,6 +348,7 @@ def _run_agent_task(
         total_rounds=result.total_rounds,
         met_threshold=result.met_threshold,
         termination_reason=result.termination_reason,
+        optimizer_metadata=getattr(result, "metadata", {}) or None,
     )
 
 

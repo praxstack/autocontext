@@ -1660,6 +1660,20 @@
       ]
     },
     {
+      "python": "simplicity_mode",
+      "typescript": "simplicityMode",
+      "type": "string",
+      "default": "off",
+      "values": [
+        "off",
+        "guide",
+        "enforce"
+      ],
+      "env": [
+        "AUTOCONTEXT_SIMPLICITY_MODE"
+      ]
+    },
+    {
       "python": "self_play_enabled",
       "typescript": "selfPlayEnabled",
       "type": "boolean",

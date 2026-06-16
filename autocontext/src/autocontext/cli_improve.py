@@ -18,9 +18,30 @@ import typer
 from autocontext.cli_runtime_overrides import apply_judge_runtime_overrides
 from autocontext.execution.improvement_events import ImprovementLoopEvent
 from autocontext.providers.base import ProviderError
+from autocontext.simplicity import (
+    normalize_simplicity_mode,
+    simplicity_mode_metadata,
+    simplicity_mode_warning,
+)
 
 if TYPE_CHECKING:
     from rich.console import Console
+
+
+def _settings_simplicity_mode(settings: Any) -> str:
+    raw = getattr(settings, "simplicity_mode", "off")
+    return normalize_simplicity_mode(raw if isinstance(raw, str) else "off")
+
+
+def _apply_simplicity_mode_override(settings: Any, value: str | None) -> Any:
+    if value is None or not value.strip():
+        return settings
+    try:
+        mode = normalize_simplicity_mode(value)
+    except ValueError as exc:
+        typer.echo(f"Invalid --simplicity-mode: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    return settings.model_copy(update={"simplicity_mode": mode})
 
 
 def _cli_attr(dependency_module: str, name: str) -> Any:
@@ -143,6 +164,11 @@ def register_improve_command(
             min=1.0,
             help="Timeout in seconds for each --checkpoint-cmd invocation.",
         ),
+        simplicity_mode: str | None = typer.Option(
+            None,
+            "--simplicity-mode",
+            help="Experimental minimal-output mode: off, guide, or enforce (enforce is guide-only for now).",
+        ),
     ) -> None:
         """Run multi-round improvement loop on agent output.
 
@@ -171,12 +197,19 @@ def register_improve_command(
             )
             raise typer.Exit(code=2)
 
-        settings = apply_judge_runtime_overrides(
-            load_settings(),
-            provider_name=provider_override,
-            timeout=timeout,
-            claude_max_total_seconds=claude_max_total_seconds,
+        settings = _apply_simplicity_mode_override(
+            apply_judge_runtime_overrides(
+                load_settings(),
+                provider_name=provider_override,
+                timeout=timeout,
+                claude_max_total_seconds=claude_max_total_seconds,
+            ),
+            simplicity_mode,
         )
+        active_simplicity_mode = _settings_simplicity_mode(settings)
+        warning = simplicity_mode_warning(active_simplicity_mode)
+        if warning:
+            typer.echo(warning, err=True)
 
         try:
             provider = get_judge_provider(settings)
@@ -185,6 +218,7 @@ def register_improve_command(
                 rubric=rubric,
                 provider=provider,
                 model=settings.judge_model,
+                simplicity_mode=active_simplicity_mode,
             )
             state = task.initial_state()
             verifier = make_verifier(
@@ -220,6 +254,11 @@ def register_improve_command(
                 output_verifier=verifier,
                 output_checkpointer=checkpointer,
                 on_event=on_event,
+                metadata=(
+                    simplicity_mode_metadata(active_simplicity_mode)
+                    if active_simplicity_mode != "off"
+                    else None
+                ),
             )
             starting_output = initial_output or task.generate_output(state)
             result = loop.run(initial_output=starting_output, state=state)
@@ -231,6 +270,7 @@ def register_improve_command(
                 json_output=json_output,
                 ndjson_output=ndjson_output,
             )
+            raise
 
         if ndjson_output:
             # Pure newline-delimited JSON on stdout (already streamed via on_event).
@@ -238,15 +278,17 @@ def register_improve_command(
             # stdout line as JSON. --json + --ndjson is rejected up front.
             pass
         elif json_output:
-            write_json_stdout(
-                {
-                    "best_score": result.best_score,
-                    "best_round": result.best_round,
-                    "total_rounds": result.total_rounds,
-                    "met_threshold": result.met_threshold,
-                    "best_output": result.best_output,
-                }
-            )
+            payload = {
+                "best_score": result.best_score,
+                "best_round": result.best_round,
+                "total_rounds": result.total_rounds,
+                "met_threshold": result.met_threshold,
+                "best_output": result.best_output,
+            }
+            metadata = getattr(result, "metadata", {})
+            if metadata:
+                payload["optimizer_metadata"] = metadata
+            write_json_stdout(payload)
         else:
             console.print(f"[bold]Best score:[/bold] {result.best_score:.4f} (round {result.best_round})")
             console.print(f"[bold]Rounds:[/bold] {result.total_rounds}")

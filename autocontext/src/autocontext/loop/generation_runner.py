@@ -11,7 +11,7 @@ from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Any, cast
 
-from autocontext import __version__ as package_fallback_version
+from autocontext import __version__ as package_fallback_version  # type: ignore[attr-defined]
 from autocontext.agents import AgentOrchestrator
 from autocontext.analytics.aggregate_runner import AggregateRunner
 from autocontext.analytics.calibration import (
@@ -337,6 +337,7 @@ class GenerationRunner:
                 "exploration_mode": self.settings.exploration_mode,
                 "rlm_enabled": self.settings.rlm_enabled,
                 "release": _current_release_version(),
+                "simplicity_mode": self.settings.simplicity_mode,
             },
         }
         generation_rows = self.sqlite.get_generation_metrics(run_id)
@@ -915,6 +916,7 @@ class GenerationRunner:
                 "executor_mode": self.settings.executor_mode,
                 "release": _current_release_version(),
                 "total_generations": len(generation_indices),
+                "simplicity_mode": self.settings.simplicity_mode,
             },
         )
 

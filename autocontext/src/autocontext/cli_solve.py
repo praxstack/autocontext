@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import typer
+import typer  # type: ignore[import-not-found]
 from rich.table import Table
 
 from autocontext.cli_runtime_overrides import (
@@ -17,10 +17,27 @@ from autocontext.cli_runtime_overrides import (
 )
 from autocontext.config.settings import AppSettings
 from autocontext.providers.base import ProviderError
+from autocontext.simplicity import normalize_simplicity_mode, simplicity_mode_metadata, simplicity_mode_warning
 from autocontext.util.json_io import write_json
 
 if TYPE_CHECKING:
     from rich.console import Console
+
+
+def _settings_simplicity_mode(settings: AppSettings) -> str:
+    raw = getattr(settings, "simplicity_mode", "off")
+    return normalize_simplicity_mode(raw if isinstance(raw, str) else "off")
+
+
+def _apply_simplicity_mode_override(settings: AppSettings, value: str | None) -> AppSettings:
+    if value is None or not value.strip():
+        return settings
+    try:
+        mode = normalize_simplicity_mode(value)
+    except ValueError as exc:
+        typer.echo(f"Invalid --simplicity-mode: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    return settings.model_copy(update={"simplicity_mode": mode})
 
 
 def _validate_family_override(family_name: str | None) -> None:
@@ -55,6 +72,7 @@ class SolveRunSummary:
     output_path: str | None
     llm_classifier_fallback_used: bool
     result: dict[str, Any] | None
+    optimizer_metadata: dict[str, str] | None
 
 
 def _cli_attr(dependency_module: str, name: str) -> Any:
@@ -75,15 +93,23 @@ def run_solve_command(
     write_json_stderr: Callable[[str], None],
     family_override: str | None = None,
     verbatim_task_prompt: str | None = None,
+    simplicity_mode: str | None = None,
 ) -> None:
     """Create a scenario on demand, run it, and export the solved package."""
     from autocontext.knowledge.solver import SolveManager
 
-    settings = apply_solve_runtime_overrides(
-        load_settings_fn(),
-        timeout=timeout,
-        generation_time_budget_seconds=generation_time_budget,
+    settings = _apply_simplicity_mode_override(
+        apply_solve_runtime_overrides(
+            load_settings_fn(),
+            timeout=timeout,
+            generation_time_budget_seconds=generation_time_budget,
+        ),
+        simplicity_mode,
     )
+    active_simplicity_mode = _settings_simplicity_mode(settings)
+    warning = simplicity_mode_warning(active_simplicity_mode)
+    if warning:
+        typer.echo(warning, err=True)
     manager = SolveManager(settings)
 
     try:
@@ -139,6 +165,11 @@ def run_solve_command(
         output_path=output_path,
         llm_classifier_fallback_used=job.llm_classifier_fallback_used,
         result=job.result.to_dict(),
+        optimizer_metadata=(
+            simplicity_mode_metadata(active_simplicity_mode)
+            if active_simplicity_mode != "off"
+            else None
+        ),
     )
 
     if json_output:
@@ -157,6 +188,8 @@ def run_solve_command(
         "LLM Fallback",
         "yes" if job.llm_classifier_fallback_used else "no",
     )
+    if active_simplicity_mode != "off":
+        table.add_row("Simplicity Mode", active_simplicity_mode)
     if output_path is not None:
         table.add_row("Output", output_path)
     console.print(table)
@@ -242,6 +275,11 @@ def register_solve_command(
                 "designer would otherwise truncate or generalize away."
             ),
         ),
+        simplicity_mode: str | None = typer.Option(
+            None,
+            "--simplicity-mode",
+            help="Experimental minimal-output mode: off, guide, or enforce (enforce is guide-only for now).",
+        ),
     ) -> None:
         _validate_family_override(family)
         write_json_stderr = _cli_attr(dependency_module, "_write_json_stderr")
@@ -292,4 +330,5 @@ def register_solve_command(
             write_json_stderr=write_json_stderr,
             family_override=family or None,
             verbatim_task_prompt=task_prompt or None,
+            simplicity_mode=simplicity_mode,
         )

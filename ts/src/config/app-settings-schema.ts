@@ -198,6 +198,7 @@ export const AppSettingsSchema = z.object({
   // Progress & constraints
   progressJsonEnabled: z.boolean().default(true),
   constraintPromptsEnabled: z.boolean().default(true),
+  simplicityMode: z.enum(["off", "guide", "enforce"]).default("off"),
   contextBudgetTokens: z.number().int().min(0).default(100_000),
   coherenceCheckEnabled: z.boolean().default(true),
 
