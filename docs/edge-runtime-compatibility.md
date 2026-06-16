@@ -135,10 +135,12 @@ manifest as standalone JSON for external/provider hosts, while
 `agentAppFetchHostCapabilityManifestSchema` and
 `renderAgentAppFetchHostCapabilityManifestSchema()` expose the matching
 provider-neutral validation schema. See
-[`generated-fetch-packaging.md`](generated-fetch-packaging.md) for a generic
-Fetch/ESM packaging walkthrough, and [`fetch-conformance.md`](fetch-conformance.md)
-for runner-agnostic checks host wrappers can use before exposing generated
-handlers. Provider wrappers remain external to that generated source.
+[`fetch-api-reference.md`](fetch-api-reference.md) for the exported Fetch API
+surface, [`generated-fetch-packaging.md`](generated-fetch-packaging.md) for a
+generic Fetch/ESM packaging walkthrough, and
+[`fetch-conformance.md`](fetch-conformance.md) for runner-agnostic checks host
+wrappers can use before exposing generated handlers. Provider wrappers remain
+external to that generated source.
 
 ### Explicit Environment And Runtime Capabilities
 

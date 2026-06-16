@@ -243,7 +243,8 @@ host-supplied `runtimeFactory` directly or resolve `runtimeFactoryName` through
 the bundled, static runtime factory module map. Provider wrappers can consume the
 manifest JSON and `agentAppFetchHostCapabilityManifestSchema` when validating
 host capability wiring, but provider-specific deployment remains outside this
-package. See [`docs/generated-fetch-packaging.md`](../docs/generated-fetch-packaging.md)
+package. See [`docs/fetch-api-reference.md`](../docs/fetch-api-reference.md) for
+the exported API surface, [`docs/generated-fetch-packaging.md`](../docs/generated-fetch-packaging.md)
 and [`examples/generated-fetch-packaging.ts`](examples/generated-fetch-packaging.ts)
 for a generic Fetch/ESM packaging example.
 

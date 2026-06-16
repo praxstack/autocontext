@@ -6,9 +6,10 @@ host still creates and passes runtime, workspace, storage, and grant
 capabilities explicitly.
 
 The same pattern is implemented as a typed repository example in
-`ts/examples/generated-fetch-packaging.ts`. After packaging, use the
-[`Fetch conformance guide`](fetch-conformance.md) to verify host-owned wrappers
-and stores before exposing the generated handler.
+`ts/examples/generated-fetch-packaging.ts`. See the
+[`Fetch adapter API reference`](fetch-api-reference.md) for the exported helper
+surface. After packaging, use the [`Fetch conformance guide`](fetch-conformance.md)
+to verify host-owned wrappers and stores before exposing the generated handler.
 
 ## Inputs
 

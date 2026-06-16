@@ -36,6 +36,7 @@ This directory is the maintainer-facing landing page for repository docs. Use it
 
 - [Core/control package split](core-control-package-split.md)
 - [Generic edge runtime compatibility spike](edge-runtime-compatibility.md)
+- [Fetch adapter API reference](fetch-api-reference.md)
 - [Generated Fetch packaging guide](generated-fetch-packaging.md)
 - [Fetch conformance guide](fetch-conformance.md)
 - [Flue-inspired runtime decisions](flue-influences.md)
