@@ -6,7 +6,8 @@ a generated `fetch` handler. See the
 [`Fetch adapter API reference`](fetch-api-reference.md) for the exported helper
 surface. The helpers are framework-agnostic: each case is an async function with
 a stable name, and each one-shot runner executes the same cases without assuming
-a test framework.
+a test framework. See `ts/examples/fetch-conformance-host-wrapper.ts` for a
+minimal executable host-wrapper example.
 
 ## Runner-Agnostic Usage
 
