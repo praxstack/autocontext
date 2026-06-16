@@ -21,6 +21,7 @@ from autocontext.loop.runner_hooks import (
     emit_run_start,
 )
 from autocontext.scenarios.agent_task import AgentTaskInterface, AgentTaskResult
+from autocontext.simplicity import append_simplicity_guidance, simplicity_mode_metadata
 from autocontext.storage import artifact_store_from_settings
 from autocontext.storage.sqlite_store import SQLiteStore
 
@@ -245,7 +246,7 @@ def run_task_like_scenario(
         context_errors = budgeted_task.validate_context(state)
         if context_errors:
             raise ValueError(f"Context validation failed: {'; '.join(context_errors)}")
-        prompt = budgeted_task.get_task_prompt(state)
+        prompt = append_simplicity_guidance(budgeted_task.get_task_prompt(state), settings.simplicity_mode)
         with active_hook_bus(hook_bus):
             initial_output = provider.complete(
                 system_prompt="Complete the task precisely.",
@@ -255,7 +256,15 @@ def run_task_like_scenario(
             budget.check("initial generation")
             sqlite.append_agent_output(active_run_id, 1, "competitor_initial", initial_output)
 
-            loop = ImprovementLoop(task=budgeted_task, max_rounds=max_rounds)
+            loop = ImprovementLoop(
+                task=budgeted_task,
+                max_rounds=max_rounds,
+                metadata=(
+                    simplicity_mode_metadata(settings.simplicity_mode)
+                    if settings.simplicity_mode != "off"
+                    else None
+                ),
+            )
             result = loop.run(initial_output=initial_output, state=state)
             budget.check("improvement loop")
     except Exception as exc:

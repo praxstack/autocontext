@@ -3,17 +3,17 @@ from __future__ import annotations
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import pytest
-from pydantic import ValidationError
+import pytest  # type: ignore[import-not-found]
+from pydantic import ValidationError  # type: ignore[import-not-found]
 
-from autocontext.config.settings import AppSettings, load_settings, setting_env_keys
+from autocontext.config.settings import AppSettings, load_settings, setting_env_keys  # type: ignore[import-untyped]
 
 
 def _contract() -> dict[str, Any]:
     contract_path = Path(__file__).resolve().parents[2] / "docs" / "app-settings-contract.json"
-    return json.loads(contract_path.read_text(encoding="utf-8"))
+    return cast(dict[str, Any], json.loads(contract_path.read_text(encoding="utf-8")))
 
 
 def _contract_value(value: object) -> object:
@@ -40,6 +40,7 @@ def test_python_app_settings_contract_covers_live_shared_fields() -> None:
         "consultation_enabled",
         "generation_time_budget_seconds",
         "monitor_heartbeat_timeout",
+        "simplicity_mode",
     }
 
     assert expected_shared_fields <= contract_names
@@ -57,7 +58,7 @@ def test_python_app_settings_defaults_and_env_aliases_match_shared_contract() ->
 def test_python_app_settings_ignores_unknown_fields_like_shared_contract() -> None:
     assert _contract()["unknown_field_policy"] == "ignore"
 
-    settings = AppSettings(not_a_portable_setting="ignored")
+    settings = AppSettings.model_validate({"not_a_portable_setting": "ignored"})
 
     assert not hasattr(settings, "not_a_portable_setting")
 
@@ -75,8 +76,9 @@ def test_python_app_settings_rejects_representative_invalid_shared_values() -> N
         ("claude_timeout", 0),
         ("browser_profile_mode", "shared"),
         ("monitor_max_conditions", 0),
+        ("simplicity_mode", "strict"),
     ]
 
     for field_name, value in invalid_cases:
         with pytest.raises(ValidationError):
-            AppSettings(**{field_name: value})
+            AppSettings.model_validate({field_name: value})

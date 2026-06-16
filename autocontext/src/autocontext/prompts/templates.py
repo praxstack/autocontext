@@ -12,6 +12,7 @@ from autocontext.knowledge.compaction import (
 )
 from autocontext.prompts.context_budget import ContextBudget, ContextBudgetTelemetry
 from autocontext.scenarios.base import Observation
+from autocontext.simplicity import append_simplicity_guidance
 from autocontext.strategy_interface import is_action_plan_interface
 
 
@@ -126,6 +127,7 @@ def build_prompt_bundle(
     compaction_entry_sink: Callable[[list[CompactionEntry]], None] | None = None,
     context_component_sink: Callable[[dict[str, str]], None] | None = None,
     context_budget_telemetry_sink: Callable[[ContextBudgetTelemetry], None] | None = None,
+    simplicity_mode: str = "off",
 ) -> PromptBundle:
     _nb = dict(notebook_contexts or {})
     _evidence = dict(evidence_manifests or {})
@@ -365,19 +367,30 @@ def build_prompt_bundle(
             "If no harness mutations, omit the MUTATIONS markers entirely."
         ),
     )
-    final_bundle = bundle
+    final_bundle = PromptBundle(
+        competitor=append_simplicity_guidance(bundle.competitor, simplicity_mode),
+        analyst=append_simplicity_guidance(bundle.analyst, simplicity_mode),
+        coach=append_simplicity_guidance(bundle.coach, simplicity_mode),
+        architect=append_simplicity_guidance(bundle.architect, simplicity_mode),
+    )
     if hook_bus is not None:
         context_event = hook_bus.emit(
             HookEvents.CONTEXT,
             {
-                "roles": _prompt_bundle_roles(bundle),
+                "roles": _prompt_bundle_roles(final_bundle),
                 "stage": "after_prompt_bundle",
             },
         )
         context_event.raise_if_blocked()
         maybe_roles = context_event.payload.get("roles")
         if isinstance(maybe_roles, dict):
-            final_bundle = _prompt_bundle_from_roles(maybe_roles, bundle)
+            final_bundle = _prompt_bundle_from_roles(maybe_roles, final_bundle)
+            final_bundle = PromptBundle(
+                competitor=append_simplicity_guidance(final_bundle.competitor, simplicity_mode),
+                analyst=append_simplicity_guidance(final_bundle.analyst, simplicity_mode),
+                coach=append_simplicity_guidance(final_bundle.coach, simplicity_mode),
+                architect=append_simplicity_guidance(final_bundle.architect, simplicity_mode),
+            )
     if context_component_sink is not None:
         context_component_sink(
             _selected_context_components(

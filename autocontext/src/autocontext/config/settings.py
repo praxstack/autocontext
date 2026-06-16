@@ -6,7 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator  # type: ignore[import-not-found]
 
 from autocontext.config.presets import apply_preset
 from autocontext.runtimes.pi_defaults import PI_DEFAULT_TIMEOUT_SECONDS
@@ -335,6 +335,7 @@ class AppSettings(BaseModel):
     progress_json_enabled: bool = Field(default=True, description="Inject structured progress JSON into prompts")
     # Constraint prompts
     constraint_prompts_enabled: bool = Field(default=True, description="Append constraint suffixes to role prompts")
+    simplicity_mode: Literal["off", "guide", "enforce"] = Field(default="off")
     # Context budget
     context_budget_tokens: int = Field(default=100_000, ge=0, description="Max estimated tokens for prompt context")
     harness_profile: HarnessProfile = Field(
