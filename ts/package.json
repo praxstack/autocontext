@@ -198,7 +198,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "@types/diff": "^7.0.2",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
     "better-sqlite3": "^11.0.0",
