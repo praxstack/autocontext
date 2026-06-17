@@ -25,10 +25,7 @@ export const PYTHON_SHARED_SERVER_MESSAGE_TYPES = [
   "monitor_alert",
 ] as const;
 
-export const TYPESCRIPT_ONLY_SERVER_MESSAGE_TYPES = [
-  "auth_status",
-  "mission_progress",
-] as const;
+export const TYPESCRIPT_ONLY_SERVER_MESSAGE_TYPES = ["auth_status", "mission_progress"] as const;
 
 export const SERVER_MESSAGE_TYPES = [
   ...PYTHON_SHARED_SERVER_MESSAGE_TYPES,
@@ -205,10 +202,14 @@ export const AuthStatusMsgSchema = protocolObject({
   provider: z.string(),
   authenticated: z.boolean(),
   model: z.string().optional(),
-  configuredProviders: z.array(protocolObject({
-    provider: z.string(),
-    hasApiKey: z.boolean(),
-  })).optional(),
+  configuredProviders: z
+    .array(
+      protocolObject({
+        provider: z.string(),
+        hasApiKey: z.boolean(),
+      }),
+    )
+    .optional(),
 });
 
 // ---------------------------------------------------------------------------
