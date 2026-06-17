@@ -116,8 +116,9 @@ export function renderRunStatusJsonLine(
   run: RunInspectionRun,
   generations: RunInspectionGeneration[],
   runtimeSession?: RuntimeSessionSummary | null,
+  progressReport?: RunProgressReport | null,
 ): string {
-  return JSON.stringify(runStatusPayload(run, generations, runtimeSession));
+  return JSON.stringify(runStatusPayload(run, generations, runtimeSession, progressReport));
 }
 
 export function renderRunShow(

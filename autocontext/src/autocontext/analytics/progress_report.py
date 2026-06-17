@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,12 +25,19 @@ MILESTONE_NAMES: tuple[ProgressMilestoneName, ...] = (
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    def to_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls.model_validate(data)
+
 
 class ProgressPoint(_StrictModel):
     """One scored candidate on the best-score-over-time curve."""
 
-    event_id: str
-    timestamp: str
+    event_id: str = Field(min_length=1)
+    timestamp: str = Field(min_length=1)
     elapsed_seconds: float
     generation_index: int | None = None
     hypothesis_node_id: str | None = None
@@ -68,9 +75,9 @@ class PassAtKSummary(_StrictModel):
 class BranchLineageEdge(_StrictModel):
     """Parent/child hypothesis edge included in the inspection artifact."""
 
-    parent_hypothesis_node_id: str
-    child_hypothesis_node_id: str
-    event_id: str
+    parent_hypothesis_node_id: str = Field(min_length=1)
+    child_hypothesis_node_id: str = Field(min_length=1)
+    event_id: str = Field(min_length=1)
     generation_index: int | None = None
 
 
@@ -78,13 +85,39 @@ class RunProgressReport(_StrictModel):
     """Durable progress report shared by Python and TypeScript."""
 
     schema_version: Literal[1] = 1
-    run_id: str
-    generated_at: str
+    run_id: str = Field(min_length=1)
+    generated_at: str = Field(min_length=1)
     threshold: float
     progress_points: list[ProgressPoint]
     milestones: list[MilestoneTiming]
     pass_at_k: list[PassAtKSummary]
     branch_lineage: list[BranchLineageEdge]
+
+    def to_markdown(self) -> str:
+        best_score = max((point.best_score for point in self.progress_points), default=None)
+        pass_lines = [
+            f"- pass@{summary.k}: {'pass' if summary.passed else 'miss'} "
+            f"({summary.successes}/{summary.trials_considered}, best={summary.best_score})"
+            for summary in self.pass_at_k
+        ]
+        milestone_lines = [
+            f"- {milestone.name}: {milestone.elapsed_seconds:.3f}s"
+            for milestone in self.milestones
+            if milestone.reached and milestone.elapsed_seconds is not None
+        ]
+        parts = [
+            f"# Progress Report: {self.run_id}",
+            f"- Best score: {best_score}",
+            f"- Threshold: {self.threshold}",
+            "",
+            "## Milestones",
+            *(milestone_lines or ["- None reached"]),
+            "",
+            "## Pass@k",
+            *(pass_lines or ["- No trials"]),
+            "",
+        ]
+        return "\n".join(parts)
 
 
 def build_run_progress_report(

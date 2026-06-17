@@ -34,15 +34,46 @@ def test_run_progress_report_round_trips_from_shared_json() -> None:
     assert RunProgressReport.model_validate(expected).model_dump(mode="json") == expected
 
 
-def test_run_progress_report_rejects_extra_fields() -> None:
+def test_run_progress_report_rejects_schema_invalid_data() -> None:
     from autocontext.analytics.progress_report import RunProgressReport
 
-    payload = {**_fixture()["expected_report"], "surprise": True}
-    try:
-        RunProgressReport.model_validate(payload)
-    except ValueError:
-        return
-    raise AssertionError("schema-invalid progress report was accepted")
+    for payload in [
+        {**_fixture()["expected_report"], "surprise": True},
+        {**_fixture()["expected_report"], "run_id": ""},
+        {**_fixture()["expected_report"], "generated_at": ""},
+    ]:
+        try:
+            RunProgressReport.model_validate(payload)
+        except ValueError:
+            continue
+        raise AssertionError("schema-invalid progress report was accepted")
+
+
+def test_run_progress_report_uses_artifact_store_round_trip(tmp_path: Path) -> None:
+    from autocontext.analytics.progress_report import RunProgressReport, build_run_progress_report
+    from autocontext.storage.artifacts import ArtifactStore
+
+    fixture = _fixture()
+    report = build_run_progress_report(
+        run_id=fixture["run_id"],
+        events=fixture["events"],
+        threshold=fixture["threshold"],
+        pass_at_k_values=fixture["pass_at_k_values"],
+        generated_at=fixture["generated_at"],
+    )
+    store = ArtifactStore(
+        tmp_path / "runs",
+        tmp_path / "knowledge",
+        tmp_path / "skills",
+        tmp_path / "claude-skills",
+    )
+
+    store.write_progress_report("grid_ctf", fixture["run_id"], report)
+    loaded = store.read_progress_report("grid_ctf", fixture["run_id"])
+
+    assert isinstance(loaded, RunProgressReport)
+    assert loaded.to_dict() == fixture["expected_report"]
+    assert "pass@4" in store.read_latest_progress_reports_markdown("grid_ctf")
 
 
 def test_run_inspection_can_reference_progress_report() -> None:
