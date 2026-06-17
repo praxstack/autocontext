@@ -77,7 +77,7 @@
         "model_wait_seconds": { "$ref": "#/$defs/nullableNumber" },
         "mean_token_utilization": { "$ref": "#/$defs/nullableNumber" },
         "token_throughput_per_second": { "$ref": "#/$defs/nullableNumber" },
-        "tokens_to_success": { "$ref": "#/$defs/nullableInteger" }
+        "tokens_to_success": { "type": ["integer", "null"], "minimum": 0 }
       }
     },
     "evaluationUtilization": {

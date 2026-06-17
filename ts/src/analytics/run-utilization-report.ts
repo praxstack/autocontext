@@ -99,13 +99,18 @@ const EVAL_FINISHED = new Set(["evaluation_finished", "eval_finished"]);
 const EVAL_ACTIVE = new Set(["evaluation_finished", "eval_finished", "evaluation_active"]);
 const VERIFIER_ACTIVE = new Set(["verifier_finished", "verification_finished", "verifier_active"]);
 
-export function buildRunUtilizationReport(input: BuildRunUtilizationReportInput): RunUtilizationReport {
+export function buildRunUtilizationReport(
+  input: BuildRunUtilizationReportInput,
+): RunUtilizationReport {
   const events = input.events.map(normalizeEvent);
   const roleUsage = input.roleUsage.map(normalizeUsage);
   const window = utilizationWindow(events, roleUsage);
   const branches = branchIds(events, roleUsage);
   const maxParallel = branches.size ? maxParallelBranches(events, window.completed_at) : null;
-  const capacity = window.duration_seconds !== null && maxParallel ? round(window.duration_seconds * maxParallel) : null;
+  const capacity =
+    window.duration_seconds !== null && maxParallel
+      ? round(window.duration_seconds * maxParallel)
+      : null;
   const evalEvents = events.filter((event) => EVAL_FINISHED.has(event.eventType));
   const evalActive = sumDuration(events, EVAL_ACTIVE);
   const explicitRunnerActive = sumDuration(events, RUNNER_ACTIVE);
@@ -196,10 +201,16 @@ function parseBranchUtilization(value: unknown): BranchUtilization {
   return {
     branch_count: nullableInteger(item.branch_count, "branch_count"),
     max_parallel_branches: nullableInteger(item.max_parallel_branches, "max_parallel_branches"),
-    runner_capacity_seconds: nullableNumber(item.runner_capacity_seconds, "runner_capacity_seconds"),
+    runner_capacity_seconds: nullableNumber(
+      item.runner_capacity_seconds,
+      "runner_capacity_seconds",
+    ),
     active_runner_seconds: nullableNumber(item.active_runner_seconds, "active_runner_seconds"),
     idle_runner_seconds: nullableNumber(item.idle_runner_seconds, "idle_runner_seconds"),
-    mean_runner_utilization: nullableNumber(item.mean_runner_utilization, "mean_runner_utilization"),
+    mean_runner_utilization: nullableNumber(
+      item.mean_runner_utilization,
+      "mean_runner_utilization",
+    ),
   };
 }
 
@@ -216,9 +227,9 @@ function parseTokenUtilization(value: unknown): TokenUtilization {
     "tokens_to_success",
   ]);
   return {
-    input_tokens: integer(item.input_tokens, "input_tokens"),
-    output_tokens: integer(item.output_tokens, "output_tokens"),
-    total_tokens: integer(item.total_tokens, "total_tokens"),
+    input_tokens: nonNegativeInteger(item.input_tokens, "input_tokens"),
+    output_tokens: nonNegativeInteger(item.output_tokens, "output_tokens"),
+    total_tokens: nonNegativeInteger(item.total_tokens, "total_tokens"),
     model_active_seconds: nullableNumber(item.model_active_seconds, "model_active_seconds"),
     model_wait_seconds: nullableNumber(item.model_wait_seconds, "model_wait_seconds"),
     mean_token_utilization: nullableNumber(item.mean_token_utilization, "mean_token_utilization"),
@@ -226,7 +237,7 @@ function parseTokenUtilization(value: unknown): TokenUtilization {
       item.token_throughput_per_second,
       "token_throughput_per_second",
     ),
-    tokens_to_success: nullableInteger(item.tokens_to_success, "tokens_to_success"),
+    tokens_to_success: nullableNonNegativeInteger(item.tokens_to_success, "tokens_to_success"),
   };
 }
 
@@ -240,9 +251,12 @@ function parseEvaluationUtilization(value: unknown): EvaluationUtilization {
     "eval_throughput_per_second",
   ]);
   return {
-    eval_count: integer(item.eval_count, "eval_count"),
+    eval_count: nonNegativeInteger(item.eval_count, "eval_count"),
     eval_active_seconds: nullableNumber(item.eval_active_seconds, "eval_active_seconds"),
-    verifier_active_seconds: nullableNumber(item.verifier_active_seconds, "verifier_active_seconds"),
+    verifier_active_seconds: nullableNumber(
+      item.verifier_active_seconds,
+      "verifier_active_seconds",
+    ),
     verifier_idle_seconds: nullableNumber(item.verifier_idle_seconds, "verifier_idle_seconds"),
     eval_throughput_per_second: nullableNumber(
       item.eval_throughput_per_second,
@@ -258,7 +272,12 @@ function normalizeEvent(event: RunUtilizationEventInput): NormalizedUtilizationE
   return {
     eventType: event.event_type ?? event.event ?? "",
     timestamp: event.timestamp ?? event.ts ?? "",
-    branchId: event.branch_id ?? maybeString(payload.branch_id) ?? event.worker_id ?? maybeString(payload.worker_id) ?? "",
+    branchId:
+      event.branch_id ??
+      maybeString(payload.branch_id) ??
+      event.worker_id ??
+      maybeString(payload.worker_id) ??
+      "",
     durationSeconds: event.duration_seconds ?? maybeNumber(payload.duration_seconds) ?? null,
     score: score ?? null,
     verifierPassed,
@@ -277,7 +296,10 @@ function normalizeUsage(row: RunUtilizationRoleUsageInput): NormalizedRoleUsage 
   };
 }
 
-function utilizationWindow(events: NormalizedUtilizationEvent[], usage: NormalizedRoleUsage[]): UtilizationWindow {
+function utilizationWindow(
+  events: NormalizedUtilizationEvent[],
+  usage: NormalizedRoleUsage[],
+): UtilizationWindow {
   const stamps = [...events.map((event) => event.timestamp), ...usage.map((row) => row.timestamp)]
     .map(parseTime)
     .filter((stamp): stamp is number => stamp !== null);
@@ -291,13 +313,19 @@ function utilizationWindow(events: NormalizedUtilizationEvent[], usage: Normaliz
   };
 }
 
-function branchIds(events: NormalizedUtilizationEvent[], usage: NormalizedRoleUsage[]): Set<string> {
+function branchIds(
+  events: NormalizedUtilizationEvent[],
+  usage: NormalizedRoleUsage[],
+): Set<string> {
   return new Set(
     [...events.map((event) => event.branchId), ...usage.map((row) => row.branchId)].filter(Boolean),
   );
 }
 
-function maxParallelBranches(events: NormalizedUtilizationEvent[], completedAt: string | null): number | null {
+function maxParallelBranches(
+  events: NormalizedUtilizationEvent[],
+  completedAt: string | null,
+): number | null {
   const starts = new Map<string, number>();
   const finishes = new Map<string, number>();
   for (const event of events) {
@@ -330,12 +358,19 @@ function sumDuration(events: NormalizedUtilizationEvent[], eventTypes: Set<strin
   return total > 0 ? round(total) : null;
 }
 
-function sumUsageSeconds(rows: NormalizedRoleUsage[], key: "latencyMs" | "modelWaitSeconds", scale: number): number | null {
+function sumUsageSeconds(
+  rows: NormalizedRoleUsage[],
+  key: "latencyMs" | "modelWaitSeconds",
+  scale: number,
+): number | null {
   const values = rows.map((row) => row[key]).filter((value): value is number => value !== null);
   return values.length ? round(values.reduce((sum, value) => sum + value, 0) / scale) : null;
 }
 
-function tokensToSuccess(events: NormalizedUtilizationEvent[], usage: NormalizedRoleUsage[]): number | null {
+function tokensToSuccess(
+  events: NormalizedUtilizationEvent[],
+  usage: NormalizedRoleUsage[],
+): number | null {
   const successTimes = events
     .filter((event) => event.verifierPassed === true || event.outcome === "success")
     .map((event) => parseTime(event.timestamp))
@@ -373,13 +408,17 @@ function formatTime(timestamp: number): string {
 }
 
 function record(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error(`${label} must be an object`);
   return value as Record<string, unknown>;
 }
 
 function exact(item: Record<string, unknown>, allowed: string[]): void {
   const allowedSet = new Set(allowed);
-  const extra = Object.keys(item).filter((key) => !allowedSet.has(key));
+  const keys = Object.keys(item);
+  const missing = allowed.filter((key) => !keys.includes(key));
+  if (missing.length) throw new Error(`missing field(s): ${missing.sort().join(", ")}`);
+  const extra = keys.filter((key) => !allowedSet.has(key));
   if (extra.length) throw new Error(`unexpected field(s): ${extra.sort().join(", ")}`);
 }
 
@@ -389,29 +428,41 @@ function string(value: unknown, label: string): string {
 }
 
 function nullableString(value: unknown, label: string): string | null {
-  return value === null || value === undefined ? null : string(value, label);
+  return value === null ? null : string(value, label);
 }
 
 function number(value: unknown, label: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${label} must be a number`);
+  if (typeof value !== "number" || !Number.isFinite(value))
+    throw new Error(`${label} must be a number`);
   return value;
 }
 
 function nullableNumber(value: unknown, label: string): number | null {
-  return value === null || value === undefined ? null : number(value, label);
+  return value === null ? null : number(value, label);
 }
 
 function integer(value: unknown, label: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
+  if (typeof value !== "number" || !Number.isInteger(value))
+    throw new Error(`${label} must be an integer`);
   return value;
 }
 
 function nullableInteger(value: unknown, label: string): number | null {
-  return value === null || value === undefined ? null : integer(value, label);
+  return value === null ? null : integer(value, label);
+}
+
+function nonNegativeInteger(value: unknown, label: string): number {
+  const result = integer(value, label);
+  if (result < 0) throw new Error(`${label} must be a non-negative integer`);
+  return result;
+}
+
+function nullableNonNegativeInteger(value: unknown, label: string): number | null {
+  return value === null ? null : nonNegativeInteger(value, label);
 }
 
 function integerOrZero(value: unknown): number {
-  return typeof value === "number" && Number.isInteger(value) ? value : 0;
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
 function maybeString(value: unknown): string | undefined {

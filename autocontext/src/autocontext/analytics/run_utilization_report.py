@@ -111,9 +111,9 @@ class TokenUtilization:
             },
         )
         return cls(
-            input_tokens=_required_int(data.get("input_tokens"), "input_tokens"),
-            output_tokens=_required_int(data.get("output_tokens"), "output_tokens"),
-            total_tokens=_required_int(data.get("total_tokens"), "total_tokens"),
+            input_tokens=_required_nonnegative_int(data.get("input_tokens"), "input_tokens"),
+            output_tokens=_required_nonnegative_int(data.get("output_tokens"), "output_tokens"),
+            total_tokens=_required_nonnegative_int(data.get("total_tokens"), "total_tokens"),
             model_active_seconds=_nullable_number(data.get("model_active_seconds"), "model_active_seconds"),
             model_wait_seconds=_nullable_number(data.get("model_wait_seconds"), "model_wait_seconds"),
             mean_token_utilization=_nullable_number(data.get("mean_token_utilization"), "mean_token_utilization"),
@@ -121,7 +121,7 @@ class TokenUtilization:
                 data.get("token_throughput_per_second"),
                 "token_throughput_per_second",
             ),
-            tokens_to_success=_nullable_int(data.get("tokens_to_success"), "tokens_to_success"),
+            tokens_to_success=_nullable_nonnegative_int(data.get("tokens_to_success"), "tokens_to_success"),
         )
 
 
@@ -155,7 +155,7 @@ class EvaluationUtilization:
             },
         )
         return cls(
-            eval_count=_required_int(data.get("eval_count"), "eval_count"),
+            eval_count=_required_nonnegative_int(data.get("eval_count"), "eval_count"),
             eval_active_seconds=_nullable_number(data.get("eval_active_seconds"), "eval_active_seconds"),
             verifier_active_seconds=_nullable_number(data.get("verifier_active_seconds"), "verifier_active_seconds"),
             verifier_idle_seconds=_nullable_number(data.get("verifier_idle_seconds"), "verifier_idle_seconds"),
@@ -206,9 +206,7 @@ class RunUtilizationReport:
             run_id=_required_string(data.get("run_id"), "run_id"),
             generated_at=_required_string(data.get("generated_at"), "generated_at"),
             window=UtilizationWindow.from_dict(_record(data.get("window"), "window")),
-            branch_utilization=BranchUtilization.from_dict(
-                _record(data.get("branch_utilization"), "branch_utilization")
-            ),
+            branch_utilization=BranchUtilization.from_dict(_record(data.get("branch_utilization"), "branch_utilization")),
             token_utilization=TokenUtilization.from_dict(_record(data.get("token_utilization"), "token_utilization")),
             evaluation_utilization=EvaluationUtilization.from_dict(
                 _record(data.get("evaluation_utilization"), "evaluation_utilization")
@@ -428,6 +426,9 @@ def _record(value: Any, label: str) -> dict[str, Any]:
 
 
 def _exact(data: dict[str, Any], allowed: set[str]) -> None:
+    missing = sorted(allowed - set(data))
+    if missing:
+        raise ValueError(f"missing field(s): {', '.join(missing)}")
     extra = sorted(set(data) - allowed)
     if extra:
         raise ValueError(f"unexpected field(s): {', '.join(extra)}")
@@ -457,6 +458,19 @@ def _nullable_int(value: Any, label: str) -> int | None:
     return _required_int(value, label)
 
 
+def _required_nonnegative_int(value: Any, label: str) -> int:
+    result = _required_int(value, label)
+    if result < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return result
+
+
+def _nullable_nonnegative_int(value: Any, label: str) -> int | None:
+    if value is None:
+        return None
+    return _required_nonnegative_int(value, label)
+
+
 def _nullable_number(value: Any, label: str) -> float | None:
     if value is None:
         return None
@@ -470,7 +484,7 @@ def _string(value: Any) -> str:
 
 
 def _int(value: Any) -> int:
-    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
 def _float_or_none(value: Any) -> float | None:
