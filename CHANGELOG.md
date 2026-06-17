@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - AC-820 scenario environment contracts now document and expose reset, rollout, verification, scoring, replay, evidence, and cleanup hooks across Python and TypeScript.
+- AC-821 run progress reports add Python/TypeScript parity for best-score-over-time curves, milestone timing, pass@k summaries, and branch lineage inspection references.
 
 ## [pi-v0.2.6] - 2026-06-16
 
