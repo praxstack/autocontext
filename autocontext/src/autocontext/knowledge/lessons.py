@@ -31,6 +31,7 @@ class ApplicabilityMeta(BaseModel):
     operation_type: str = "advance"
     superseded_by: str = ""
     last_validated_gen: int = _UNSET_GEN
+    approval_status: str = "active"  # "active" (applied) | "pending" (awaiting human approval)
 
     def model_post_init(self, __context: Any) -> None:
         if self.last_validated_gen == _UNSET_GEN:
@@ -60,8 +61,12 @@ class Lesson(BaseModel):
     def is_superseded(self) -> bool:
         return bool(self.meta.superseded_by)
 
+    def is_pending(self) -> bool:
+        return self.meta.approval_status == "pending"
+
     def is_applicable(self, current_generation: int, staleness_window: int = 10) -> bool:
-        return not self.is_stale(current_generation, staleness_window) and not self.is_superseded()
+        # Pending lessons await human approval and must never enter prompts.
+        return not self.is_pending() and not self.is_stale(current_generation, staleness_window) and not self.is_superseded()
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump()
@@ -79,7 +84,9 @@ class LessonStore:
         self.skills_root = skills_root
 
     def _lessons_path(self, scenario: str) -> Path:
-        return self.knowledge_root / scenario / "lessons.json"
+        from autocontext.storage.scenario_paths import resolve_scenario_root
+
+        return resolve_scenario_root(self.knowledge_root, scenario) / "lessons.json"
 
     def read_lessons(self, scenario: str) -> list[Lesson]:
         path = self._lessons_path(scenario)
@@ -102,10 +109,7 @@ class LessonStore:
         lessons = self.read_lessons(scenario)
         if not lessons:
             return 0
-        return max(
-            max(lesson.meta.generation, lesson.meta.last_validated_gen)
-            for lesson in lessons
-        )
+        return max(max(lesson.meta.generation, lesson.meta.last_validated_gen) for lesson in lessons)
 
     def write_lessons(self, scenario: str, lessons: Sequence[Lesson]) -> None:
         path = self._lessons_path(scenario)
@@ -124,18 +128,22 @@ class LessonStore:
         return lesson
 
     def get_applicable_lessons(
-        self, scenario: str, current_generation: int, staleness_window: int = 10,
+        self,
+        scenario: str,
+        current_generation: int,
+        staleness_window: int = 10,
     ) -> list[Lesson]:
-        return [
-            les for les in self.read_lessons(scenario)
-            if les.is_applicable(current_generation, staleness_window)
-        ]
+        return [les for les in self.read_lessons(scenario) if les.is_applicable(current_generation, staleness_window)]
 
     def get_stale_lessons(
-        self, scenario: str, current_generation: int, staleness_window: int = 10,
+        self,
+        scenario: str,
+        current_generation: int,
+        staleness_window: int = 10,
     ) -> list[Lesson]:
         return [
-            les for les in self.read_lessons(scenario)
+            les
+            for les in self.read_lessons(scenario)
             if les.is_stale(current_generation, staleness_window) and not les.is_superseded()
         ]
 
@@ -199,7 +207,10 @@ class LessonStore:
         return lessons
 
     def staleness_report(
-        self, scenario: str, current_generation: int, staleness_window: int = 10,
+        self,
+        scenario: str,
+        current_generation: int,
+        staleness_window: int = 10,
     ) -> str:
         """Generate a markdown staleness report for operator visibility."""
         lessons = self.read_lessons(scenario)
@@ -207,10 +218,7 @@ class LessonStore:
             return "No lessons recorded."
 
         applicable = [les for les in lessons if les.is_applicable(current_generation, staleness_window)]
-        stale = [
-            les for les in lessons
-            if les.is_stale(current_generation, staleness_window) and not les.is_superseded()
-        ]
+        stale = [les for les in lessons if les.is_stale(current_generation, staleness_window) and not les.is_superseded()]
         superseded = [les for les in lessons if les.is_superseded()]
 
         lines = [
