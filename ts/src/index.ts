@@ -655,6 +655,25 @@ export type {
 // Analytics / Traces
 export { ActorRef, TraceEvent, RunTrace } from "./analytics/run-trace.js";
 export type { TraceEventInit } from "./analytics/run-trace.js";
+export {
+  PROGRESS_MILESTONE_NAMES,
+  buildRunProgressReport,
+  parseRunProgressReport,
+  progressReportReference,
+} from "./analytics/progress-report.js";
+export type {
+  BranchLineageEdge,
+  BuildRunProgressReportInput,
+  MilestoneTiming,
+  PassAtKSummary,
+  ProgressMilestoneName,
+  ProgressPoint,
+  ProgressReportReference,
+  RunProgressEvent,
+  RunProgressEventInput,
+  RunProgressEventStreamRow,
+  RunProgressReport,
+} from "./analytics/progress-report.js";
 export { runtimeSessionLogToRunTrace } from "./analytics/runtime-session-run-trace.js";
 export type { RuntimeSessionRunTraceOpts } from "./analytics/runtime-session-run-trace.js";
 export {
