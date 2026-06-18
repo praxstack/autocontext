@@ -688,6 +688,34 @@ export {
   writeCampaignModeReport,
 } from "./knowledge/campaign-mode-report-store.js";
 export {
+  GOAL_ACTION_KINDS,
+  GOAL_ACTION_STATUSES,
+  GOAL_RUN_STATUSES,
+  buildGoalRunReport,
+  goalRunReportToMarkdown,
+  parseGoalRunReport,
+} from "./analytics/goal-run-report.js";
+export type {
+  BuildGoalRunReportInput,
+  GoalActionKind,
+  GoalActionRecord,
+  GoalActionStatus,
+  GoalBudget,
+  GoalDecisionKind,
+  GoalEvidenceRef,
+  GoalRunReport,
+  GoalRunStatus,
+  GoalStopReason,
+  GoalSupervisorDecision,
+  GoalUsage,
+  GoalVerifierState,
+} from "./analytics/goal-run-report.js";
+export {
+  goalRunReportPath,
+  readGoalRunReport,
+  writeGoalRunReport,
+} from "./knowledge/goal-run-report-store.js";
+export {
   FAILURE_KINDS,
   NEGATIVE_RESULT_DISPOSITIONS,
   buildNegativeResultLedger,

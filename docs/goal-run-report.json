@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/greyhaven-ai/autocontext/docs/goal-run-report.json",
+  "title": "GoalRunReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "goal_id",
+    "goal_run_id",
+    "scenario_name",
+    "objective",
+    "generated_at",
+    "resume_token",
+    "status",
+    "verifier_ref",
+    "budget",
+    "usage",
+    "actions",
+    "verifier_state",
+    "decision"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "goal_id": { "type": "string", "minLength": 1 },
+    "goal_run_id": { "type": "string", "minLength": 1 },
+    "scenario_name": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "resume_token": { "type": "string", "minLength": 1 },
+    "status": { "$ref": "#/$defs/goalRunStatus" },
+    "verifier_ref": { "type": "string", "minLength": 1 },
+    "budget": { "$ref": "#/$defs/budget" },
+    "usage": { "$ref": "#/$defs/usage" },
+    "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
+    "verifier_state": { "$ref": "#/$defs/verifierState" },
+    "decision": { "$ref": "#/$defs/decision" }
+  },
+  "$defs": {
+    "goalRunStatus": {
+      "enum": [
+        "continued",
+        "verified_complete",
+        "blocked",
+        "budget_exhausted",
+        "verifier_failed",
+        "no_progress",
+        "canceled"
+      ]
+    },
+    "actionKind": { "enum": ["run", "solve", "improve", "mission", "campaign"] },
+    "actionStatus": { "enum": ["planned", "running", "completed", "failed", "canceled"] },
+    "stopReason": {
+      "enum": ["verified_complete", "blocked", "budget_exhausted", "verifier_failed", "no_progress", "canceled"]
+    },
+    "decisionKind": { "enum": ["continue", "stop"] },
+    "nullableString": { "type": ["string", "null"] },
+    "nullableNumber": { "type": ["number", "null"] },
+    "nullableNonNegativeInteger": { "type": ["integer", "null"], "minimum": 0 },
+    "nullableNonNegativeNumber": { "type": ["number", "null"], "minimum": 0 },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "summary"],
+      "properties": {
+        "uri": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_iterations", "max_actions", "max_seconds", "max_tokens", "max_no_progress_iterations"],
+      "properties": {
+        "max_iterations": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+        "max_actions": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+        "max_seconds": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "max_tokens": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+        "max_no_progress_iterations": { "$ref": "#/$defs/nullableNonNegativeInteger" }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["iterations", "actions", "elapsed_seconds", "tokens", "no_progress_count"],
+      "properties": {
+        "iterations": { "type": "integer", "minimum": 0 },
+        "actions": { "type": "integer", "minimum": 0 },
+        "elapsed_seconds": { "type": "number", "minimum": 0 },
+        "tokens": { "type": "integer", "minimum": 0 },
+        "no_progress_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "action_kind",
+        "status",
+        "started_at",
+        "completed_at",
+        "inner_run_ref",
+        "summary",
+        "evidence_refs",
+        "negative_result_ledger_uri"
+      ],
+      "properties": {
+        "action_id": { "type": "string", "minLength": 1 },
+        "action_kind": { "$ref": "#/$defs/actionKind" },
+        "status": { "$ref": "#/$defs/actionStatus" },
+        "started_at": { "$ref": "#/$defs/nullableString" },
+        "completed_at": { "$ref": "#/$defs/nullableString" },
+        "inner_run_ref": { "$ref": "#/$defs/nullableString" },
+        "summary": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } },
+        "negative_result_ledger_uri": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "verifierState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifier_ref", "verified", "verifier_failed", "confidence", "summary", "evidence_refs"],
+      "properties": {
+        "verifier_ref": { "type": "string", "minLength": 1 },
+        "verified": { "type": "boolean" },
+        "verifier_failed": { "type": "boolean" },
+        "confidence": { "$ref": "#/$defs/nullableNumber" },
+        "summary": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_id",
+        "decision_kind",
+        "status",
+        "next_action_kind",
+        "stop_reason",
+        "rationale",
+        "evidence_refs"
+      ],
+      "properties": {
+        "decision_id": { "type": "string", "minLength": 1 },
+        "decision_kind": { "$ref": "#/$defs/decisionKind" },
+        "status": { "$ref": "#/$defs/goalRunStatus" },
+        "next_action_kind": { "oneOf": [{ "$ref": "#/$defs/actionKind" }, { "type": "null" }] },
+        "stop_reason": { "oneOf": [{ "$ref": "#/$defs/stopReason" }, { "type": "null" }] },
+        "rationale": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } }
+      }
+    }
+  }
+}

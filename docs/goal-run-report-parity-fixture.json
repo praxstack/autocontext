@@ -1,0 +1,646 @@
+{
+  "cases": [
+    {
+      "name": "continued",
+      "goal_id": "goal-cap-set",
+      "goal_run_id": "goal-run-1",
+      "scenario_name": "cap_set",
+      "objective": "Find and verify a stronger cap-set construction.",
+      "generated_at": "2026-06-17T20:00:00Z",
+      "resume_token": "goal-run-1:1",
+      "verifier_ref": "scenario://cap_set/verifier",
+      "budget": {
+        "max_iterations": 4,
+        "max_actions": 8,
+        "max_seconds": null,
+        "max_tokens": null,
+        "max_no_progress_iterations": 2
+      },
+      "usage": {
+        "iterations": 1,
+        "actions": 1,
+        "elapsed_seconds": 12.5,
+        "tokens": 2048,
+        "no_progress_count": 0
+      },
+      "actions": [
+        {
+          "action_id": "action-1",
+          "action_kind": "run",
+          "status": "completed",
+          "started_at": "2026-06-17T19:59:00Z",
+          "completed_at": "2026-06-17T19:59:30Z",
+          "inner_run_ref": "run://cap-set/1",
+          "summary": "Initial run found a promising but unverified branch.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-1/progress.json",
+              "summary": "best score improved to 0.62"
+            }
+          ],
+          "negative_result_ledger_uri": null
+        }
+      ],
+      "verifier_state": {
+        "verifier_ref": "scenario://cap_set/verifier",
+        "verified": false,
+        "verifier_failed": false,
+        "confidence": 0.61,
+        "summary": "Incomplete: best construction has not passed holdout probes.",
+        "evidence_refs": [
+          {
+            "uri": "artifact://runs/run-1/verification.json",
+            "summary": "holdout failed"
+          }
+        ]
+      },
+      "next_action_kind": "mission",
+      "decision_id": "decision-continued",
+      "expected_report": {
+        "schema_version": 1,
+        "goal_id": "goal-cap-set",
+        "goal_run_id": "goal-run-1",
+        "scenario_name": "cap_set",
+        "objective": "Find and verify a stronger cap-set construction.",
+        "generated_at": "2026-06-17T20:00:00Z",
+        "resume_token": "goal-run-1:1",
+        "status": "continued",
+        "verifier_ref": "scenario://cap_set/verifier",
+        "budget": {
+          "max_iterations": 4,
+          "max_actions": 8,
+          "max_seconds": null,
+          "max_tokens": null,
+          "max_no_progress_iterations": 2
+        },
+        "usage": {
+          "iterations": 1,
+          "actions": 1,
+          "elapsed_seconds": 12.5,
+          "tokens": 2048,
+          "no_progress_count": 0
+        },
+        "actions": [
+          {
+            "action_id": "action-1",
+            "action_kind": "run",
+            "status": "completed",
+            "started_at": "2026-06-17T19:59:00Z",
+            "completed_at": "2026-06-17T19:59:30Z",
+            "inner_run_ref": "run://cap-set/1",
+            "summary": "Initial run found a promising but unverified branch.",
+            "evidence_refs": [
+              {
+                "uri": "artifact://runs/run-1/progress.json",
+                "summary": "best score improved to 0.62"
+              }
+            ],
+            "negative_result_ledger_uri": null
+          }
+        ],
+        "verifier_state": {
+          "verifier_ref": "scenario://cap_set/verifier",
+          "verified": false,
+          "verifier_failed": false,
+          "confidence": 0.61,
+          "summary": "Incomplete: best construction has not passed holdout probes.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-1/verification.json",
+              "summary": "holdout failed"
+            }
+          ]
+        },
+        "decision": {
+          "decision_id": "decision-continued",
+          "decision_kind": "continue",
+          "status": "continued",
+          "next_action_kind": "mission",
+          "stop_reason": null,
+          "rationale": "Verifier incomplete; continue with mission checkpoint.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-1/verification.json",
+              "summary": "holdout failed"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "verified_complete",
+      "goal_id": "goal-cap-set",
+      "goal_run_id": "goal-run-verified",
+      "scenario_name": "cap_set",
+      "objective": "Find and verify a stronger cap-set construction.",
+      "generated_at": "2026-06-17T20:01:00Z",
+      "resume_token": "goal-run-verified:2",
+      "verifier_ref": "scenario://cap_set/verifier",
+      "budget": {
+        "max_iterations": 4,
+        "max_actions": 8,
+        "max_seconds": null,
+        "max_tokens": null,
+        "max_no_progress_iterations": 2
+      },
+      "usage": {
+        "iterations": 2,
+        "actions": 2,
+        "elapsed_seconds": 20.0,
+        "tokens": 4096,
+        "no_progress_count": 0
+      },
+      "actions": [],
+      "verifier_state": {
+        "verifier_ref": "scenario://cap_set/verifier",
+        "verified": true,
+        "verifier_failed": false,
+        "confidence": 0.98,
+        "summary": "Holdout verifier passed.",
+        "evidence_refs": [
+          {
+            "uri": "artifact://runs/run-2/verification.json",
+            "summary": "holdout passed"
+          }
+        ]
+      },
+      "next_action_kind": "mission",
+      "decision_id": "decision-verified",
+      "expected_report": {
+        "schema_version": 1,
+        "goal_id": "goal-cap-set",
+        "goal_run_id": "goal-run-verified",
+        "scenario_name": "cap_set",
+        "objective": "Find and verify a stronger cap-set construction.",
+        "generated_at": "2026-06-17T20:01:00Z",
+        "resume_token": "goal-run-verified:2",
+        "status": "verified_complete",
+        "verifier_ref": "scenario://cap_set/verifier",
+        "budget": {
+          "max_iterations": 4,
+          "max_actions": 8,
+          "max_seconds": null,
+          "max_tokens": null,
+          "max_no_progress_iterations": 2
+        },
+        "usage": {
+          "iterations": 2,
+          "actions": 2,
+          "elapsed_seconds": 20.0,
+          "tokens": 4096,
+          "no_progress_count": 0
+        },
+        "actions": [],
+        "verifier_state": {
+          "verifier_ref": "scenario://cap_set/verifier",
+          "verified": true,
+          "verifier_failed": false,
+          "confidence": 0.98,
+          "summary": "Holdout verifier passed.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-2/verification.json",
+              "summary": "holdout passed"
+            }
+          ]
+        },
+        "decision": {
+          "decision_id": "decision-verified",
+          "decision_kind": "stop",
+          "status": "verified_complete",
+          "next_action_kind": null,
+          "stop_reason": "verified_complete",
+          "rationale": "Verifier confirmed the goal is complete.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-2/verification.json",
+              "summary": "holdout passed"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "blocked",
+      "goal_id": "goal-cap-set",
+      "goal_run_id": "goal-run-blocked",
+      "scenario_name": "cap_set",
+      "objective": "Find and verify a stronger cap-set construction.",
+      "generated_at": "2026-06-17T20:02:00Z",
+      "resume_token": "goal-run-blocked:2",
+      "verifier_ref": "scenario://cap_set/verifier",
+      "budget": {
+        "max_iterations": 4,
+        "max_actions": 8,
+        "max_seconds": null,
+        "max_tokens": null,
+        "max_no_progress_iterations": 2
+      },
+      "usage": {
+        "iterations": 2,
+        "actions": 2,
+        "elapsed_seconds": 21.0,
+        "tokens": 4096,
+        "no_progress_count": 0
+      },
+      "actions": [],
+      "verifier_state": {
+        "verifier_ref": "scenario://cap_set/verifier",
+        "verified": false,
+        "verifier_failed": false,
+        "confidence": null,
+        "summary": "Verifier needs human approval before continuing.",
+        "evidence_refs": []
+      },
+      "next_action_kind": "mission",
+      "blocked_reason": "Waiting for human approval.",
+      "decision_id": "decision-blocked",
+      "expected_report": {
+        "schema_version": 1,
+        "goal_id": "goal-cap-set",
+        "goal_run_id": "goal-run-blocked",
+        "scenario_name": "cap_set",
+        "objective": "Find and verify a stronger cap-set construction.",
+        "generated_at": "2026-06-17T20:02:00Z",
+        "resume_token": "goal-run-blocked:2",
+        "status": "blocked",
+        "verifier_ref": "scenario://cap_set/verifier",
+        "budget": {
+          "max_iterations": 4,
+          "max_actions": 8,
+          "max_seconds": null,
+          "max_tokens": null,
+          "max_no_progress_iterations": 2
+        },
+        "usage": {
+          "iterations": 2,
+          "actions": 2,
+          "elapsed_seconds": 21.0,
+          "tokens": 4096,
+          "no_progress_count": 0
+        },
+        "actions": [],
+        "verifier_state": {
+          "verifier_ref": "scenario://cap_set/verifier",
+          "verified": false,
+          "verifier_failed": false,
+          "confidence": null,
+          "summary": "Verifier needs human approval before continuing.",
+          "evidence_refs": []
+        },
+        "decision": {
+          "decision_id": "decision-blocked",
+          "decision_kind": "stop",
+          "status": "blocked",
+          "next_action_kind": null,
+          "stop_reason": "blocked",
+          "rationale": "Waiting for human approval.",
+          "evidence_refs": []
+        }
+      }
+    },
+    {
+      "name": "budget_exhausted",
+      "goal_id": "goal-cap-set",
+      "goal_run_id": "goal-run-budget",
+      "scenario_name": "cap_set",
+      "objective": "Find and verify a stronger cap-set construction.",
+      "generated_at": "2026-06-17T20:03:00Z",
+      "resume_token": "goal-run-budget:4",
+      "verifier_ref": "scenario://cap_set/verifier",
+      "budget": {
+        "max_iterations": 4,
+        "max_actions": 8,
+        "max_seconds": null,
+        "max_tokens": null,
+        "max_no_progress_iterations": 2
+      },
+      "usage": {
+        "iterations": 4,
+        "actions": 5,
+        "elapsed_seconds": 42.0,
+        "tokens": 8192,
+        "no_progress_count": 1
+      },
+      "actions": [],
+      "verifier_state": {
+        "verifier_ref": "scenario://cap_set/verifier",
+        "verified": false,
+        "verifier_failed": false,
+        "confidence": 0.5,
+        "summary": "Verifier incomplete at final checkpoint.",
+        "evidence_refs": []
+      },
+      "next_action_kind": "mission",
+      "decision_id": "decision-budget",
+      "expected_report": {
+        "schema_version": 1,
+        "goal_id": "goal-cap-set",
+        "goal_run_id": "goal-run-budget",
+        "scenario_name": "cap_set",
+        "objective": "Find and verify a stronger cap-set construction.",
+        "generated_at": "2026-06-17T20:03:00Z",
+        "resume_token": "goal-run-budget:4",
+        "status": "budget_exhausted",
+        "verifier_ref": "scenario://cap_set/verifier",
+        "budget": {
+          "max_iterations": 4,
+          "max_actions": 8,
+          "max_seconds": null,
+          "max_tokens": null,
+          "max_no_progress_iterations": 2
+        },
+        "usage": {
+          "iterations": 4,
+          "actions": 5,
+          "elapsed_seconds": 42.0,
+          "tokens": 8192,
+          "no_progress_count": 1
+        },
+        "actions": [],
+        "verifier_state": {
+          "verifier_ref": "scenario://cap_set/verifier",
+          "verified": false,
+          "verifier_failed": false,
+          "confidence": 0.5,
+          "summary": "Verifier incomplete at final checkpoint.",
+          "evidence_refs": []
+        },
+        "decision": {
+          "decision_id": "decision-budget",
+          "decision_kind": "stop",
+          "status": "budget_exhausted",
+          "next_action_kind": null,
+          "stop_reason": "budget_exhausted",
+          "rationale": "Goal budget exhausted before verification.",
+          "evidence_refs": []
+        }
+      }
+    },
+    {
+      "name": "verifier_failed",
+      "goal_id": "goal-cap-set",
+      "goal_run_id": "goal-run-verifier-failed",
+      "scenario_name": "cap_set",
+      "objective": "Find and verify a stronger cap-set construction.",
+      "generated_at": "2026-06-17T20:04:00Z",
+      "resume_token": "goal-run-verifier-failed:2",
+      "verifier_ref": "scenario://cap_set/verifier",
+      "budget": {
+        "max_iterations": 4,
+        "max_actions": 8,
+        "max_seconds": null,
+        "max_tokens": null,
+        "max_no_progress_iterations": 2
+      },
+      "usage": {
+        "iterations": 2,
+        "actions": 2,
+        "elapsed_seconds": 24.0,
+        "tokens": 4096,
+        "no_progress_count": 0
+      },
+      "actions": [],
+      "verifier_state": {
+        "verifier_ref": "scenario://cap_set/verifier",
+        "verified": false,
+        "verifier_failed": true,
+        "confidence": null,
+        "summary": "Verifier harness crashed with invalid state.",
+        "evidence_refs": [
+          {
+            "uri": "artifact://runs/run-2/verifier-error.txt",
+            "summary": "harness error"
+          }
+        ]
+      },
+      "next_action_kind": "mission",
+      "decision_id": "decision-verifier-failed",
+      "expected_report": {
+        "schema_version": 1,
+        "goal_id": "goal-cap-set",
+        "goal_run_id": "goal-run-verifier-failed",
+        "scenario_name": "cap_set",
+        "objective": "Find and verify a stronger cap-set construction.",
+        "generated_at": "2026-06-17T20:04:00Z",
+        "resume_token": "goal-run-verifier-failed:2",
+        "status": "verifier_failed",
+        "verifier_ref": "scenario://cap_set/verifier",
+        "budget": {
+          "max_iterations": 4,
+          "max_actions": 8,
+          "max_seconds": null,
+          "max_tokens": null,
+          "max_no_progress_iterations": 2
+        },
+        "usage": {
+          "iterations": 2,
+          "actions": 2,
+          "elapsed_seconds": 24.0,
+          "tokens": 4096,
+          "no_progress_count": 0
+        },
+        "actions": [],
+        "verifier_state": {
+          "verifier_ref": "scenario://cap_set/verifier",
+          "verified": false,
+          "verifier_failed": true,
+          "confidence": null,
+          "summary": "Verifier harness crashed with invalid state.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-2/verifier-error.txt",
+              "summary": "harness error"
+            }
+          ]
+        },
+        "decision": {
+          "decision_id": "decision-verifier-failed",
+          "decision_kind": "stop",
+          "status": "verifier_failed",
+          "next_action_kind": null,
+          "stop_reason": "verifier_failed",
+          "rationale": "Verifier failed before goal completion.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-2/verifier-error.txt",
+              "summary": "harness error"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "no_progress",
+      "goal_id": "goal-cap-set",
+      "goal_run_id": "goal-run-no-progress",
+      "scenario_name": "cap_set",
+      "objective": "Find and verify a stronger cap-set construction.",
+      "generated_at": "2026-06-17T20:05:00Z",
+      "resume_token": "goal-run-no-progress:3",
+      "verifier_ref": "scenario://cap_set/verifier",
+      "budget": {
+        "max_iterations": 4,
+        "max_actions": 8,
+        "max_seconds": null,
+        "max_tokens": null,
+        "max_no_progress_iterations": 2
+      },
+      "usage": {
+        "iterations": 3,
+        "actions": 3,
+        "elapsed_seconds": 32.0,
+        "tokens": 6144,
+        "no_progress_count": 2
+      },
+      "actions": [],
+      "verifier_state": {
+        "verifier_ref": "scenario://cap_set/verifier",
+        "verified": false,
+        "verifier_failed": false,
+        "confidence": 0.2,
+        "summary": "Two checkpoints produced no new evidence.",
+        "evidence_refs": [
+          {
+            "uri": "artifact://runs/run-3/negative-ledger.json",
+            "summary": "repeated no-progress branches"
+          }
+        ]
+      },
+      "next_action_kind": "mission",
+      "decision_id": "decision-no-progress",
+      "expected_report": {
+        "schema_version": 1,
+        "goal_id": "goal-cap-set",
+        "goal_run_id": "goal-run-no-progress",
+        "scenario_name": "cap_set",
+        "objective": "Find and verify a stronger cap-set construction.",
+        "generated_at": "2026-06-17T20:05:00Z",
+        "resume_token": "goal-run-no-progress:3",
+        "status": "no_progress",
+        "verifier_ref": "scenario://cap_set/verifier",
+        "budget": {
+          "max_iterations": 4,
+          "max_actions": 8,
+          "max_seconds": null,
+          "max_tokens": null,
+          "max_no_progress_iterations": 2
+        },
+        "usage": {
+          "iterations": 3,
+          "actions": 3,
+          "elapsed_seconds": 32.0,
+          "tokens": 6144,
+          "no_progress_count": 2
+        },
+        "actions": [],
+        "verifier_state": {
+          "verifier_ref": "scenario://cap_set/verifier",
+          "verified": false,
+          "verifier_failed": false,
+          "confidence": 0.2,
+          "summary": "Two checkpoints produced no new evidence.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-3/negative-ledger.json",
+              "summary": "repeated no-progress branches"
+            }
+          ]
+        },
+        "decision": {
+          "decision_id": "decision-no-progress",
+          "decision_kind": "stop",
+          "status": "no_progress",
+          "next_action_kind": null,
+          "stop_reason": "no_progress",
+          "rationale": "No-progress limit reached with evidence.",
+          "evidence_refs": [
+            {
+              "uri": "artifact://runs/run-3/negative-ledger.json",
+              "summary": "repeated no-progress branches"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "canceled",
+      "goal_id": "goal-cap-set",
+      "goal_run_id": "goal-run-canceled",
+      "scenario_name": "cap_set",
+      "objective": "Find and verify a stronger cap-set construction.",
+      "generated_at": "2026-06-17T20:06:00Z",
+      "resume_token": "goal-run-canceled:2",
+      "verifier_ref": "scenario://cap_set/verifier",
+      "budget": {
+        "max_iterations": 4,
+        "max_actions": 8,
+        "max_seconds": null,
+        "max_tokens": null,
+        "max_no_progress_iterations": 2
+      },
+      "usage": {
+        "iterations": 2,
+        "actions": 2,
+        "elapsed_seconds": 25.0,
+        "tokens": 4096,
+        "no_progress_count": 0
+      },
+      "actions": [],
+      "verifier_state": {
+        "verifier_ref": "scenario://cap_set/verifier",
+        "verified": false,
+        "verifier_failed": false,
+        "confidence": 0.4,
+        "summary": "Canceled before next checkpoint.",
+        "evidence_refs": []
+      },
+      "next_action_kind": "mission",
+      "requested_cancel": true,
+      "decision_id": "decision-canceled",
+      "expected_report": {
+        "schema_version": 1,
+        "goal_id": "goal-cap-set",
+        "goal_run_id": "goal-run-canceled",
+        "scenario_name": "cap_set",
+        "objective": "Find and verify a stronger cap-set construction.",
+        "generated_at": "2026-06-17T20:06:00Z",
+        "resume_token": "goal-run-canceled:2",
+        "status": "canceled",
+        "verifier_ref": "scenario://cap_set/verifier",
+        "budget": {
+          "max_iterations": 4,
+          "max_actions": 8,
+          "max_seconds": null,
+          "max_tokens": null,
+          "max_no_progress_iterations": 2
+        },
+        "usage": {
+          "iterations": 2,
+          "actions": 2,
+          "elapsed_seconds": 25.0,
+          "tokens": 4096,
+          "no_progress_count": 0
+        },
+        "actions": [],
+        "verifier_state": {
+          "verifier_ref": "scenario://cap_set/verifier",
+          "verified": false,
+          "verifier_failed": false,
+          "confidence": 0.4,
+          "summary": "Canceled before next checkpoint.",
+          "evidence_refs": []
+        },
+        "decision": {
+          "decision_id": "decision-canceled",
+          "decision_kind": "stop",
+          "status": "canceled",
+          "next_action_kind": null,
+          "stop_reason": "canceled",
+          "rationale": "Goal canceled by operator.",
+          "evidence_refs": []
+        }
+      }
+    }
+  ]
+}
