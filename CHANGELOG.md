@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - AC-822 run utilization reports add shared Python/TypeScript runner, token, verifier idle, model wait, and eval-throughput telemetry for single- and multi-branch runs.
 - AC-823 negative result ledgers preserve failed/pruned/rejected branch evidence, branch lineage, score deltas, and caution-vs-hard-ban prompt lessons across Python and TypeScript.
 - AC-824 campaign mode reports define shared Python/TypeScript multi-branch campaign identity, branch budgets, eval lanes, evidence sharing, terminal states, and recommendations.
+- AC-825 goal run reports define a shared Python/TypeScript outer supervisor artifact for continue-until-verified execution, resume tokens, budgets, action cadence, verifier state, and durable stop/continuation decisions.
 
 ## [pi-v0.2.6] - 2026-06-16
 
