@@ -72,21 +72,17 @@ class PlaybookApprovalMethods:
 
     def approve_pending_playbook(self: PlaybookApprovalHost, scenario_name: str) -> dict[str, Any]:
         pending = read_pending_playbook(self.knowledge_root, scenario_name)
-        result = approve_pending_playbook(self.knowledge_root, scenario_name, self.write_playbook, self.lesson_store)
+        result = approve_pending_playbook(self.knowledge_root, scenario_name, self.write_playbook)
         if result["ok"]:
             generation = int((pending.get("provenance") or {}).get("generation", 0))
-            lessons = [
-                lesson.text
-                for lesson in self.lesson_store.read_lessons(scenario_name)
-                if lesson.meta.generation == generation and lesson.meta.approval_status == "active"
-            ]
+            lessons = _extract_lesson_bullets(str(pending.get("content") or ""))
             if lessons:
                 self.persist_skill_note(scenario_name, generation, "advance", "\n".join(lessons))
             self._append_mutation(scenario_name, mutation_type="playbook_approved", payload={}, description="Playbook approved")
         return result
 
     def reject_pending_playbook(self: PlaybookApprovalHost, scenario_name: str) -> dict[str, Any]:
-        result = reject_pending_playbook(self.knowledge_root, scenario_name, self.lesson_store)
+        result = reject_pending_playbook(self.knowledge_root, scenario_name)
         if result["ok"]:
             self._append_mutation(scenario_name, mutation_type="playbook_rejected", payload={}, description="Playbook rejected")
         return result
@@ -152,15 +148,11 @@ def approve_pending_playbook(
     knowledge_root: Path,
     scenario_name: str,
     write_live_playbook: Callable[[str, str], None],
-    lesson_store: LessonApprovalStore | None = None,
 ) -> dict[str, Any]:
     pending = read_pending_playbook(knowledge_root, scenario_name)
     if not pending["has_pending"]:
         return {"ok": False, "status": "missing"}
-    provenance = pending["provenance"] or {}
     write_live_playbook(scenario_name, str(pending["content"]))
-    if lesson_store is not None:
-        _approve_lessons(lesson_store, scenario_name, int(provenance.get("generation", -1)))
     _clear_pending(resolve_scenario_root(knowledge_root, scenario_name))
     return {"ok": True, "status": "approved"}
 
@@ -168,37 +160,23 @@ def approve_pending_playbook(
 def reject_pending_playbook(
     knowledge_root: Path,
     scenario_name: str,
-    lesson_store: LessonApprovalStore | None = None,
 ) -> dict[str, Any]:
     pending = read_pending_playbook(knowledge_root, scenario_name)
     if not pending["has_pending"]:
         return {"ok": False, "status": "missing"}
-    provenance = pending["provenance"] or {}
-    if lesson_store is not None:
-        _drop_lessons(lesson_store, scenario_name, int(provenance.get("generation", -1)))
     _clear_pending(resolve_scenario_root(knowledge_root, scenario_name))
     return {"ok": True, "status": "rejected"}
 
 
-def _approve_lessons(lesson_store: LessonApprovalStore, scenario_name: str, generation: int) -> None:
-    lessons = lesson_store.read_lessons(scenario_name)
-    changed = False
-    for lesson in lessons:
-        if lesson.meta.approval_status == "pending" and lesson.meta.generation == generation:
-            lesson.meta.approval_status = "active"
-            lesson.meta.last_validated_gen = max(lesson.meta.last_validated_gen, generation)
-            changed = True
-    if changed:
-        lesson_store.write_lessons(scenario_name, lessons)
-
-
-def _drop_lessons(lesson_store: LessonApprovalStore, scenario_name: str, generation: int) -> None:
-    lessons = lesson_store.read_lessons(scenario_name)
-    kept = [
-        lesson for lesson in lessons if not (lesson.meta.approval_status == "pending" and lesson.meta.generation == generation)
-    ]
-    if len(kept) != len(lessons):
-        lesson_store.write_lessons(scenario_name, kept)
+def _extract_lesson_bullets(content: str) -> list[str]:
+    start_marker = "<!-- LESSONS_START -->"
+    end_marker = "<!-- LESSONS_END -->"
+    start = content.find(start_marker)
+    end = content.find(end_marker)
+    if start == -1 or end == -1 or end <= start:
+        return []
+    block = content[start + len(start_marker):end]
+    return [line.strip() for line in block.splitlines() if line.strip().startswith("-")]
 
 
 def _clear_pending(scenario_dir: Path) -> None:

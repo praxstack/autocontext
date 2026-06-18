@@ -1,7 +1,8 @@
-"""AC-236: Schema- and state-aware lesson applicability.
+"""Deprecated AC-236 structured lesson compatibility types.
 
-Defines structured lessons with applicability metadata, a JSON-backed
-LessonStore, and filtering/invalidation operations.
+AC-827 moved prompt loading and lifecycle curation to live playbook/SKILL
+markdown. ``LessonStore`` remains for old callers/tests, but new code should
+not use ``lessons.json`` as a lesson source of truth.
 """
 
 from __future__ import annotations
@@ -77,7 +78,7 @@ class Lesson(BaseModel):
 
 
 class LessonStore:
-    """JSON-backed store for structured lessons with applicability metadata."""
+    """Deprecated JSON-backed store for structured lesson metadata."""
 
     def __init__(self, knowledge_root: Path, skills_root: Path) -> None:
         self.knowledge_root = knowledge_root

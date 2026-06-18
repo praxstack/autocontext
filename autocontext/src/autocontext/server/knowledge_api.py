@@ -149,9 +149,8 @@ def _validate_scenario(scenario_name: str) -> str:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-def _lesson_stores() -> tuple[Any, Any]:
-    ctx = _get_ctx()
-    return ctx.artifacts, ctx.artifacts.lesson_store
+def _artifacts() -> Any:
+    return _get_ctx().artifacts
 
 
 @router.get("/{scenario_name}/lifecycle")
@@ -160,26 +159,24 @@ def lesson_lifecycle(scenario_name: str) -> dict[str, Any]:
     from autocontext.knowledge.lifecycle import build_lifecycle
 
     scenario_name = _validate_scenario(scenario_name)
-    artifacts, store = _lesson_stores()
     return build_lifecycle(
-        artifacts=artifacts,
-        lesson_store=store,
+        artifacts=_artifacts(),
         scenario=scenario_name,
-        current_generation=store.current_generation(scenario_name),
+        current_generation=0,
     )
 
 
 @router.get("/{scenario_name}/playbook/pending")
 def pending_playbook_route(scenario_name: str) -> dict[str, Any]:
     scenario_name = _validate_scenario(scenario_name)
-    artifacts, _store = _lesson_stores()
+    artifacts = _artifacts()
     return cast(dict[str, Any], artifacts.read_pending_playbook(scenario_name))
 
 
 @router.post("/{scenario_name}/playbook/approve")
 def approve_playbook_route(scenario_name: str) -> dict[str, Any]:
     scenario_name = _validate_scenario(scenario_name)
-    artifacts, _store = _lesson_stores()
+    artifacts = _artifacts()
     result = cast(dict[str, Any], artifacts.approve_pending_playbook(scenario_name))
     if not result.get("ok"):
         raise HTTPException(status_code=404, detail="pending playbook not found")
@@ -189,7 +186,7 @@ def approve_playbook_route(scenario_name: str) -> dict[str, Any]:
 @router.post("/{scenario_name}/playbook/reject")
 def reject_playbook_route(scenario_name: str) -> dict[str, Any]:
     scenario_name = _validate_scenario(scenario_name)
-    artifacts, _store = _lesson_stores()
+    artifacts = _artifacts()
     result = cast(dict[str, Any], artifacts.reject_pending_playbook(scenario_name))
     if not result.get("ok"):
         raise HTTPException(status_code=404, detail="pending playbook not found")
@@ -198,16 +195,15 @@ def reject_playbook_route(scenario_name: str) -> dict[str, Any]:
 
 @router.post("/{scenario_name}/lessons/{lesson_id}/approve")
 def approve_lesson_route(scenario_name: str, lesson_id: str) -> dict[str, Any]:
-    """Approve a pending lesson (move it to active). 404 if the id is not pending."""
+    """Validate an existing live lesson. 404 if the derived id is missing."""
     from autocontext.knowledge.lifecycle import approve_lesson
 
     scenario_name = _validate_scenario(scenario_name)
-    _artifacts, store = _lesson_stores()
     status = approve_lesson(
-        lesson_store=store,
+        artifacts=_artifacts(),
         scenario=scenario_name,
         lesson_id=lesson_id,
-        current_generation=store.current_generation(scenario_name),
+        current_generation=0,
     )
     if status is None:
         raise HTTPException(status_code=404, detail="lesson not found")
@@ -216,12 +212,11 @@ def approve_lesson_route(scenario_name: str, lesson_id: str) -> dict[str, Any]:
 
 @router.post("/{scenario_name}/lessons/{lesson_id}/reject")
 def reject_lesson_route(scenario_name: str, lesson_id: str) -> dict[str, Any]:
-    """Reject a lesson (remove from pending and from active if present). 404 if not found."""
+    """Reject a lesson by removing its markdown bullet. 404 if not found."""
     from autocontext.knowledge.lifecycle import reject_lesson
 
     scenario_name = _validate_scenario(scenario_name)
-    _artifacts, store = _lesson_stores()
-    ok = reject_lesson(lesson_store=store, scenario=scenario_name, lesson_id=lesson_id)
+    ok = reject_lesson(artifacts=_artifacts(), scenario=scenario_name, lesson_id=lesson_id)
     if not ok:
         raise HTTPException(status_code=404, detail="lesson not found")
     return {"ok": True}
@@ -233,14 +228,12 @@ def curate_lesson_route(scenario_name: str, lesson_id: str, body: CurateRequest)
     from autocontext.knowledge.lifecycle import curate_lesson
 
     scenario_name = _validate_scenario(scenario_name)
-    artifacts, store = _lesson_stores()
     status = curate_lesson(
-        artifacts=artifacts,
-        lesson_store=store,
+        artifacts=_artifacts(),
         scenario=scenario_name,
         lesson_id=lesson_id,
         action=body.action,
-        current_generation=store.current_generation(scenario_name),
+        current_generation=0,
     )
     if status is None:
         raise HTTPException(status_code=404, detail="lesson not found")

@@ -37,34 +37,7 @@ def _load_fresh_skill_context(
     *,
     artifacts: ArtifactStore,
 ) -> tuple[str, str]:
-    lessons = artifacts.lesson_store.read_lessons(ctx.scenario_name)
-    if not lessons:
-        return artifacts.read_skills(ctx.scenario_name), ""
-
-    records: list[tuple[str, EvidenceFreshness]] = []
-    for lesson in lessons:
-        if lesson.is_pending():
-            # Pending lessons await human approval and must never enter prompts.
-            continue
-        records.append(
-            (
-                lesson.text.strip(),
-                EvidenceFreshness(
-                    item_id=lesson.id or lesson.text.strip(),
-                    support_count=1,
-                    last_validated_gen=max(lesson.meta.last_validated_gen, 0),
-                    confidence=max(0.0, min(1.0, lesson.meta.best_score)),
-                    created_at_gen=max(lesson.meta.generation, 0),
-                ),
-            )
-        )
-
-    items = [item for _, item in records]
-    active, _ = apply_freshness_decay(items, ctx.generation, _freshness_policy(ctx))
-    active_ids = {item.item_id for item in active}
-    active_text = "\n".join(text for text, item in records if item.item_id in active_ids).strip()
-    warnings = detect_stale_context(items, ctx.generation, _freshness_policy(ctx))
-    return active_text, _format_freshness_warning_block("Lesson", warnings)
+    return artifacts.read_skills(ctx.scenario_name), ""
 
 
 def _load_fresh_hint_context(

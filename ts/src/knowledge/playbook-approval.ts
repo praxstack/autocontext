@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { LessonStore, Lesson } from "./lessons.js";
 import { resolveScenarioRoot } from "./scenario-paths.js";
 
 export interface PendingPlaybookProvenance {
@@ -84,12 +83,10 @@ export function approvePendingPlaybook(
   knowledgeRoot: string,
   scenarioName: string,
   writeLivePlaybook: (scenarioName: string, content: string) => void,
-  lessonStore?: LessonStore,
 ): { ok: boolean; status: "approved" | "missing" } {
   const pending = readPendingPlaybook(knowledgeRoot, scenarioName);
   if (!pending.hasPending || pending.provenance === null) return { ok: false, status: "missing" };
   writeLivePlaybook(scenarioName, pending.content);
-  approveLessons(lessonStore, scenarioName, pending.provenance.generation);
   clearPending(resolveScenarioRoot(knowledgeRoot, scenarioName));
   return { ok: true, status: "approved" };
 }
@@ -97,45 +94,11 @@ export function approvePendingPlaybook(
 export function rejectPendingPlaybook(
   knowledgeRoot: string,
   scenarioName: string,
-  lessonStore?: LessonStore,
 ): { ok: boolean; status: "rejected" | "missing" } {
   const pending = readPendingPlaybook(knowledgeRoot, scenarioName);
   if (!pending.hasPending || pending.provenance === null) return { ok: false, status: "missing" };
-  dropLessons(lessonStore, scenarioName, pending.provenance.generation);
   clearPending(resolveScenarioRoot(knowledgeRoot, scenarioName));
   return { ok: true, status: "rejected" };
-}
-
-function approveLessons(
-  lessonStore: LessonStore | undefined,
-  scenarioName: string,
-  generation: number,
-): void {
-  if (!lessonStore) return;
-  const lessons = lessonStore.readLessons(scenarioName);
-  let changed = false;
-  for (const lesson of lessons) {
-    if (lesson.meta.approvalStatus === "pending" && lesson.meta.generation === generation) {
-      lesson.meta.approvalStatus = "active";
-      lesson.meta.lastValidatedGen = Math.max(lesson.meta.lastValidatedGen, generation);
-      changed = true;
-    }
-  }
-  if (changed) lessonStore.writeLessons(scenarioName, lessons);
-}
-
-function dropLessons(
-  lessonStore: LessonStore | undefined,
-  scenarioName: string,
-  generation: number,
-): void {
-  if (!lessonStore) return;
-  const lessons = lessonStore.readLessons(scenarioName);
-  const kept = lessons.filter(
-    (lesson: Lesson) =>
-      !(lesson.meta.approvalStatus === "pending" && lesson.meta.generation === generation),
-  );
-  if (kept.length !== lessons.length) lessonStore.writeLessons(scenarioName, kept);
 }
 
 function clearPending(scenarioDir: string): void {

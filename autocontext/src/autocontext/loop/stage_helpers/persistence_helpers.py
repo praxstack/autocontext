@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from autocontext.agents.feedback_loops import AnalystRating
@@ -14,7 +13,6 @@ from autocontext.analytics.credit_assignment import (
     compute_change_vector,
 )
 from autocontext.knowledge.dead_end_manager import DeadEndEntry, consolidate_dead_ends
-from autocontext.knowledge.lessons import ApplicabilityMeta
 from autocontext.knowledge.progress import build_progress_snapshot
 from autocontext.loop.stage_helpers.context_loaders import _current_tool_names
 from autocontext.loop.stage_types import GenerationContext
@@ -199,8 +197,6 @@ def _persist_skill_note(
 
     if gate_decision == "advance":
         if ctx.require_playbook_approval:
-            if playbook_result == "pending":
-                _stage_pending_skill_lessons(ctx, artifacts=artifacts)
             return
         skill_lessons = outputs.coach_lessons
     else:
@@ -229,26 +225,6 @@ def _persist_skill_note(
             score=tournament.best_score,
         )
         artifacts.append_dead_end(ctx.scenario_name, entry.to_markdown())
-
-
-def _stage_pending_skill_lessons(ctx: GenerationContext, *, artifacts: ArtifactStore) -> None:
-    outputs = ctx.outputs
-    tournament = ctx.tournament
-    assert outputs is not None and tournament is not None
-    for line in outputs.coach_lessons.strip().splitlines():
-        text = line.strip()
-        if not text or text == "No new lessons.":
-            continue
-        artifacts.lesson_store.add_lesson(
-            ctx.scenario_name,
-            text if text.startswith("- ") else f"- {text}",
-            ApplicabilityMeta(
-                created_at=datetime.now(UTC).isoformat(),
-                generation=ctx.generation,
-                best_score=tournament.best_score,
-                approval_status="pending",
-            ),
-        )
 
 
 def _run_curator_consolidation(

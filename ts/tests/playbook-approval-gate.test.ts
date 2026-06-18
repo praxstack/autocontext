@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ArtifactStore } from "../src/knowledge/artifact-store.js";
-import { LessonStore, makeMeta } from "../src/knowledge/lessons.js";
 import { buildKnowledgeApiRoutes } from "../src/server/knowledge-api.js";
 import { StartRunCmdSchema } from "../src/server/protocol.js";
 
@@ -111,17 +110,11 @@ describe("playbook approval gate", () => {
     }
   });
 
-  it("approves or rejects pending playbooks with same-generation lessons", () => {
+  it("approves or rejects pending playbooks without structured lesson side effects", () => {
     const dir = root();
     try {
       const artifacts = store(dir);
-      const lessons = new LessonStore(join(dir, "knowledge"));
       artifacts.writePlaybook("grid_ctf", "approved playbook");
-      lessons.addLesson(
-        "grid_ctf",
-        "held lesson",
-        makeMeta({ generation: 2, bestScore: 0.7, approvalStatus: "pending" }),
-      );
       artifacts.writeOrStagePlaybook("grid_ctf", "pending playbook", {
         requireApproval: true,
         sourceRunId: "run-approval",
@@ -129,12 +122,11 @@ describe("playbook approval gate", () => {
         curatorDecision: "advance",
       });
 
-      expect(artifacts.approvePendingPlaybook("grid_ctf", lessons)).toEqual({
+      expect(artifacts.approvePendingPlaybook("grid_ctf")).toEqual({
         ok: true,
         status: "approved",
       });
       expect(artifacts.readPlaybook("grid_ctf")).toBe("pending playbook\n");
-      expect(lessons.readLessons("grid_ctf")[0]!.meta.approvalStatus).toBe("active");
 
       artifacts.writeOrStagePlaybook("grid_ctf", "rejected playbook", {
         requireApproval: true,
@@ -142,18 +134,12 @@ describe("playbook approval gate", () => {
         generation: 3,
         curatorDecision: "advance",
       });
-      lessons.addLesson(
-        "grid_ctf",
-        "rejected lesson",
-        makeMeta({ generation: 3, bestScore: 0.8, approvalStatus: "pending" }),
-      );
 
-      expect(artifacts.rejectPendingPlaybook("grid_ctf", lessons)).toEqual({
+      expect(artifacts.rejectPendingPlaybook("grid_ctf")).toEqual({
         ok: true,
         status: "rejected",
       });
       expect(artifacts.readPlaybook("grid_ctf")).toBe("pending playbook\n");
-      expect(lessons.readLessons("grid_ctf").map((lesson) => lesson.text)).toEqual(["held lesson"]);
       expect(existsSync(join(dir, "knowledge", "grid_ctf", "playbook.pending.md"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -15,7 +15,6 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { HookEvents, type HookBus } from "../extensions/index.js";
-import { LessonStore } from "./lessons.js";
 import { PlaybookManager, EMPTY_PLAYBOOK_SENTINEL } from "./playbook.js";
 import {
   approvePendingPlaybook,
@@ -227,23 +226,12 @@ export class ArtifactStore {
     return readPendingPlaybook(this.knowledgeRoot, scenarioName);
   }
 
-  approvePendingPlaybook(
-    scenarioName: string,
-    lessonStore = new LessonStore(this.knowledgeRoot),
-  ): { ok: boolean; status: "approved" | "missing" } {
-    return approvePendingPlaybook(
-      this.knowledgeRoot,
-      scenarioName,
-      this.writePlaybook.bind(this),
-      lessonStore,
-    );
+  approvePendingPlaybook(scenarioName: string): { ok: boolean; status: "approved" | "missing" } {
+    return approvePendingPlaybook(this.knowledgeRoot, scenarioName, this.writePlaybook.bind(this));
   }
 
-  rejectPendingPlaybook(
-    scenarioName: string,
-    lessonStore = new LessonStore(this.knowledgeRoot),
-  ): { ok: boolean; status: "rejected" | "missing" } {
-    return rejectPendingPlaybook(this.knowledgeRoot, scenarioName, lessonStore);
+  rejectPendingPlaybook(scenarioName: string): { ok: boolean; status: "rejected" | "missing" } {
+    return rejectPendingPlaybook(this.knowledgeRoot, scenarioName);
   }
 
   readDeadEnds(scenarioName: string): string {

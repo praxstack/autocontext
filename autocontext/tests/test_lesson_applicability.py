@@ -790,12 +790,13 @@ class TestArtifactStoreLessonIntegration:
         lessons = artifact_store.lesson_store.read_lessons("grid_ctf")
         assert len(lessons) == 1
 
-    def test_read_skills_prefers_applicable_structured_lessons(self, artifact_store) -> None:
+    def test_read_skills_ignores_structured_lessons_shadow(self, artifact_store) -> None:
         from autocontext.knowledge.lessons import ApplicabilityMeta
 
+        artifact_store.persist_skill_note("grid_ctf", 4, "advance", "- markdown source")
         artifact_store.lesson_store.add_lesson(
             "grid_ctf",
-            "- still valid",
+            "- structured shadow",
             ApplicabilityMeta(
                 created_at="2026-03-13T10:00:00Z",
                 generation=4,
@@ -803,17 +804,7 @@ class TestArtifactStoreLessonIntegration:
                 last_validated_gen=4,
             ),
         )
-        artifact_store.lesson_store.add_lesson(
-            "grid_ctf",
-            "- invalidated by schema change",
-            ApplicabilityMeta(
-                created_at="2026-03-13T11:00:00Z",
-                generation=4,
-                best_score=0.72,
-                last_validated_gen=-1,
-            ),
-        )
 
         skills = artifact_store.read_skills("grid_ctf")
-        assert "- still valid" in skills
-        assert "- invalidated by schema change" not in skills
+        assert "- markdown source" in skills
+        assert "- structured shadow" not in skills

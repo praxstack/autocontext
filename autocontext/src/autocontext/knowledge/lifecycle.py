@@ -1,32 +1,119 @@
-"""Pure lesson-lifecycle assembly and curation ops (Cowork 2c).
-
-Backed by the structured LessonStore (lessons.json) and the dead_ends.md
-registry. "pending" is a status on the lesson itself (meta.approval_status),
-not a separate store, so the whole lifecycle reads one store.
-"""
+"""Lesson lifecycle derived from live playbook/SKILL markdown primitives."""
 
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
-from autocontext.knowledge.lessons import Lesson, LessonStore
 from autocontext.storage.artifacts import ArtifactStore
 
 STALENESS_WINDOW = 10
+LESSONS_START = "<!-- LESSONS_START -->"
+LESSONS_END = "<!-- LESSONS_END -->"
+STALE_MARKER = "<!-- autocontext:lesson-status=stale -->"
 
 
-def _lesson_view(lesson: Lesson, status: str, source: str = "curator") -> dict[str, Any]:
+@dataclass(frozen=True)
+class _DerivedLesson:
+    id: str
+    text: str
+    status: Literal["active", "stale"]
+    source: str
+
+
+def _normalize_text(text: str) -> str:
+    stripped = text.replace(STALE_MARKER, "").strip()
+    if stripped.startswith("- "):
+        stripped = stripped[2:].strip()
+    return " ".join(stripped.split())
+
+
+def _lesson_id(text: str) -> str:
+    return "lesson_" + hashlib.sha256(_normalize_text(text).encode("utf-8")).hexdigest()[:12]
+
+
+def _parse_lesson_line(line: str) -> tuple[str, bool] | None:
+    stripped = line.strip()
+    if not stripped.startswith("-"):
+        return None
+    text = _normalize_text(stripped[1:].strip())
+    if not text:
+        return None
+    return text, STALE_MARKER in stripped
+
+
+def _playbook_block(content: str) -> tuple[int, int, str] | None:
+    start = content.find(LESSONS_START)
+    end = content.find(LESSONS_END)
+    if start == -1 or end == -1 or end <= start:
+        return None
+    block_start = start + len(LESSONS_START)
+    return block_start, end, content[block_start:end]
+
+
+def _playbook_lessons(artifacts: ArtifactStore, scenario: str) -> list[_DerivedLesson]:
+    content = artifacts.read_playbook(scenario)
+    block = _playbook_block(content)
+    if block is None:
+        return []
+    lessons: list[_DerivedLesson] = []
+    for line in block[2].splitlines():
+        parsed = _parse_lesson_line(line)
+        if parsed is None:
+            continue
+        text, stale = parsed
+        lessons.append(
+            _DerivedLesson(
+                id=_lesson_id(text),
+                text=text,
+                status="stale" if stale else "active",
+                source=f"knowledge/{scenario}/playbook.md",
+            )
+        )
+    return lessons
+
+
+def _skill_lessons(artifacts: ArtifactStore, scenario: str) -> list[_DerivedLesson]:
+    lessons: list[_DerivedLesson] = []
+    for line in artifacts.read_skill_lessons_raw(scenario):
+        parsed = _parse_lesson_line(line)
+        if parsed is None:
+            continue
+        text, stale = parsed
+        lessons.append(
+            _DerivedLesson(
+                id=_lesson_id(text),
+                text=text,
+                status="stale" if stale else "active",
+                source=f"skills/{scenario.replace('_', '-')}-ops/SKILL.md",
+            )
+        )
+    return lessons
+
+
+def _derived_lessons(artifacts: ArtifactStore, scenario: str) -> list[_DerivedLesson]:
+    seen: set[str] = set()
+    result: list[_DerivedLesson] = []
+    for lesson in [*_playbook_lessons(artifacts, scenario), *_skill_lessons(artifacts, scenario)]:
+        if lesson.id in seen:
+            continue
+        seen.add(lesson.id)
+        result.append(lesson)
+    return result
+
+
+def _lesson_view(lesson: _DerivedLesson, current_generation: int) -> dict[str, Any]:
     return {
         "id": lesson.id,
         "text": lesson.text,
-        "status": status,
-        "generation": lesson.meta.generation,
-        "createdAt": lesson.meta.created_at,
-        "bestScore": lesson.meta.best_score,
-        "lastValidatedGen": lesson.meta.last_validated_gen,
-        "supersededBy": lesson.meta.superseded_by or None,
-        "source": source,
+        "status": lesson.status,
+        "generation": 0,
+        "createdAt": "",
+        "bestScore": None,
+        "lastValidatedGen": current_generation if lesson.status == "active" else None,
+        "supersededBy": None,
+        "source": lesson.source,
     }
 
 
@@ -36,7 +123,7 @@ def _dead_end_views(dead_ends_md: str) -> list[dict[str, Any]]:
         text = block.strip()
         if not text:
             continue
-        did = "deadend_" + hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
+        did = "deadend_" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
         views.append(
             {
                 "id": did,
@@ -47,7 +134,7 @@ def _dead_end_views(dead_ends_md: str) -> list[dict[str, Any]]:
                 "bestScore": None,
                 "lastValidatedGen": None,
                 "supersededBy": None,
-                "source": "curator",
+                "source": "knowledge/dead_ends.md",
             }
         )
     return views
@@ -56,27 +143,22 @@ def _dead_end_views(dead_ends_md: str) -> list[dict[str, Any]]:
 def build_lifecycle(
     *,
     artifacts: ArtifactStore,
-    lesson_store: LessonStore,
     scenario: str,
     current_generation: int,
+    lesson_store: object | None = None,
     staleness_window: int = STALENESS_WINDOW,
 ) -> dict[str, Any]:
-    pending: list[dict[str, Any]] = []
+    del lesson_store, staleness_window
     active: list[dict[str, Any]] = []
     stale: list[dict[str, Any]] = []
-    for lesson in lesson_store.read_lessons(scenario):
-        if lesson.is_pending():
-            pending.append(_lesson_view(lesson, "pending"))
-            continue
-        if lesson.is_superseded():
-            continue
-        if lesson.is_stale(current_generation, staleness_window):
-            stale.append(_lesson_view(lesson, "stale"))
+    for lesson in _derived_lessons(artifacts, scenario):
+        if lesson.status == "stale":
+            stale.append(_lesson_view(lesson, current_generation))
         else:
-            active.append(_lesson_view(lesson, "active"))
+            active.append(_lesson_view(lesson, current_generation))
     return {
         "scenario": scenario,
-        "pending": pending,
+        "pending": [],
         "active": active,
         "stale": stale,
         "deadEnd": _dead_end_views(artifacts.read_dead_ends(scenario)),
@@ -85,59 +167,165 @@ def build_lifecycle(
 
 def approve_lesson(
     *,
-    lesson_store: LessonStore,
+    artifacts: ArtifactStore,
     scenario: str,
     lesson_id: str,
     current_generation: int,
+    lesson_store: object | None = None,
 ) -> str | None:
-    """Approve a pending lesson: flip it to active. Returns None if not pending."""
-    lessons = lesson_store.read_lessons(scenario)
-    target = next((les for les in lessons if les.id == lesson_id and les.is_pending()), None)
-    if target is None:
-        return None
-    target.meta.approval_status = "active"
-    # Never lower the validation generation: approving must not make a lesson stale
-    # (current_generation can be 0 when derived from an otherwise-empty store).
-    target.meta.last_validated_gen = max(current_generation, target.meta.generation, target.meta.last_validated_gen)
-    lesson_store.write_lessons(scenario, lessons)
-    return "active"
+    del lesson_store, current_generation
+    found, _text = _set_lesson_stale(artifacts, scenario, lesson_id, stale=False)
+    return "active" if found else None
 
 
-def reject_lesson(*, lesson_store: LessonStore, scenario: str, lesson_id: str) -> bool:
-    """Reject a PENDING lesson: remove it from the store. Returns False if the id is
-    not a pending lesson. Deleting an already-active lesson is a separate, explicit
-    action (curate "delete")."""
-    lessons = lesson_store.read_lessons(scenario)
-    target = next((les for les in lessons if les.id == lesson_id and les.is_pending()), None)
-    if target is None:
-        return False
-    lesson_store.write_lessons(scenario, [les for les in lessons if les.id != lesson_id])
-    return True
+def reject_lesson(
+    *,
+    artifacts: ArtifactStore,
+    scenario: str,
+    lesson_id: str,
+    lesson_store: object | None = None,
+) -> bool:
+    del lesson_store
+    found, _text = _remove_lesson(artifacts, scenario, lesson_id)
+    return found
 
 
 def curate_lesson(
     *,
     artifacts: ArtifactStore,
-    lesson_store: LessonStore,
     scenario: str,
     lesson_id: str,
     action: str,
     current_generation: int,
+    lesson_store: object | None = None,
 ) -> str | None:
-    """Manually mark an active lesson stale, move it to dead-end, or delete it."""
-    lessons = lesson_store.read_lessons(scenario)
-    target = next((les for les in lessons if les.id == lesson_id), None)
-    if target is None:
-        return None
+    del lesson_store, current_generation
     if action == "delete":
-        lesson_store.write_lessons(scenario, [les for les in lessons if les.id != lesson_id])
-        return "deleted"
+        found, _text = _remove_lesson(artifacts, scenario, lesson_id)
+        return "deleted" if found else None
     if action == "stale":
-        target.meta.last_validated_gen = -1
-        lesson_store.write_lessons(scenario, lessons)
-        return "stale"
+        found, _text = _set_lesson_stale(artifacts, scenario, lesson_id, stale=True)
+        return "stale" if found else None
     if action == "deadEnd":
-        artifacts.append_dead_end(scenario, target.text)
-        lesson_store.write_lessons(scenario, [les for les in lessons if les.id != lesson_id])
+        found, text = _remove_lesson(artifacts, scenario, lesson_id)
+        if not found or text is None:
+            return None
+        artifacts.append_dead_end(scenario, text)
         return "deadEnd"
     return None
+
+
+def _remove_lesson(artifacts: ArtifactStore, scenario: str, lesson_id: str) -> tuple[bool, str | None]:
+    found_playbook, text = _rewrite_playbook_lessons(artifacts, scenario, lesson_id, mode="remove")
+    found_skill, skill_text = _rewrite_skill_lessons(artifacts, scenario, lesson_id, mode="remove")
+    return found_playbook or found_skill, text or skill_text
+
+
+def _set_lesson_stale(
+    artifacts: ArtifactStore,
+    scenario: str,
+    lesson_id: str,
+    *,
+    stale: bool,
+) -> tuple[bool, str | None]:
+    mode: Literal["stale", "active"] = "stale" if stale else "active"
+    found_playbook, text = _rewrite_playbook_lessons(artifacts, scenario, lesson_id, mode=mode)
+    found_skill, skill_text = _rewrite_skill_lessons(artifacts, scenario, lesson_id, mode=mode)
+    return found_playbook or found_skill, text or skill_text
+
+
+def _rewrite_playbook_lessons(
+    artifacts: ArtifactStore,
+    scenario: str,
+    lesson_id: str,
+    *,
+    mode: Literal["remove", "stale", "active"],
+) -> tuple[bool, str | None]:
+    content = artifacts.read_playbook(scenario)
+    block = _playbook_block(content)
+    if block is None:
+        return False, None
+    start, end, body = block
+    found = False
+    changed = False
+    target_text: str | None = None
+    next_lines: list[str] = []
+    for line in body.splitlines():
+        parsed = _parse_lesson_line(line)
+        if parsed is None:
+            next_lines.append(line)
+            continue
+        text, is_stale = parsed
+        if _lesson_id(text) != lesson_id:
+            next_lines.append(line)
+            continue
+        found = True
+        target_text = target_text or text
+        if mode == "remove":
+            changed = True
+            continue
+        if mode == "active" and not is_stale:
+            next_lines.append(line)
+            continue
+        if mode == "stale" and is_stale:
+            next_lines.append(line)
+            continue
+        changed = True
+        bullet = f"- {text}"
+        if mode == "stale":
+            bullet = f"{bullet} {STALE_MARKER}"
+        next_lines.append(bullet)
+    if not found:
+        return False, None
+    if not changed:
+        return True, target_text
+    new_body = "\n".join(next_lines).strip()
+    prefix = content[:start].rstrip()
+    suffix = content[end:].lstrip()
+    new_content = f"{prefix}\n{new_body}\n{suffix}" if new_body else f"{prefix}\n{suffix}"
+    artifacts.write_playbook(scenario, new_content)
+    return True, target_text
+
+
+def _rewrite_skill_lessons(
+    artifacts: ArtifactStore,
+    scenario: str,
+    lesson_id: str,
+    *,
+    mode: Literal["remove", "stale", "active"],
+) -> tuple[bool, str | None]:
+    lines = artifacts.read_skill_lessons_raw(scenario)
+    if not lines:
+        return False, None
+    found = False
+    changed = False
+    target_text: str | None = None
+    next_lines: list[str] = []
+    for line in lines:
+        parsed = _parse_lesson_line(line)
+        if parsed is None:
+            next_lines.append(line)
+            continue
+        text, is_stale = parsed
+        if _lesson_id(text) != lesson_id:
+            next_lines.append(line)
+            continue
+        found = True
+        target_text = target_text or text
+        if mode == "remove":
+            changed = True
+            continue
+        if mode == "active" and not is_stale:
+            next_lines.append(line)
+            continue
+        if mode == "stale" and is_stale:
+            next_lines.append(line)
+            continue
+        changed = True
+        bullet = f"- {text}"
+        if mode == "stale":
+            bullet = f"{bullet} {STALE_MARKER}"
+        next_lines.append(bullet)
+    if changed:
+        artifacts.replace_skill_lessons(scenario, next_lines)
+    return found, target_text
