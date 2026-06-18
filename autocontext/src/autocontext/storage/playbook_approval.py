@@ -24,6 +24,7 @@ class PlaybookApprovalHost(Protocol):
     def lesson_store(self) -> LessonApprovalStore: ...
 
     def write_playbook(self, scenario_name: str, content: str) -> None: ...
+    def persist_skill_note(self, scenario_name: str, generation_index: int, decision: str, lessons: str) -> None: ...
     def _append_mutation(
         self,
         scenario_name: str,
@@ -70,8 +71,17 @@ class PlaybookApprovalMethods:
         return read_pending_playbook(self.knowledge_root, scenario_name)
 
     def approve_pending_playbook(self: PlaybookApprovalHost, scenario_name: str) -> dict[str, Any]:
+        pending = read_pending_playbook(self.knowledge_root, scenario_name)
         result = approve_pending_playbook(self.knowledge_root, scenario_name, self.write_playbook, self.lesson_store)
         if result["ok"]:
+            generation = int((pending.get("provenance") or {}).get("generation", 0))
+            lessons = [
+                lesson.text
+                for lesson in self.lesson_store.read_lessons(scenario_name)
+                if lesson.meta.generation == generation and lesson.meta.approval_status == "active"
+            ]
+            if lessons:
+                self.persist_skill_note(scenario_name, generation, "advance", "\n".join(lessons))
             self._append_mutation(scenario_name, mutation_type="playbook_approved", payload={}, description="Playbook approved")
         return result
 
@@ -94,6 +104,8 @@ def stage_pending_playbook(
 ) -> str:
     scenario_dir = resolve_scenario_root(knowledge_root, scenario_name)
     scenario_dir.mkdir(parents=True, exist_ok=True)
+    if _pending_md(scenario_dir).exists() or _pending_json(scenario_dir).exists():
+        raise ValueError("pending playbook already exists; approve or reject it before staging another")
     normalized = content.strip() + "\n"
     _pending_md(scenario_dir).write_text(normalized, encoding="utf-8")
     write_json(

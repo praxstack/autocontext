@@ -1314,7 +1314,7 @@ def stage_persistence(
             artifacts.persist_pi_session(run_id, generation, trace, role=role_execution.role)
 
     # 5. Write skill note + dead-end tracking
-    _persist_skill_note(ctx, artifacts=artifacts)
+    _persist_skill_note(ctx, artifacts=artifacts, playbook_result=playbook_result)
 
     # 6. Curator lesson consolidation
     existing_lessons_check = artifacts.read_skill_lessons_raw(scenario_name)

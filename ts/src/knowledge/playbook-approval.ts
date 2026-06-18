@@ -35,6 +35,9 @@ export function stagePendingPlaybook(
 ): "pending" {
   const scenarioDir = resolveScenarioRoot(knowledgeRoot, scenarioName);
   mkdirSync(scenarioDir, { recursive: true });
+  if (existsSync(pendingMd(scenarioDir)) || existsSync(pendingJson(scenarioDir))) {
+    throw new Error("pending playbook already exists; approve or reject it before staging another");
+  }
   writeFileSync(pendingMd(scenarioDir), `${content.trim()}\n`, "utf-8");
   writeFileSync(
     pendingJson(scenarioDir),

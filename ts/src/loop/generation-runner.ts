@@ -656,6 +656,7 @@ export class GenerationRunner {
   }
 
   private async runCuratorConsolidation(runId: string, gen: number): Promise<void> {
+    if (this.#requirePlaybookApproval) return;
     const playbook = this.#artifactStore.readPlaybook(this.#scenario.name);
     if (!playbook || playbook === EMPTY_PLAYBOOK_SENTINEL) return;
 

@@ -57,6 +57,33 @@ describe("playbook approval gate", () => {
     }
   });
 
+  it("refuses to overwrite an unresolved pending playbook", () => {
+    const dir = root();
+    try {
+      const artifacts = store(dir);
+      artifacts.writePlaybook("grid_ctf", "approved playbook");
+      artifacts.writeOrStagePlaybook("grid_ctf", "pending playbook", {
+        requireApproval: true,
+        sourceRunId: "run-approval",
+        generation: 2,
+        curatorDecision: "advance",
+      });
+
+      expect(() =>
+        artifacts.writeOrStagePlaybook("grid_ctf", "new pending playbook", {
+          requireApproval: true,
+          sourceRunId: "run-approval",
+          generation: 3,
+          curatorDecision: "advance",
+        }),
+      ).toThrow(/pending playbook already exists/);
+      expect(artifacts.readPendingPlaybook("grid_ctf").content).toBe("pending playbook\n");
+      expect(artifacts.readPendingPlaybook("grid_ctf").provenance?.generation).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("stages pending playbooks without touching approved playbook", () => {
     const dir = root();
     try {
@@ -128,6 +155,69 @@ describe("playbook approval gate", () => {
       expect(artifacts.readPlaybook("grid_ctf")).toBe("pending playbook\n");
       expect(lessons.readLessons("grid_ctf").map((lesson) => lesson.text)).toEqual(["held lesson"]);
       expect(existsSync(join(dir, "knowledge", "grid_ctf", "playbook.pending.md"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips curator consolidation live writes while approval gate is active", async () => {
+    const { GenerationRunner } = await import("../src/loop/generation-runner.js");
+    const { GridCtfScenario } = await import("../src/scenarios/grid-ctf.js");
+    const { SQLiteStore } = await import("../src/storage/index.js");
+
+    const dir = root();
+    const artifacts = store(dir);
+    const livePlaybook =
+      "<!-- PLAYBOOK_START -->\n## Strategy Updates\n\n- keep current plan\n<!-- PLAYBOOK_END -->\n\n" +
+      "<!-- LESSONS_START -->\n- existing lesson\n<!-- LESSONS_END -->\n\n" +
+      "<!-- COMPETITOR_HINTS_START -->\n- hint\n<!-- COMPETITOR_HINTS_END -->";
+    artifacts.writePlaybook("grid_ctf", livePlaybook);
+
+    class ConsolidatingProvider {
+      readonly name = "consolidating";
+      defaultModel(): string {
+        return "consolidating-model";
+      }
+      async complete(opts: { userPrompt: string }) {
+        if (opts.userPrompt.startsWith("Describe your strategy")) {
+          return { text: JSON.stringify({ aggression: 0.6, defense: 0.55, path_bias: 0.5 }), model: "m", usage: {} };
+        }
+        if (opts.userPrompt.startsWith("You are a curator consolidating")) {
+          return {
+            text: "<!-- CONSOLIDATED_LESSONS_START -->\n- consolidated leak\n<!-- CONSOLIDATED_LESSONS_END -->\n<!-- LESSONS_REMOVED: 0 -->",
+            model: "m",
+            usage: {},
+          };
+        }
+        return { text: "No playbook update.", model: "m", usage: {} };
+      }
+    }
+
+    try {
+      const dbPath = join(dir, "test.db");
+      const storeDb = new SQLiteStore(dbPath);
+      storeDb.migrate(join(import.meta.dirname, "..", "migrations"));
+      const runner = new GenerationRunner({
+        provider: new ConsolidatingProvider(),
+        scenario: new GridCtfScenario(),
+        store: storeDb,
+        runsRoot: join(dir, "runs"),
+        knowledgeRoot: join(dir, "knowledge"),
+        matchesPerGeneration: 1,
+        maxRetries: 0,
+        minDelta: 0,
+        curatorEnabled: true,
+        curatorConsolidateEveryNGens: 1,
+        requirePlaybookApproval: true,
+      });
+
+      await runner.run("approval-consolidation", 1);
+      storeDb.close();
+
+      expect(readFileSync(join(dir, "knowledge", "grid_ctf", "playbook.md"), "utf-8")).not.toContain(
+        "consolidated leak",
+      );
+      expect(artifacts.readPendingPlaybook("grid_ctf").hasPending).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
