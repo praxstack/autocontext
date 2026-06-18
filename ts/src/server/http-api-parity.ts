@@ -112,6 +112,24 @@ export const HTTP_API_PARITY_ROUTES: readonly HttpApiParityEntry[] = [
     "/api/knowledge/solve/:job_id",
     "autocontext/src/autocontext/server/knowledge_api.py",
   ),
+  both(
+    "knowledge",
+    "GET",
+    "/api/knowledge/:scenario/playbook/pending",
+    "autocontext/src/autocontext/server/knowledge_api.py",
+  ),
+  both(
+    "knowledge",
+    "POST",
+    "/api/knowledge/:scenario/playbook/approve",
+    "autocontext/src/autocontext/server/knowledge_api.py",
+  ),
+  both(
+    "knowledge",
+    "POST",
+    "/api/knowledge/:scenario/playbook/reject",
+    "autocontext/src/autocontext/server/knowledge_api.py",
+  ),
   typescriptOnly(
     "knowledge",
     "GET",

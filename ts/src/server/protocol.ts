@@ -239,6 +239,8 @@ export const StartRunCmdSchema = protocolObject({
   type: z.literal("start_run"),
   scenario: z.string(),
   generations: z.number().int().positive(),
+  require_playbook_approval: z.boolean().default(false),
+  require_lesson_approval: z.boolean().default(false),
 });
 
 export const ListScenariosCmdSchema = protocolObject({

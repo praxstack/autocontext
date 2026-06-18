@@ -929,6 +929,29 @@ export class InteractiveServer {
       return;
     }
 
+    // GET/POST /api/knowledge/:scenario/playbook/(pending|approve|reject)
+    const pendingPlaybookMatch = url.match(/^\/api\/knowledge\/([^/]+)\/playbook\/pending$/);
+    if (method === "GET" && pendingPlaybookMatch) {
+      const [, rawScenario] = pendingPlaybookMatch;
+      const response = knowledgeApi.pendingPlaybook(decodeURIComponent(rawScenario!));
+      json(response.status, response.body);
+      return;
+    }
+    const approvePlaybookMatch = url.match(/^\/api\/knowledge\/([^/]+)\/playbook\/approve$/);
+    if (method === "POST" && approvePlaybookMatch) {
+      const [, rawScenario] = approvePlaybookMatch;
+      const response = knowledgeApi.approvePendingPlaybook(decodeURIComponent(rawScenario!));
+      json(response.status, response.body);
+      return;
+    }
+    const rejectPlaybookMatch = url.match(/^\/api\/knowledge\/([^/]+)\/playbook\/reject$/);
+    if (method === "POST" && rejectPlaybookMatch) {
+      const [, rawScenario] = rejectPlaybookMatch;
+      const response = knowledgeApi.rejectPendingPlaybook(decodeURIComponent(rawScenario!));
+      json(response.status, response.body);
+      return;
+    }
+
     // GET /api/knowledge/solve/:jobId
     const knowledgeSolveMatch = url.match(/^\/api\/knowledge\/solve\/([^/]+)$/);
     if (method === "GET" && knowledgeSolveMatch) {

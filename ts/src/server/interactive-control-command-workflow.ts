@@ -6,7 +6,11 @@ export interface InteractiveControlRunManager {
   resume(): void;
   injectHint(text: string): void;
   overrideGate(decision: "advance" | "retry" | "rollback"): void;
-  startRun(scenario: string, generations: number): Promise<string>;
+  startRun(
+    scenario: string,
+    generations: number,
+    opts?: { requirePlaybookApproval?: boolean },
+  ): Promise<string>;
   getEnvironmentInfo(): {
     scenarios: Array<{ name: string; description: string }>;
     executors: Array<{ mode: string; available: boolean; description: string }>;
@@ -49,16 +53,27 @@ export async function executeInteractiveControlCommand(opts: {
       opts.runManager.overrideGate(opts.command.decision);
       return [{ type: "ack", action: "override_gate", decision: opts.command.decision }];
     case "start_run": {
-      const runId = await opts.runManager.startRun(opts.command.scenario, opts.command.generations);
-      return [buildRunAcceptedMessage({
-        runId,
-        scenario: opts.command.scenario,
-        generations: opts.command.generations,
-      })];
+      const runId = await opts.runManager.startRun(
+        opts.command.scenario,
+        opts.command.generations,
+        {
+          requirePlaybookApproval:
+            opts.command.require_playbook_approval || opts.command.require_lesson_approval,
+        },
+      );
+      return [
+        buildRunAcceptedMessage({
+          runId,
+          scenario: opts.command.scenario,
+          generations: opts.command.generations,
+        }),
+      ];
     }
     case "list_scenarios":
       return [buildEnvironmentMessage(opts.runManager.getEnvironmentInfo())];
     default:
-      throw new Error(`Unsupported interactive control command: ${String((opts.command as { type?: unknown }).type ?? "unknown")}`);
+      throw new Error(
+        `Unsupported interactive control command: ${String((opts.command as { type?: unknown }).type ?? "unknown")}`,
+      );
   }
 }

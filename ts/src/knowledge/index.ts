@@ -15,6 +15,13 @@ export {
 export type { GuardResult } from "./playbook.js";
 export { ArtifactStore } from "./artifact-store.js";
 export type { AppendedCompactionEntries, ArtifactStoreOpts } from "./artifact-store.js";
+export {
+  approvePendingPlaybook,
+  readPendingPlaybook,
+  rejectPendingPlaybook,
+  stagePendingPlaybook,
+} from "./playbook-approval.js";
+export type { PendingPlaybookProvenance, PendingPlaybookView } from "./playbook-approval.js";
 export { CompactionLedgerStore } from "./compaction-ledger.js";
 export type { CompactionEntry } from "./compaction-ledger.js";
 export {
@@ -41,4 +48,8 @@ export type {
 export { ScoreTrajectoryBuilder } from "./trajectory.js";
 export type { TrajectoryRow } from "./trajectory.js";
 export { exportStrategyPackage, importStrategyPackage } from "./package.js";
-export type { StrategyPackageData, ImportStrategyPackageResult, ConflictPolicy } from "./package.js";
+export type {
+  StrategyPackageData,
+  ImportStrategyPackageResult,
+  ConflictPolicy,
+} from "./package.js";

@@ -89,6 +89,7 @@ class GenerationContext:
     skeptic_review: SkepticReview | None = None
     applied_competitor_hints: str = ""
     challenger_uncertainty: float | None = None
+    require_playbook_approval: bool = False
 
 
 @dataclass(slots=True)

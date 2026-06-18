@@ -25,10 +25,12 @@ from autocontext.knowledge.compaction import CompactionEntry, compact_prompt_com
 from autocontext.knowledge.hint_volume import HintManager, HintVolumePolicy
 from autocontext.knowledge.lessons import LessonStore
 from autocontext.knowledge.mutation_log import MutationEntry, MutationLog
+from autocontext.storage.artifact_generation_persistence import ArtifactGenerationPersistenceMethods
 from autocontext.storage.artifact_write_methods import ArtifactWriteMethods
 from autocontext.storage.blob_integration import BlobAwareWriter, mirror_path_append_bytes, mirror_path_bytes
 from autocontext.storage.buffered_writer import BufferedWriter
 from autocontext.storage.compaction_ledger import CompactionLedgerStore
+from autocontext.storage.playbook_approval import PlaybookApprovalMethods
 from autocontext.storage.scenario_paths import (
     normalize_scenario_name_segment,
     resolve_scenario_root,
@@ -51,7 +53,7 @@ class DictSerializable(Protocol):
 EMPTY_PLAYBOOK_SENTINEL = "No playbook yet. Start from scenario rules and observation."
 
 
-class ArtifactStore(ArtifactWriteMethods):
+class ArtifactStore(PlaybookApprovalMethods, ArtifactGenerationPersistenceMethods, ArtifactWriteMethods):
     def __init__(
         self,
         runs_root: Path,
@@ -742,39 +744,6 @@ class ArtifactStore(ArtifactWriteMethods):
             sections.append(shared_context)
 
         return "\n\n".join(sections) if sections else "No generated tools available."
-
-    def persist_generation(
-        self,
-        run_id: str,
-        generation_index: int,
-        metrics: dict[str, Any],
-        replay_payload: dict[str, Any],
-        analysis_md: str,
-        coach_md: str,
-        architect_md: str,
-        scenario_name: str,
-        coach_playbook: str = "",
-    ) -> None:
-        gen_dir = self.generation_dir(run_id, generation_index)
-        scenario_dir = self._scenario_dir(scenario_name)
-        # Non-critical writes — buffer if available
-        self.buffered_write_json(gen_dir / "metrics.json", metrics)
-        self.buffered_write_json(gen_dir / "replays" / f"{scenario_dir.name}_{generation_index}.json", replay_payload)
-        analysis_path = scenario_dir / "analysis" / f"gen_{generation_index}.md"
-        self.buffered_write_markdown(analysis_path, analysis_md)
-        self.buffered_append_markdown(
-            scenario_dir / "coach_history.md",
-            coach_md,
-            heading=f"generation_{generation_index}",
-        )
-        # Critical write — always synchronous (versioned)
-        if coach_playbook:
-            self.write_playbook(scenario_name, coach_playbook)
-        self.buffered_append_markdown(
-            scenario_dir / "architect" / "changelog.md",
-            architect_md,
-            heading=f"generation_{generation_index}",
-        )
 
     def persist_skill_note(self, scenario_name: str, generation_index: int, decision: str, lessons: str) -> None:
         """Write a Claude Code Skill with playbook, lessons, and resource refs.
