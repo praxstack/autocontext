@@ -210,11 +210,12 @@ export class ArtifactStore {
       generation: number;
       curatorDecision: string;
     },
-  ): "live" | "pending" {
+  ): "live" | "pending" | "awaiting_approval" {
     if (!opts.requireApproval) {
       this.writePlaybook(scenarioName, content);
       return "live";
     }
+    if (this.readPendingPlaybook(scenarioName).hasPending) return "awaiting_approval";
     return stagePendingPlaybook(this.knowledgeRoot, scenarioName, content, {
       sourceRunId: opts.sourceRunId,
       generation: opts.generation,

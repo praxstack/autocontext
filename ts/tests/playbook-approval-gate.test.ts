@@ -56,7 +56,7 @@ describe("playbook approval gate", () => {
     }
   });
 
-  it("refuses to overwrite an unresolved pending playbook", () => {
+  it("skips new staging while an unresolved pending playbook exists", () => {
     const dir = root();
     try {
       const artifacts = store(dir);
@@ -68,14 +68,14 @@ describe("playbook approval gate", () => {
         curatorDecision: "advance",
       });
 
-      expect(() =>
+      expect(
         artifacts.writeOrStagePlaybook("grid_ctf", "new pending playbook", {
           requireApproval: true,
           sourceRunId: "run-approval",
           generation: 3,
           curatorDecision: "advance",
         }),
-      ).toThrow(/pending playbook already exists/);
+      ).toBe("awaiting_approval");
       expect(artifacts.readPendingPlaybook("grid_ctf").content).toBe("pending playbook\n");
       expect(artifacts.readPendingPlaybook("grid_ctf").provenance?.generation).toBe(2);
     } finally {
@@ -166,7 +166,11 @@ describe("playbook approval gate", () => {
       }
       async complete(opts: { userPrompt: string }) {
         if (opts.userPrompt.startsWith("Describe your strategy")) {
-          return { text: JSON.stringify({ aggression: 0.6, defense: 0.55, path_bias: 0.5 }), model: "m", usage: {} };
+          return {
+            text: JSON.stringify({ aggression: 0.6, defense: 0.55, path_bias: 0.5 }),
+            model: "m",
+            usage: {},
+          };
         }
         if (opts.userPrompt.startsWith("You are a curator consolidating")) {
           return {
@@ -200,9 +204,9 @@ describe("playbook approval gate", () => {
       await runner.run("approval-consolidation", 1);
       storeDb.close();
 
-      expect(readFileSync(join(dir, "knowledge", "grid_ctf", "playbook.md"), "utf-8")).not.toContain(
-        "consolidated leak",
-      );
+      expect(
+        readFileSync(join(dir, "knowledge", "grid_ctf", "playbook.md"), "utf-8"),
+      ).not.toContain("consolidated leak");
       expect(artifacts.readPendingPlaybook("grid_ctf").hasPending).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });

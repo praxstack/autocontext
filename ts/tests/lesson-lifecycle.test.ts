@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ArtifactStore } from "../src/knowledge/artifact-store.js";
@@ -54,7 +54,11 @@ describe("lesson lifecycle (derived markdown view)", () => {
       currentGeneration: 20,
     });
 
-    expect(view.active.map((l: { text: string }) => l.text)).toEqual(["fresh", "shared", "skill only"]);
+    expect(view.active.map((l: { text: string }) => l.text)).toEqual([
+      "fresh",
+      "shared",
+      "skill only",
+    ]);
     expect(view.pending).toEqual([]);
     expect(view.stale).toEqual([]);
     expect(view.deadEnd[0].text).toContain("tried Y");
@@ -62,17 +66,95 @@ describe("lesson lifecycle (derived markdown view)", () => {
     expect(view.active[0].source).toMatch(/playbook\.md$/);
   });
 
+  it("curates skill-only lessons listed in the derived view", async () => {
+    const { buildLifecycle, curateLesson, rejectLesson } = await mods();
+    const skillDir = join(dir, "skills", "scn-ops");
+    const skillPath = join(skillDir, "SKILL.md");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(skillPath, "# Skill\n\n## Operational Lessons\n\n- skill only\n", "utf-8");
+    const lesson = buildLifecycle({
+      knowledgeRoot: dir,
+      skillsRoot: join(dir, "skills"),
+      scenario: "scn",
+      currentGeneration: 1,
+    }).active.find((item: { text: string }) => item.text === "skill only")!;
+
+    expect(
+      curateLesson({
+        knowledgeRoot: dir,
+        skillsRoot: join(dir, "skills"),
+        scenario: "scn",
+        lessonId: lesson.id,
+        action: "stale",
+        currentGeneration: 1,
+      }),
+    ).toBe("stale");
+    expect(readFileSync(skillPath, "utf-8")).toContain("autocontext:lesson-status=stale");
+    expect(
+      buildLifecycle({
+        knowledgeRoot: dir,
+        skillsRoot: join(dir, "skills"),
+        scenario: "scn",
+        currentGeneration: 1,
+      }).stale.map((item: { text: string }) => item.text),
+    ).toEqual(["skill only"]);
+
+    expect(
+      curateLesson({
+        knowledgeRoot: dir,
+        skillsRoot: join(dir, "skills"),
+        scenario: "scn",
+        lessonId: lesson.id,
+        action: "deadEnd",
+        currentGeneration: 1,
+      }),
+    ).toBe("deadEnd");
+    expect(readFileSync(skillPath, "utf-8")).not.toContain("skill only");
+    expect(store().readDeadEnds("scn")).toContain("skill only");
+
+    writeFileSync(skillPath, "# Skill\n\n## Operational Lessons\n\n- reject me\n", "utf-8");
+    const rejectId = buildLifecycle({
+      knowledgeRoot: dir,
+      skillsRoot: join(dir, "skills"),
+      scenario: "scn",
+      currentGeneration: 1,
+    }).active[0].id;
+    expect(
+      rejectLesson({
+        knowledgeRoot: dir,
+        skillsRoot: join(dir, "skills"),
+        scenario: "scn",
+        lessonId: rejectId,
+      }),
+    ).toBe(true);
+    expect(readFileSync(skillPath, "utf-8")).not.toContain("reject me");
+  });
+
   it("approve is a no-op for a live derived lesson", async () => {
     const { approveLesson, buildLifecycle } = await mods();
     const artifacts = store();
     artifacts.writePlaybook("scn", playbook("already live"));
-    const [lesson] = buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 1 }).active;
+    const [lesson] = buildLifecycle({
+      knowledgeRoot: dir,
+      scenario: "scn",
+      currentGeneration: 1,
+    }).active;
 
     expect(
-      approveLesson({ knowledgeRoot: dir, scenario: "scn", lessonId: lesson.id, currentGeneration: 0 }),
+      approveLesson({
+        knowledgeRoot: dir,
+        scenario: "scn",
+        lessonId: lesson.id,
+        currentGeneration: 0,
+      }),
     ).toBe("active");
     expect(
-      approveLesson({ knowledgeRoot: dir, scenario: "scn", lessonId: "missing", currentGeneration: 9 }),
+      approveLesson({
+        knowledgeRoot: dir,
+        scenario: "scn",
+        lessonId: "missing",
+        currentGeneration: 9,
+      }),
     ).toBeNull();
   });
 
@@ -80,8 +162,11 @@ describe("lesson lifecycle (derived markdown view)", () => {
     const { rejectLesson, buildLifecycle } = await mods();
     const artifacts = store();
     artifacts.writePlaybook("scn", playbook("held", "keep"));
-    const lesson = buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 1 })
-      .active.find((l: { text: string }) => l.text === "held")!;
+    const lesson = buildLifecycle({
+      knowledgeRoot: dir,
+      scenario: "scn",
+      currentGeneration: 1,
+    }).active.find((l: { text: string }) => l.text === "held")!;
 
     expect(rejectLesson({ knowledgeRoot: dir, scenario: "scn", lessonId: lesson.id })).toBe(true);
     expect(artifacts.readPlaybook("scn")).not.toContain("held");
@@ -92,7 +177,11 @@ describe("lesson lifecycle (derived markdown view)", () => {
     const { curateLesson, buildLifecycle } = await mods();
     const artifacts = store();
     artifacts.writePlaybook("scn", playbook("dead me"));
-    const [lesson] = buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 9 }).active;
+    const [lesson] = buildLifecycle({
+      knowledgeRoot: dir,
+      scenario: "scn",
+      currentGeneration: 9,
+    }).active;
 
     expect(
       curateLesson({
@@ -104,15 +193,20 @@ describe("lesson lifecycle (derived markdown view)", () => {
       }),
     ).toBe("deadEnd");
     expect(artifacts.readPlaybook("scn")).not.toContain("dead me");
-    expect(buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 9 }).deadEnd[0].text)
-      .toContain("dead me");
+    expect(
+      buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 9 }).deadEnd[0].text,
+    ).toContain("dead me");
   });
 
   it("curate stale annotates without deleting and excludes stale from active", async () => {
     const { curateLesson, buildLifecycle } = await mods();
     const artifacts = store();
     artifacts.writePlaybook("scn", playbook("stale me"));
-    const [lesson] = buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 9 }).active;
+    const [lesson] = buildLifecycle({
+      knowledgeRoot: dir,
+      scenario: "scn",
+      currentGeneration: 9,
+    }).active;
 
     expect(
       curateLesson({
@@ -133,7 +227,11 @@ describe("lesson lifecycle (derived markdown view)", () => {
     const { curateLesson, buildLifecycle } = await mods();
     const artifacts = store();
     artifacts.writePlaybook("scn", playbook("gone"));
-    const [lesson] = buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 9 }).active;
+    const [lesson] = buildLifecycle({
+      knowledgeRoot: dir,
+      scenario: "scn",
+      currentGeneration: 9,
+    }).active;
 
     expect(
       curateLesson({
@@ -163,7 +261,9 @@ describe("lesson lifecycle (derived markdown view)", () => {
       { id: "x", text: "structured shadow", meta: makeMeta({ generation: 1, bestScore: 0 }) },
     ]);
 
-    expect(buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 1 }).active).toEqual([]);
+    expect(
+      buildLifecycle({ knowledgeRoot: dir, scenario: "scn", currentGeneration: 1 }).active,
+    ).toEqual([]);
   });
 
   it("rejects path-traversal scenario names and writes nothing outside the root", async () => {

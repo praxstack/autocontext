@@ -12,7 +12,9 @@ When `require_playbook_approval` is false, curator-approved playbooks are writte
 ## API
 
 - `GET /api/knowledge/{scenario}/playbook/pending` returns pending content, diff, and provenance.
-- `POST /api/knowledge/{scenario}/playbook/approve` promotes pending content to `playbook.md`, clears pending files, and activates same-generation pending lessons.
-- `POST /api/knowledge/{scenario}/playbook/reject` clears pending files and drops same-generation pending lessons.
+- `POST /api/knowledge/{scenario}/playbook/approve` promotes pending content to `playbook.md` and clears pending files. Python also syncs lesson bullets from the approved pending playbook into `SKILL.md`.
+- `POST /api/knowledge/{scenario}/playbook/reject` clears pending files without changing the approved playbook or skill lessons.
+
+The lesson lifecycle `pending` bucket is now always empty; lesson curation is derived from approved playbook/SKILL markdown, not a structured pending lesson store.
 
 The wire flag `require_lesson_approval` is accepted as a deprecated alias for one compatibility window; new clients should send `require_playbook_approval`.

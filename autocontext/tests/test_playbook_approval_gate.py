@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 
 def _store(tmp_path: Path):
     from autocontext.storage.artifacts import ArtifactStore
@@ -74,18 +72,18 @@ def test_approve_pending_playbook_promotes_and_syncs_lessons_to_skill(tmp_path: 
     assert store.lesson_store.read_lessons("grid_ctf") == []
 
 
-def test_pending_playbook_cannot_be_overwritten_before_review(tmp_path: Path) -> None:
+def test_pending_playbook_skips_new_staging_without_failing_run(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.write_playbook("grid_ctf", "approved playbook")
     store.persist_generation(**_persist_args(), require_playbook_approval=True)
     args = _persist_args() | {"generation_index": 3, "coach_playbook": "new pending playbook"}
 
-    with pytest.raises(ValueError, match="pending playbook already exists"):
-        store.persist_generation(**args, require_playbook_approval=True)
+    assert store.persist_generation(**args, require_playbook_approval=True) == "awaiting_approval"
 
     pending = store.read_pending_playbook("grid_ctf")
     assert pending["content"] == _pending_playbook().strip() + "\n"
     assert pending["provenance"]["generation"] == 2
+    assert "new pending playbook" not in pending["content"]
 
 
 def test_pending_skill_lessons_do_not_reach_skill_prompt_until_approval(tmp_path: Path) -> None:
