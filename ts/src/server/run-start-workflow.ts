@@ -103,6 +103,7 @@ export async function executeBuiltInGameStartRun(opts: {
   runId: string;
   scenarioName: string;
   generations: number;
+  requirePlaybookApproval?: boolean;
   settings: AppSettings;
   providerBundle: RoleProviderBundle;
   opts: {
@@ -141,6 +142,7 @@ export async function executeBuiltInGameStartRun(opts: {
       maxRetries: opts.settings.maxRetries,
       minDelta: opts.settings.backpressureMinDelta,
       playbookMaxVersions: opts.settings.playbookMaxVersions,
+      requirePlaybookApproval: opts.requirePlaybookApproval ?? false,
       contextBudgetTokens: opts.settings.contextBudgetTokens,
       curatorEnabled: opts.settings.curatorEnabled,
       curatorConsolidateEveryNGens: opts.settings.curatorConsolidateEveryNGens,
@@ -172,6 +174,7 @@ export async function executeBuiltInGameStartRun(opts: {
       maxRetries: opts.settings.maxRetries,
       minDelta: opts.settings.backpressureMinDelta,
       playbookMaxVersions: opts.settings.playbookMaxVersions,
+      requirePlaybookApproval: opts.requirePlaybookApproval ?? false,
       contextBudgetTokens: opts.settings.contextBudgetTokens,
       curatorEnabled: opts.settings.curatorEnabled,
       curatorConsolidateEveryNGens: opts.settings.curatorConsolidateEveryNGens,

@@ -158,6 +158,8 @@ export const StartRunCmdSchema = z.object({
   type: z.literal("start_run"),
   scenario: z.string(),
   generations: z.number().int().gt(0),
+  require_playbook_approval: z.boolean().optional(),
+  require_lesson_approval: z.boolean().optional(),
 });
 
 export const ListScenariosCmdSchema = z.object({

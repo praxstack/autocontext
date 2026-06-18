@@ -169,6 +169,33 @@ def lesson_lifecycle(scenario_name: str) -> dict[str, Any]:
     )
 
 
+@router.get("/{scenario_name}/playbook/pending")
+def pending_playbook_route(scenario_name: str) -> dict[str, Any]:
+    scenario_name = _validate_scenario(scenario_name)
+    artifacts, _store = _lesson_stores()
+    return cast(dict[str, Any], artifacts.read_pending_playbook(scenario_name))
+
+
+@router.post("/{scenario_name}/playbook/approve")
+def approve_playbook_route(scenario_name: str) -> dict[str, Any]:
+    scenario_name = _validate_scenario(scenario_name)
+    artifacts, _store = _lesson_stores()
+    result = cast(dict[str, Any], artifacts.approve_pending_playbook(scenario_name))
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail="pending playbook not found")
+    return result
+
+
+@router.post("/{scenario_name}/playbook/reject")
+def reject_playbook_route(scenario_name: str) -> dict[str, Any]:
+    scenario_name = _validate_scenario(scenario_name)
+    artifacts, _store = _lesson_stores()
+    result = cast(dict[str, Any], artifacts.reject_pending_playbook(scenario_name))
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail="pending playbook not found")
+    return result
+
+
 @router.post("/{scenario_name}/lessons/{lesson_id}/approve")
 def approve_lesson_route(scenario_name: str, lesson_id: str) -> dict[str, Any]:
     """Approve a pending lesson (move it to active). 404 if the id is not pending."""

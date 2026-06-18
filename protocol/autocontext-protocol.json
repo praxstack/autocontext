@@ -792,6 +792,16 @@
             "exclusiveMinimum": 0,
             "title": "Generations",
             "type": "integer"
+          },
+          "require_playbook_approval": {
+            "default": false,
+            "title": "Require Playbook Approval",
+            "type": "boolean"
+          },
+          "require_lesson_approval": {
+            "default": false,
+            "title": "Require Lesson Approval",
+            "type": "boolean"
           }
         },
         "required": [

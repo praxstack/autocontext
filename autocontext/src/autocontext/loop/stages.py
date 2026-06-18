@@ -1282,7 +1282,7 @@ def stage_persistence(
             tournament.results[0].metadata["execution_output"],
         )
 
-    artifacts.persist_generation(
+    playbook_result = artifacts.persist_generation(
         run_id=run_id,
         generation_index=generation,
         metrics=metrics,
@@ -1292,7 +1292,13 @@ def stage_persistence(
         architect_md=outputs.architect_markdown,
         scenario_name=scenario_name,
         coach_playbook=outputs.coach_playbook if gate_decision == "advance" else "",
+        require_playbook_approval=ctx.require_playbook_approval,
     )
+    if playbook_result == "pending":
+        events.emit(
+            "playbook_pending",
+            {"run_id": run_id, "scenario": scenario_name, "generation": generation},
+        )
     if credit_assignment is not None:
         artifacts.write_credit_assignment(
             scenario_name,

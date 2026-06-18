@@ -1060,7 +1060,14 @@ class GenerationRunner:
             gate_decision_history,
         )
 
-    def run(self, scenario_name: str, generations: int, run_id: str | None = None) -> RunSummary:
+    def run(
+        self,
+        scenario_name: str,
+        generations: int,
+        run_id: str | None = None,
+        *,
+        require_playbook_approval: bool = False,
+    ) -> RunSummary:
         scenario = self._scenario(scenario_name)
         active_run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
         run_start_time = time.monotonic()
@@ -1218,6 +1225,7 @@ class GenerationRunner:
                         gate_decision_history=gate_decision_history,
                         coach_competitor_hints=coach_competitor_hints,
                         replay_narrative=replay_narrative,
+                        require_playbook_approval=require_playbook_approval,
                     )
                     ctx = pipeline.run_generation(ctx)
                     self.artifacts.mutation_log.append(

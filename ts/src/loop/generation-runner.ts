@@ -18,7 +18,6 @@ import { BackpressureGate } from "./backpressure.js";
 import { ArtifactStore, EMPTY_PLAYBOOK_SENTINEL } from "../knowledge/artifact-store.js";
 import { PlaybookGuard, PLAYBOOK_MARKERS } from "../knowledge/playbook.js";
 import { ScoreTrajectoryBuilder } from "../knowledge/trajectory.js";
-import { generateSessionReport } from "../knowledge/session-report.js";
 import {
   compactPromptComponents,
   compactionEntriesForComponents,
@@ -58,7 +57,7 @@ import {
 } from "./generation-loop-orchestrator.js";
 import { GenerationRecovery } from "./generation-recovery.js";
 import { hasRemainingGenerationCycles } from "./generation-cycle-state.js";
-import { type GenerationAttempt } from "./generation-phase-state.js";
+import type { GenerationAttempt } from "./generation-phase-state.js";
 import {
   consumeFreshStartHint,
   queueFreshStartHint,
@@ -81,6 +80,7 @@ export interface GenerationRunnerOpts {
   minDelta?: number;
   seedBase?: number;
   playbookMaxVersions?: number;
+  requirePlaybookApproval?: boolean;
   contextBudgetTokens?: number;
   curatorEnabled?: boolean;
   curatorConsolidateEveryNGens?: number;
@@ -125,6 +125,7 @@ export class GenerationRunner {
   #gate: BackpressureGate;
   #seedBase: number;
   #playbookGuard: PlaybookGuard;
+  #requirePlaybookApproval: boolean;
   #contextBudget: ContextBudget;
   #curatorEnabled: boolean;
   #curatorConsolidateEveryNGens: number;
@@ -167,6 +168,7 @@ export class GenerationRunner {
     this.#gate = new BackpressureGate(opts.minDelta ?? 0.005);
     this.#seedBase = opts.seedBase ?? 1000;
     this.#playbookGuard = new PlaybookGuard();
+    this.#requirePlaybookApproval = opts.requirePlaybookApproval ?? false;
     this.#contextBudget = new ContextBudget(opts.contextBudgetTokens ?? 100_000);
     this.#curatorEnabled = opts.curatorEnabled ?? false;
     this.#curatorConsolidateEveryNGens = opts.curatorConsolidateEveryNGens ?? 3;
@@ -625,7 +627,23 @@ export class GenerationRunner {
     }
 
     if (nextPlaybook) {
-      this.#artifactStore.writePlaybook(this.#scenario.name, nextPlaybook);
+      const playbookResult = this.#artifactStore.writeOrStagePlaybook(
+        this.#scenario.name,
+        nextPlaybook,
+        {
+          requireApproval: this.#requirePlaybookApproval,
+          sourceRunId: runId,
+          generation: gen,
+          curatorDecision: "advance",
+        },
+      );
+      if (playbookResult === "pending") {
+        this.emit("playbook_pending", {
+          run_id: runId,
+          scenario: this.#scenario.name,
+          generation: gen,
+        });
+      }
     }
 
     if (
@@ -832,10 +850,6 @@ function replaceMarkedSection(
     "\n",
     content.slice(end),
   ].join("");
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 function readStringRecord(value: unknown): Record<string, string> | undefined {

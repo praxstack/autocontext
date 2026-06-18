@@ -84,7 +84,6 @@ export type ScenarioReadyInfo = InteractiveScenarioReadyInfo;
 export class RunManager {
   readonly #opts: RunManagerOpts;
   #active = false;
-  #runPromise: Promise<void> | null = null;
   readonly #controller = new LoopController();
   readonly #events: EventStreamEmitter;
   readonly #stateSubscribers: Array<(state: RunManagerState) => void> = [];
@@ -234,7 +233,15 @@ export class RunManager {
     });
   }
 
-  async startRun(scenario: string, generations: number, runId?: string): Promise<string> {
+  async startRun(
+    scenario: string,
+    generations: number,
+    optsOrRunId: string | { requirePlaybookApproval?: boolean } = {},
+    maybeRunId?: string,
+  ): Promise<string> {
+    const requirePlaybookApproval =
+      typeof optsOrRunId === "string" ? false : optsOrRunId.requirePlaybookApproval ?? false;
+    const runId = typeof optsOrRunId === "string" ? optsOrRunId : maybeRunId;
     if (this.#active) {
       throw new Error("A run is already active");
     }
@@ -265,12 +272,13 @@ export class RunManager {
       const scenarioInstance = resolveBuiltInGameScenario({
         scenarioName: plan.scenarioName,
       });
-      this.#runPromise = createManagedRunExecution({
+      void createManagedRunExecution({
         runId: id,
         execute: () => executeBuiltInGameStartRun({
           runId: id,
           scenarioName: plan.scenarioName,
           generations,
+          requirePlaybookApproval,
           settings,
           providerBundle,
           opts: this.#opts,
@@ -296,7 +304,7 @@ export class RunManager {
         settings,
         this.#runtimeSessionOptsForRun(id, plan.scenarioName),
       );
-      this.#runPromise = createManagedRunExecution({
+      void createManagedRunExecution({
         runId: id,
         execute: async () => {
           try {
@@ -326,7 +334,7 @@ export class RunManager {
       return id;
     }
 
-    this.#runPromise = createManagedRunExecution({
+    void createManagedRunExecution({
       runId: id,
       execute: () => executeGeneratedCustomStartRun({
         runId: id,

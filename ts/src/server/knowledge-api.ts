@@ -29,6 +29,9 @@ export interface KnowledgeApiRoutes {
   search(body: Record<string, unknown>): KnowledgeApiResponse;
   submitSolve(body: Record<string, unknown>): KnowledgeApiResponse;
   solveStatus(jobId: string): KnowledgeApiResponse;
+  pendingPlaybook(scenarioName: string): KnowledgeApiResponse;
+  approvePendingPlaybook(scenarioName: string): KnowledgeApiResponse;
+  rejectPendingPlaybook(scenarioName: string): KnowledgeApiResponse;
 }
 
 export function buildKnowledgeApiRoutes(opts: {
@@ -113,11 +116,7 @@ export function buildKnowledgeApiRoutes(opts: {
       if (!solveOptions.ok) {
         return { status: 422, body: { error: solveOptions.error } };
       }
-      const jobId = opts.getSolveManager().submit(
-        description,
-        generations,
-        solveOptions.options,
-      );
+      const jobId = opts.getSolveManager().submit(description, generations, solveOptions.options);
       return { status: 200, body: { job_id: jobId, status: "pending" } };
     },
     solveStatus: (jobId) => {
@@ -132,15 +131,44 @@ export function buildKnowledgeApiRoutes(opts: {
         body: result ? { ...status, result } : status,
       };
     },
+    pendingPlaybook: (scenarioName) =>
+      withPlaybookApproval(opts, scenarioName, (artifacts) => ({
+        status: 200,
+        body: artifacts.readPendingPlaybook(scenarioName),
+      })),
+    approvePendingPlaybook: (scenarioName) =>
+      withPlaybookApproval(opts, scenarioName, (artifacts) => {
+        const result = artifacts.approvePendingPlaybook(scenarioName);
+        return result.ok
+          ? { status: 200, body: result }
+          : { status: 404, body: { detail: "pending playbook not found" } };
+      }),
+    rejectPendingPlaybook: (scenarioName) =>
+      withPlaybookApproval(opts, scenarioName, (artifacts) => {
+        const result = artifacts.rejectPendingPlaybook(scenarioName);
+        return result.ok
+          ? { status: 200, body: result }
+          : { status: 404, body: { detail: "pending playbook not found" } };
+      }),
   };
+}
+
+function withPlaybookApproval(
+  opts: { runsRoot: string; knowledgeRoot: string },
+  scenarioName: string,
+  fn: (artifacts: ArtifactStore) => KnowledgeApiResponse,
+): KnowledgeApiResponse {
+  const scenarioDir = resolveKnowledgeScenarioDir(opts.knowledgeRoot, scenarioName);
+  if (!scenarioDir) return { status: 422, body: { error: `Invalid scenario '${scenarioName}'` } };
+  return fn(new ArtifactStore({ runsRoot: opts.runsRoot, knowledgeRoot: opts.knowledgeRoot }));
 }
 
 type ImportPackageRequestResult =
   | {
-    ok: true;
-    rawPackage: Record<string, unknown>;
-    conflictPolicy: ConflictPolicy;
-  }
+      ok: true;
+      rawPackage: Record<string, unknown>;
+      conflictPolicy: ConflictPolicy;
+    }
   | { ok: false; error: string };
 
 const CONFLICT_POLICIES = new Set<ConflictPolicy>(["overwrite", "merge", "skip"]);
@@ -169,7 +197,9 @@ function parseImportPackageRequest(body: Record<string, unknown>): ImportPackage
   };
 }
 
-function listSolvedScenarios(knowledgeRoot: string): Array<{ scenario: string; hasPlaybook: boolean }> {
+function listSolvedScenarios(
+  knowledgeRoot: string,
+): Array<{ scenario: string; hasPlaybook: boolean }> {
   const solved: Array<{ scenario: string; hasPlaybook: boolean }> = [];
   if (!existsSync(knowledgeRoot)) {
     return solved;
@@ -213,8 +243,10 @@ function resolveKnowledgeScenarioDir(knowledgeRoot: string, scenarioName: string
 }
 
 function scenarioHasKnowledge(scenarioDir: string): boolean {
-  return existsSync(join(scenarioDir, "playbook.md"))
-    || existsSync(join(scenarioDir, "package_metadata.json"));
+  return (
+    existsSync(join(scenarioDir, "playbook.md")) ||
+    existsSync(join(scenarioDir, "package_metadata.json"))
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -331,11 +363,7 @@ function readOptionalNonNegativeInteger(
   if (!entry) {
     return { ok: true };
   }
-  if (
-    typeof entry.value !== "number"
-    || !Number.isInteger(entry.value)
-    || entry.value < 0
-  ) {
+  if (typeof entry.value !== "number" || !Number.isInteger(entry.value) || entry.value < 0) {
     return { ok: false, error: `${entry.key} must be a non-negative integer` };
   }
   return { ok: true, value: entry.value };
@@ -346,7 +374,7 @@ function firstPresent(
   keys: string[],
 ): { key: string; value: unknown } | null {
   for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(body, key)) {
+    if (Object.hasOwn(body, key)) {
       return { key, value: body[key] };
     }
   }

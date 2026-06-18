@@ -15,7 +15,15 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { HookEvents, type HookBus } from "../extensions/index.js";
+import { LessonStore } from "./lessons.js";
 import { PlaybookManager, EMPTY_PLAYBOOK_SENTINEL } from "./playbook.js";
+import {
+  approvePendingPlaybook,
+  readPendingPlaybook,
+  rejectPendingPlaybook,
+  stagePendingPlaybook,
+  type PendingPlaybookView,
+} from "./playbook-approval.js";
 import {
   CompactionLedgerStore,
   normalizeCompactionEntry,
@@ -192,6 +200,50 @@ export class ArtifactStore {
     }
     mkdirSync(dirname(request.path), { recursive: true });
     writeFileSync(request.path, finalContent.trim() + "\n", "utf-8");
+  }
+
+  writeOrStagePlaybook(
+    scenarioName: string,
+    content: string,
+    opts: {
+      requireApproval: boolean;
+      sourceRunId: string;
+      generation: number;
+      curatorDecision: string;
+    },
+  ): "live" | "pending" {
+    if (!opts.requireApproval) {
+      this.writePlaybook(scenarioName, content);
+      return "live";
+    }
+    return stagePendingPlaybook(this.knowledgeRoot, scenarioName, content, {
+      sourceRunId: opts.sourceRunId,
+      generation: opts.generation,
+      curatorDecision: opts.curatorDecision,
+    });
+  }
+
+  readPendingPlaybook(scenarioName: string): PendingPlaybookView {
+    return readPendingPlaybook(this.knowledgeRoot, scenarioName);
+  }
+
+  approvePendingPlaybook(
+    scenarioName: string,
+    lessonStore = new LessonStore(this.knowledgeRoot),
+  ): { ok: boolean; status: "approved" | "missing" } {
+    return approvePendingPlaybook(
+      this.knowledgeRoot,
+      scenarioName,
+      this.writePlaybook.bind(this),
+      lessonStore,
+    );
+  }
+
+  rejectPendingPlaybook(
+    scenarioName: string,
+    lessonStore = new LessonStore(this.knowledgeRoot),
+  ): { ok: boolean; status: "rejected" | "missing" } {
+    return rejectPendingPlaybook(this.knowledgeRoot, scenarioName, lessonStore);
   }
 
   readDeadEnds(scenarioName: string): string {
