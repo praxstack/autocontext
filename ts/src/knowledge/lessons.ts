@@ -1,4 +1,4 @@
-/** Structured lessons with applicability metadata (Cowork 2c, mirrors Python LessonStore). */
+/** Deprecated structured lessons compatibility types; live curation derives from markdown. */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";

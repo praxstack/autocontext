@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ArtifactStore } from "../src/knowledge/artifact-store.js";
-import { LessonStore, makeMeta } from "../src/knowledge/lessons.js";
 import { buildKnowledgeApiRoutes } from "../src/server/knowledge-api.js";
 import { StartRunCmdSchema } from "../src/server/protocol.js";
 
@@ -57,7 +56,37 @@ describe("playbook approval gate", () => {
     }
   });
 
-  it("refuses to overwrite an unresolved pending playbook", () => {
+  it("auto mode supersedes stale pending approvals", () => {
+    const dir = root();
+    try {
+      const artifacts = store(dir);
+      artifacts.writePlaybook("grid_ctf", "approved playbook");
+      artifacts.writeOrStagePlaybook("grid_ctf", "pending old", {
+        requireApproval: true,
+        sourceRunId: "run-approval",
+        generation: 2,
+        curatorDecision: "advance",
+      });
+
+      expect(
+        artifacts.writeOrStagePlaybook("grid_ctf", "auto new", {
+          requireApproval: false,
+          sourceRunId: "run-auto",
+          generation: 3,
+          curatorDecision: "advance",
+        }),
+      ).toBe("live");
+
+      expect(artifacts.readPlaybook("grid_ctf")).toBe("auto new\n");
+      expect(artifacts.readPendingPlaybook("grid_ctf").hasPending).toBe(false);
+      expect(artifacts.approvePendingPlaybook("grid_ctf")).toEqual({ ok: false, status: "missing" });
+      expect(artifacts.readPlaybook("grid_ctf")).toBe("auto new\n");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips new staging while an unresolved pending playbook exists", () => {
     const dir = root();
     try {
       const artifacts = store(dir);
@@ -69,14 +98,14 @@ describe("playbook approval gate", () => {
         curatorDecision: "advance",
       });
 
-      expect(() =>
+      expect(
         artifacts.writeOrStagePlaybook("grid_ctf", "new pending playbook", {
           requireApproval: true,
           sourceRunId: "run-approval",
           generation: 3,
           curatorDecision: "advance",
         }),
-      ).toThrow(/pending playbook already exists/);
+      ).toBe("awaiting_approval");
       expect(artifacts.readPendingPlaybook("grid_ctf").content).toBe("pending playbook\n");
       expect(artifacts.readPendingPlaybook("grid_ctf").provenance?.generation).toBe(2);
     } finally {
@@ -111,17 +140,11 @@ describe("playbook approval gate", () => {
     }
   });
 
-  it("approves or rejects pending playbooks with same-generation lessons", () => {
+  it("approves or rejects pending playbooks without structured lesson side effects", () => {
     const dir = root();
     try {
       const artifacts = store(dir);
-      const lessons = new LessonStore(join(dir, "knowledge"));
       artifacts.writePlaybook("grid_ctf", "approved playbook");
-      lessons.addLesson(
-        "grid_ctf",
-        "held lesson",
-        makeMeta({ generation: 2, bestScore: 0.7, approvalStatus: "pending" }),
-      );
       artifacts.writeOrStagePlaybook("grid_ctf", "pending playbook", {
         requireApproval: true,
         sourceRunId: "run-approval",
@@ -129,12 +152,11 @@ describe("playbook approval gate", () => {
         curatorDecision: "advance",
       });
 
-      expect(artifacts.approvePendingPlaybook("grid_ctf", lessons)).toEqual({
+      expect(artifacts.approvePendingPlaybook("grid_ctf")).toEqual({
         ok: true,
         status: "approved",
       });
       expect(artifacts.readPlaybook("grid_ctf")).toBe("pending playbook\n");
-      expect(lessons.readLessons("grid_ctf")[0]!.meta.approvalStatus).toBe("active");
 
       artifacts.writeOrStagePlaybook("grid_ctf", "rejected playbook", {
         requireApproval: true,
@@ -142,18 +164,12 @@ describe("playbook approval gate", () => {
         generation: 3,
         curatorDecision: "advance",
       });
-      lessons.addLesson(
-        "grid_ctf",
-        "rejected lesson",
-        makeMeta({ generation: 3, bestScore: 0.8, approvalStatus: "pending" }),
-      );
 
-      expect(artifacts.rejectPendingPlaybook("grid_ctf", lessons)).toEqual({
+      expect(artifacts.rejectPendingPlaybook("grid_ctf")).toEqual({
         ok: true,
         status: "rejected",
       });
       expect(artifacts.readPlaybook("grid_ctf")).toBe("pending playbook\n");
-      expect(lessons.readLessons("grid_ctf").map((lesson) => lesson.text)).toEqual(["held lesson"]);
       expect(existsSync(join(dir, "knowledge", "grid_ctf", "playbook.pending.md"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -180,7 +196,11 @@ describe("playbook approval gate", () => {
       }
       async complete(opts: { userPrompt: string }) {
         if (opts.userPrompt.startsWith("Describe your strategy")) {
-          return { text: JSON.stringify({ aggression: 0.6, defense: 0.55, path_bias: 0.5 }), model: "m", usage: {} };
+          return {
+            text: JSON.stringify({ aggression: 0.6, defense: 0.55, path_bias: 0.5 }),
+            model: "m",
+            usage: {},
+          };
         }
         if (opts.userPrompt.startsWith("You are a curator consolidating")) {
           return {
@@ -214,9 +234,9 @@ describe("playbook approval gate", () => {
       await runner.run("approval-consolidation", 1);
       storeDb.close();
 
-      expect(readFileSync(join(dir, "knowledge", "grid_ctf", "playbook.md"), "utf-8")).not.toContain(
-        "consolidated leak",
-      );
+      expect(
+        readFileSync(join(dir, "knowledge", "grid_ctf", "playbook.md"), "utf-8"),
+      ).not.toContain("consolidated leak");
       expect(artifacts.readPendingPlaybook("grid_ctf").hasPending).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });

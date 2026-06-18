@@ -228,17 +228,6 @@ class ArtifactStore(PlaybookApprovalMethods, ArtifactGenerationPersistenceMethod
         reads the full SKILL.md (with bundled resources) on its own.
         """
         scenario = normalize_scenario_name_segment(scenario_name)
-        structured_lessons = self.lesson_store.read_lessons(scenario)
-        if structured_lessons:
-            current_generation = self.lesson_store.current_generation(scenario)
-            applicable = self.lesson_store.get_applicable_lessons(
-                scenario,
-                current_generation=current_generation,
-            )
-            if applicable:
-                return "\n".join(lesson.text.strip() for lesson in applicable).strip()
-            return ""
-
         skill_path = self._skill_dir(scenario) / "SKILL.md"
         if not skill_path.exists():
             return ""
@@ -249,9 +238,12 @@ class ArtifactStore(PlaybookApprovalMethods, ArtifactGenerationPersistenceMethod
             return ""
         after = content[start + len(marker):]
         next_heading = after.find("\n## ")
-        if next_heading != -1:
-            return after[:next_heading].strip()
-        return after.strip()
+        section = after[:next_heading] if next_heading != -1 else after
+        active_lines = [
+            line for line in section.splitlines()
+            if "<!-- autocontext:lesson-status=stale -->" not in line
+        ]
+        return "\n".join(active_lines).strip()
 
     def write_hints(self, scenario_name: str, content: str) -> None:
         """Persist coach hints so they survive run restarts."""

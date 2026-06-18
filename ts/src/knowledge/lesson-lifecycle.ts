@@ -1,15 +1,13 @@
-/** Pure lesson-lifecycle assembly + curation ops (Cowork 2c, mirrors Python).
- *
- * Backed by the structured LessonStore (lessons.json) and the ArtifactStore
- * dead_ends.md registry. "pending" is a status on the lesson itself
- * (meta.approvalStatus), not a separate store, so the lifecycle reads one store.
- */
+/** Lesson lifecycle derived from live playbook markdown primitives. */
 import { createHash } from "node:crypto";
-import { type Lesson, LessonStore, isPending, isStale, isSuperseded } from "./lessons.js";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { ArtifactStore } from "./artifact-store.js";
+import { PLAYBOOK_MARKERS } from "./playbook.js";
 import { normalizeScenarioSegment } from "./scenario-paths.js";
 
 export const STALENESS_WINDOW = 10;
+export const STALE_MARKER = "<!-- autocontext:lesson-status=stale -->";
 
 export interface LessonView {
   id: string;
@@ -20,45 +18,7 @@ export interface LessonView {
   bestScore: number | null;
   lastValidatedGen: number | null;
   supersededBy: string | null;
-  source: "curator" | "human";
-}
-
-function lessonView(l: Lesson, status: LessonView["status"]): LessonView {
-  return {
-    id: l.id,
-    text: l.text,
-    status,
-    generation: l.meta.generation,
-    createdAt: l.meta.createdAt,
-    bestScore: l.meta.bestScore,
-    lastValidatedGen: l.meta.lastValidatedGen,
-    supersededBy: l.meta.supersededBy || null,
-    source: "curator",
-  };
-}
-
-function deadEndStore(knowledgeRoot: string): ArtifactStore {
-  // Dead ends only need knowledgeRoot; runsRoot is unused for read/append.
-  return new ArtifactStore({ runsRoot: knowledgeRoot, knowledgeRoot });
-}
-
-function deadEndViews(md: string): LessonView[] {
-  // ArtifactStore.appendDeadEnd writes "### Dead End\n\n{entry}\n" sections.
-  return md
-    .split("### Dead End")
-    .map((block) => block.trim())
-    .filter((block) => block.length > 0)
-    .map((text) => ({
-      id: "deadend_" + createHash("sha1").update(text).digest("hex").slice(0, 8),
-      text,
-      status: "deadEnd" as const,
-      generation: 0,
-      createdAt: "",
-      bestScore: null,
-      lastValidatedGen: null,
-      supersededBy: null,
-      source: "curator" as const,
-    }));
+  source: string;
 }
 
 export interface LifecycleView {
@@ -69,108 +29,323 @@ export interface LifecycleView {
   deadEnd: LessonView[];
 }
 
+type DerivedLesson = {
+  id: string;
+  text: string;
+  status: "active" | "stale";
+  source: string;
+};
+
+type RewriteMode = "remove" | "stale" | "active";
+
+function normalizeText(text: string): string {
+  let stripped = text.replace(STALE_MARKER, "").trim();
+  if (stripped.startsWith("- ")) stripped = stripped.slice(2).trim();
+  return stripped.split(/\s+/).filter(Boolean).join(" ");
+}
+
+function lessonId(text: string): string {
+  return "lesson_" + createHash("sha256").update(normalizeText(text)).digest("hex").slice(0, 12);
+}
+
+function parseLessonLine(line: string): { text: string; stale: boolean } | null {
+  const stripped = line.trim();
+  if (!stripped.startsWith("-")) return null;
+  const text = normalizeText(stripped.slice(1));
+  return text ? { text, stale: stripped.includes(STALE_MARKER) } : null;
+}
+
+function playbookBlock(content: string): { start: number; end: number; body: string } | null {
+  const startMarker = PLAYBOOK_MARKERS.LESSONS_START;
+  const endMarker = PLAYBOOK_MARKERS.LESSONS_END;
+  const markerStart = content.indexOf(startMarker);
+  const end = content.indexOf(endMarker);
+  if (markerStart === -1 || end === -1 || end <= markerStart) return null;
+  const start = markerStart + startMarker.length;
+  return { start, end, body: content.slice(start, end) };
+}
+
+function playbookLessons(artifacts: ArtifactStore, scenario: string): DerivedLesson[] {
+  const block = playbookBlock(artifacts.readPlaybook(scenario));
+  if (!block) return [];
+  return block.body
+    .split("\n")
+    .map(parseLessonLine)
+    .filter((item): item is { text: string; stale: boolean } => item !== null)
+    .map((item) => ({
+      id: lessonId(item.text),
+      text: item.text,
+      status: item.stale ? "stale" : "active",
+      source: `knowledge/${scenario}/playbook.md`,
+    }));
+}
+
+function skillLessons(skillsRoot: string | undefined, scenario: string): DerivedLesson[] {
+  if (!skillsRoot) return [];
+  const skillPath = join(skillsRoot, `${scenario.replace(/_/g, "-")}-ops`, "SKILL.md");
+  if (!existsSync(skillPath)) return [];
+  const content = readFileSync(skillPath, "utf-8");
+  const marker = "## Operational Lessons";
+  const start = content.indexOf(marker);
+  if (start === -1) return [];
+  const after = content.slice(start + marker.length);
+  const nextHeading = after.indexOf("\n## ");
+  const section = nextHeading === -1 ? after : after.slice(0, nextHeading);
+  return section
+    .split("\n")
+    .map(parseLessonLine)
+    .filter((item): item is { text: string; stale: boolean } => item !== null)
+    .map((item) => ({
+      id: lessonId(item.text),
+      text: item.text,
+      status: item.stale ? "stale" : "active",
+      source: `skills/${scenario.replace(/_/g, "-")}-ops/SKILL.md`,
+    }));
+}
+
+function derivedLessons(
+  artifacts: ArtifactStore,
+  scenario: string,
+  skillsRoot: string | undefined,
+): DerivedLesson[] {
+  const seen = new Set<string>();
+  const result: DerivedLesson[] = [];
+  for (const lesson of [
+    ...playbookLessons(artifacts, scenario),
+    ...skillLessons(skillsRoot, scenario),
+  ]) {
+    if (seen.has(lesson.id)) continue;
+    seen.add(lesson.id);
+    result.push(lesson);
+  }
+  return result;
+}
+
+function lessonView(lesson: DerivedLesson, currentGeneration: number): LessonView {
+  return {
+    id: lesson.id,
+    text: lesson.text,
+    status: lesson.status,
+    generation: 0,
+    createdAt: "",
+    bestScore: null,
+    lastValidatedGen: lesson.status === "active" ? currentGeneration : null,
+    supersededBy: null,
+    source: lesson.source,
+  };
+}
+
+function deadEndViews(md: string): LessonView[] {
+  return md
+    .split("### Dead End")
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0)
+    .map((text) => ({
+      id: "deadend_" + createHash("sha256").update(text).digest("hex").slice(0, 8),
+      text,
+      status: "deadEnd" as const,
+      generation: 0,
+      createdAt: "",
+      bestScore: null,
+      lastValidatedGen: null,
+      supersededBy: null,
+      source: "knowledge/dead_ends.md",
+    }));
+}
+
 export function buildLifecycle(opts: {
   knowledgeRoot: string;
   scenario: string;
   currentGeneration: number;
   stalenessWindow?: number;
+  skillsRoot?: string;
 }): LifecycleView {
+  void opts.stalenessWindow;
   const scenario = normalizeScenarioSegment(opts.scenario);
-  const window = opts.stalenessWindow ?? STALENESS_WINDOW;
-  const store = new LessonStore(opts.knowledgeRoot);
-  const pending: LessonView[] = [];
+  const artifacts = new ArtifactStore({
+    runsRoot: opts.knowledgeRoot,
+    knowledgeRoot: opts.knowledgeRoot,
+  });
   const active: LessonView[] = [];
   const stale: LessonView[] = [];
-  for (const l of store.readLessons(scenario)) {
-    if (isPending(l)) {
-      pending.push(lessonView(l, "pending"));
-      continue;
-    }
-    if (isSuperseded(l)) continue;
-    if (isStale(l, opts.currentGeneration, window)) stale.push(lessonView(l, "stale"));
-    else active.push(lessonView(l, "active"));
+  for (const lesson of derivedLessons(artifacts, scenario, opts.skillsRoot)) {
+    (lesson.status === "stale" ? stale : active).push(lessonView(lesson, opts.currentGeneration));
   }
   return {
     scenario,
-    pending,
+    pending: [],
     active,
     stale,
-    deadEnd: deadEndViews(deadEndStore(opts.knowledgeRoot).readDeadEnds(scenario)),
+    deadEnd: deadEndViews(artifacts.readDeadEnds(scenario)),
   };
 }
 
 export function approveLesson(opts: {
   knowledgeRoot: string;
+  skillsRoot?: string;
   scenario: string;
   lessonId: string;
   currentGeneration: number;
 }): string | null {
-  const scenario = normalizeScenarioSegment(opts.scenario);
-  const store = new LessonStore(opts.knowledgeRoot);
-  const lessons = store.readLessons(scenario);
-  const target = lessons.find((l) => l.id === opts.lessonId && isPending(l));
-  if (!target) return null;
-  target.meta.approvalStatus = "active";
-  // Never lower the validation generation: approving must not make a lesson stale.
-  target.meta.lastValidatedGen = Math.max(
-    opts.currentGeneration,
-    target.meta.generation,
-    target.meta.lastValidatedGen,
+  void opts.currentGeneration;
+  const result = setLessonStale(
+    opts.knowledgeRoot,
+    opts.skillsRoot,
+    opts.scenario,
+    opts.lessonId,
+    false,
   );
-  store.writeLessons(scenario, lessons);
-  return "active";
+  return result.found ? "active" : null;
 }
 
 export function rejectLesson(opts: {
   knowledgeRoot: string;
+  skillsRoot?: string;
   scenario: string;
   lessonId: string;
 }): boolean {
-  // Reject only removes pending lessons; deleting an active lesson is the explicit
-  // curate "delete" action.
-  const scenario = normalizeScenarioSegment(opts.scenario);
-  const store = new LessonStore(opts.knowledgeRoot);
-  const lessons = store.readLessons(scenario);
-  const target = lessons.find((l) => l.id === opts.lessonId && isPending(l));
-  if (!target) return false;
-  store.writeLessons(
-    scenario,
-    lessons.filter((l) => l.id !== opts.lessonId),
-  );
-  return true;
+  return removeLesson(opts.knowledgeRoot, opts.skillsRoot, opts.scenario, opts.lessonId).found;
 }
 
 export function curateLesson(opts: {
   knowledgeRoot: string;
+  skillsRoot?: string;
   scenario: string;
   lessonId: string;
   action: "stale" | "deadEnd" | "delete";
   currentGeneration: number;
 }): string | null {
-  const scenario = normalizeScenarioSegment(opts.scenario);
-  const store = new LessonStore(opts.knowledgeRoot);
-  const lessons = store.readLessons(scenario);
-  const target = lessons.find((l) => l.id === opts.lessonId);
-  if (!target) return null;
+  void opts.currentGeneration;
   if (opts.action === "delete") {
-    store.writeLessons(
-      scenario,
-      lessons.filter((l) => l.id !== opts.lessonId),
-    );
-    return "deleted";
+    return removeLesson(opts.knowledgeRoot, opts.skillsRoot, opts.scenario, opts.lessonId).found
+      ? "deleted"
+      : null;
   }
   if (opts.action === "stale") {
-    target.meta.lastValidatedGen = -1;
-    store.writeLessons(scenario, lessons);
-    return "stale";
+    return setLessonStale(opts.knowledgeRoot, opts.skillsRoot, opts.scenario, opts.lessonId, true)
+      .found
+      ? "stale"
+      : null;
   }
-  // deadEnd: append via the shared ArtifactStore registry (single format), remove from active.
-  deadEndStore(opts.knowledgeRoot).appendDeadEnd(scenario, target.text);
-  store.writeLessons(
-    scenario,
-    lessons.filter((l) => l.id !== opts.lessonId),
-  );
+  const result = removeLesson(opts.knowledgeRoot, opts.skillsRoot, opts.scenario, opts.lessonId);
+  if (!result.found || !result.text) return null;
+  new ArtifactStore({
+    runsRoot: opts.knowledgeRoot,
+    knowledgeRoot: opts.knowledgeRoot,
+  }).appendDeadEnd(normalizeScenarioSegment(opts.scenario), result.text);
   return "deadEnd";
+}
+
+function removeLesson(
+  knowledgeRoot: string,
+  skillsRoot: string | undefined,
+  scenarioName: string,
+  id: string,
+): { found: boolean; text: string | null } {
+  const playbook = rewritePlaybookLesson(knowledgeRoot, scenarioName, id, "remove");
+  const skill = rewriteSkillLesson(skillsRoot, scenarioName, id, "remove");
+  return { found: playbook.found || skill.found, text: playbook.text ?? skill.text };
+}
+
+function setLessonStale(
+  knowledgeRoot: string,
+  skillsRoot: string | undefined,
+  scenarioName: string,
+  id: string,
+  stale: boolean,
+): { found: boolean; text: string | null } {
+  const mode = stale ? "stale" : "active";
+  const playbook = rewritePlaybookLesson(knowledgeRoot, scenarioName, id, mode);
+  const skill = rewriteSkillLesson(skillsRoot, scenarioName, id, mode);
+  return { found: playbook.found || skill.found, text: playbook.text ?? skill.text };
+}
+
+function rewritePlaybookLesson(
+  knowledgeRoot: string,
+  scenarioName: string,
+  id: string,
+  mode: RewriteMode,
+): { found: boolean; text: string | null } {
+  const scenario = normalizeScenarioSegment(scenarioName);
+  const artifacts = new ArtifactStore({ runsRoot: knowledgeRoot, knowledgeRoot });
+  const content = artifacts.readPlaybook(scenario);
+  const block = playbookBlock(content);
+  if (!block) return { found: false, text: null };
+  const rewritten = rewriteLessonLines(block.body, id, mode);
+  if (!rewritten.found) return rewritten;
+  if (!rewritten.changed) return { found: true, text: rewritten.text };
+  const body = rewritten.lines.join("\n").trim();
+  const prefix = content.slice(0, block.start).trimEnd();
+  const suffix = content.slice(block.end).trimStart();
+  artifacts.writePlaybook(
+    scenario,
+    body ? `${prefix}\n${body}\n${suffix}` : `${prefix}\n${suffix}`,
+  );
+  return { found: true, text: rewritten.text };
+}
+
+function rewriteSkillLesson(
+  skillsRoot: string | undefined,
+  scenarioName: string,
+  id: string,
+  mode: RewriteMode,
+): { found: boolean; text: string | null } {
+  if (!skillsRoot) return { found: false, text: null };
+  const scenario = normalizeScenarioSegment(scenarioName);
+  const path = join(skillsRoot, `${scenario.replace(/_/g, "-")}-ops`, "SKILL.md");
+  if (!existsSync(path)) return { found: false, text: null };
+  const content = readFileSync(path, "utf-8");
+  const marker = "## Operational Lessons";
+  const markerStart = content.indexOf(marker);
+  if (markerStart === -1) return { found: false, text: null };
+  const start = markerStart + marker.length;
+  const after = content.slice(start);
+  const nextHeading = after.indexOf("\n## ");
+  const end = nextHeading === -1 ? content.length : start + nextHeading;
+  const rewritten = rewriteLessonLines(content.slice(start, end), id, mode);
+  if (!rewritten.found) return rewritten;
+  if (rewritten.changed) {
+    const body = rewritten.lines.join("\n").trim();
+    const prefix = content.slice(0, start).trimEnd();
+    const suffix = content.slice(end).trimStart();
+    writeFileSync(path, body ? `${prefix}\n${body}\n${suffix}` : `${prefix}\n${suffix}`, "utf-8");
+  }
+  return { found: true, text: rewritten.text };
+}
+
+function rewriteLessonLines(
+  body: string,
+  id: string,
+  mode: RewriteMode,
+): { found: boolean; changed: boolean; text: string | null; lines: string[] } {
+  let found = false;
+  let changed = false;
+  let targetText: string | null = null;
+  const lines: string[] = [];
+  for (const line of body.split("\n")) {
+    const parsed = parseLessonLine(line);
+    if (!parsed || lessonId(parsed.text) !== id) {
+      lines.push(line);
+      continue;
+    }
+    found = true;
+    targetText ??= parsed.text;
+    if (mode === "remove") {
+      changed = true;
+      continue;
+    }
+    if (mode === "active" && !parsed.stale) {
+      lines.push(line);
+      continue;
+    }
+    if (mode === "stale" && parsed.stale) {
+      lines.push(line);
+      continue;
+    }
+    changed = true;
+    lines.push(`- ${parsed.text}${mode === "stale" ? ` ${STALE_MARKER}` : ""}`);
+  }
+  return { found, changed, text: targetText, lines };
 }
 
 export { LessonStore, makeMeta } from "./lessons.js";

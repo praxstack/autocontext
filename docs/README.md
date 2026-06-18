@@ -50,6 +50,7 @@ This directory is the maintainer-facing landing page for repository docs. Use it
 - [Campaign mode report](campaign-mode-report.md)
 - [Goal run report](goal-run-report.md)
 - [Playbook approval gate](playbook-approval-gate.md)
+- [Derived lesson curation](derived-lesson-curation.md)
 - [Browser exploration contract](browser-exploration-contract.md)
 - [OpenTelemetry bridge](opentelemetry-bridge.md)
 - [Background session domain and parity contract](background-session-domain.md)
