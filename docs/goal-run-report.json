@@ -36,6 +36,113 @@
     "verifier_state": { "$ref": "#/$defs/verifierState" },
     "decision": { "$ref": "#/$defs/decision" }
   },
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "status": { "const": "continued" },
+        "decision": {
+          "type": "object",
+          "properties": {
+            "decision_kind": { "const": "continue" },
+            "status": { "const": "continued" },
+            "next_action_kind": { "$ref": "#/$defs/actionKind" },
+            "stop_reason": { "const": null }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "status": { "const": "verified_complete" },
+        "decision": {
+          "type": "object",
+          "properties": {
+            "decision_kind": { "const": "stop" },
+            "status": { "const": "verified_complete" },
+            "next_action_kind": { "const": null },
+            "stop_reason": { "const": "verified_complete" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "status": { "const": "blocked" },
+        "decision": {
+          "type": "object",
+          "properties": {
+            "decision_kind": { "const": "stop" },
+            "status": { "const": "blocked" },
+            "next_action_kind": { "const": null },
+            "stop_reason": { "const": "blocked" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "status": { "const": "budget_exhausted" },
+        "decision": {
+          "type": "object",
+          "properties": {
+            "decision_kind": { "const": "stop" },
+            "status": { "const": "budget_exhausted" },
+            "next_action_kind": { "const": null },
+            "stop_reason": { "const": "budget_exhausted" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "status": { "const": "verifier_failed" },
+        "decision": {
+          "type": "object",
+          "properties": {
+            "decision_kind": { "const": "stop" },
+            "status": { "const": "verifier_failed" },
+            "next_action_kind": { "const": null },
+            "stop_reason": { "const": "verifier_failed" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "status": { "const": "no_progress" },
+        "decision": {
+          "type": "object",
+          "properties": {
+            "decision_kind": { "const": "stop" },
+            "status": { "const": "no_progress" },
+            "next_action_kind": { "const": null },
+            "stop_reason": { "const": "no_progress" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "status": { "const": "canceled" },
+        "decision": {
+          "type": "object",
+          "properties": {
+            "decision_kind": { "const": "stop" },
+            "status": { "const": "canceled" },
+            "next_action_kind": { "const": null },
+            "stop_reason": { "const": "canceled" }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "goalRunStatus": {
       "enum": [
@@ -51,7 +158,14 @@
     "actionKind": { "enum": ["run", "solve", "improve", "mission", "campaign"] },
     "actionStatus": { "enum": ["planned", "running", "completed", "failed", "canceled"] },
     "stopReason": {
-      "enum": ["verified_complete", "blocked", "budget_exhausted", "verifier_failed", "no_progress", "canceled"]
+      "enum": [
+        "verified_complete",
+        "blocked",
+        "budget_exhausted",
+        "verifier_failed",
+        "no_progress",
+        "canceled"
+      ]
     },
     "decisionKind": { "enum": ["continue", "stop"] },
     "nullableString": { "type": ["string", "null"] },
@@ -70,7 +184,13 @@
     "budget": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["max_iterations", "max_actions", "max_seconds", "max_tokens", "max_no_progress_iterations"],
+      "required": [
+        "max_iterations",
+        "max_actions",
+        "max_seconds",
+        "max_tokens",
+        "max_no_progress_iterations"
+      ],
       "properties": {
         "max_iterations": { "$ref": "#/$defs/nullableNonNegativeInteger" },
         "max_actions": { "$ref": "#/$defs/nullableNonNegativeInteger" },
@@ -120,7 +240,14 @@
     "verifierState": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["verifier_ref", "verified", "verifier_failed", "confidence", "summary", "evidence_refs"],
+      "required": [
+        "verifier_ref",
+        "verified",
+        "verifier_failed",
+        "confidence",
+        "summary",
+        "evidence_refs"
+      ],
       "properties": {
         "verifier_ref": { "type": "string", "minLength": 1 },
         "verified": { "type": "boolean" },
@@ -128,6 +255,14 @@
         "confidence": { "$ref": "#/$defs/nullableNumber" },
         "summary": { "type": "string", "minLength": 1 },
         "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } }
+      },
+      "not": {
+        "type": "object",
+        "required": ["verified", "verifier_failed"],
+        "properties": {
+          "verified": { "const": true },
+          "verifier_failed": { "const": true }
+        }
       }
     },
     "decision": {

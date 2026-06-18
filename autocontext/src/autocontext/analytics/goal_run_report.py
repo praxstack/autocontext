@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 GoalRunStatus = Literal[
     "continued",
@@ -74,6 +74,12 @@ class GoalVerifierState(_StrictModel):
     summary: str = Field(min_length=1)
     evidence_refs: list[GoalEvidenceRef]
 
+    @model_validator(mode="after")
+    def verified_or_failed(self) -> Self:
+        if self.verified and self.verifier_failed:
+            raise ValueError("verified and verifier_failed are mutually exclusive")
+        return self
+
 
 class GoalSupervisorDecision(_StrictModel):
     decision_id: str = Field(min_length=1)
@@ -83,6 +89,16 @@ class GoalSupervisorDecision(_StrictModel):
     stop_reason: GoalStopReason | None
     rationale: str = Field(min_length=1)
     evidence_refs: list[GoalEvidenceRef]
+
+    @model_validator(mode="after")
+    def decision_matches_shape(self) -> Self:
+        if self.decision_kind == "continue":
+            if self.status != "continued" or self.next_action_kind is None or self.stop_reason is not None:
+                raise ValueError("continue decisions require continued status, next action, and no stop reason")
+            return self
+        if self.status == "continued" or self.next_action_kind is not None or self.stop_reason != self.status:
+            raise ValueError("stop decisions require terminal status, no next action, and matching stop reason")
+        return self
 
 
 class GoalRunReport(_StrictModel):
@@ -100,6 +116,12 @@ class GoalRunReport(_StrictModel):
     actions: list[GoalActionRecord]
     verifier_state: GoalVerifierState
     decision: GoalSupervisorDecision
+
+    @model_validator(mode="after")
+    def status_matches_decision(self) -> Self:
+        if self.status != self.decision.status:
+            raise ValueError("status must match decision.status")
+        return self
 
     def to_markdown(self) -> str:
         decision = self.decision

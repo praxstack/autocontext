@@ -1,8 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { dirname, join, posix, win32 } from "node:path";
 import { parseGoalRunReport, type GoalRunReport } from "../analytics/goal-run-report.js";
 
-export function goalRunReportPath(knowledgeRoot: string, goalId: string, goalRunId: string): string {
+export function goalRunReportPath(
+  knowledgeRoot: string,
+  goalId: string,
+  goalRunId: string,
+): string {
   return join(
     knowledgeRoot,
     "goal_runs",
@@ -19,7 +23,10 @@ function pathSegment(value: string, label: string): string {
     normalized === ".." ||
     normalized.includes("/") ||
     normalized.includes("\\") ||
-    basename(normalized) !== normalized
+    posix.isAbsolute(normalized) ||
+    win32.isAbsolute(normalized) ||
+    posix.basename(normalized) !== normalized ||
+    win32.basename(normalized) !== normalized
   ) {
     throw new Error(`${label} must be a single path segment`);
   }
@@ -38,7 +45,13 @@ export function writeGoalRunReport(
   return path;
 }
 
-export function readGoalRunReport(knowledgeRoot: string, goalId: string, goalRunId: string): GoalRunReport | null {
+export function readGoalRunReport(
+  knowledgeRoot: string,
+  goalId: string,
+  goalRunId: string,
+): GoalRunReport | null {
   const path = goalRunReportPath(knowledgeRoot, goalId, goalRunId);
-  return existsSync(path) ? parseGoalRunReport(JSON.parse(readFileSync(path, "utf-8")) as unknown) : null;
+  return existsSync(path)
+    ? parseGoalRunReport(JSON.parse(readFileSync(path, "utf-8")) as unknown)
+    : null;
 }

@@ -25,7 +25,13 @@ def _path_segment(value: str, label: str) -> str:
         raise ValueError(f"{label} must be a single path segment: {value!r}")
     for path_cls in (PurePosixPath, PureWindowsPath):
         candidate = path_cls(normalized)
-        if candidate.is_absolute() or len(candidate.parts) != 1 or candidate.parts[0] in {".", ".."}:
+        if (
+            candidate.drive
+            or candidate.root
+            or candidate.is_absolute()
+            or len(candidate.parts) != 1
+            or candidate.parts[0] in {".", ".."}
+        ):
             raise ValueError(f"{label} must be a single path segment: {value!r}")
     return normalized
 

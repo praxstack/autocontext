@@ -8,7 +8,13 @@ export const GOAL_RUN_STATUSES = [
   "canceled",
 ] as const;
 export const GOAL_ACTION_KINDS = ["run", "solve", "improve", "mission", "campaign"] as const;
-export const GOAL_ACTION_STATUSES = ["planned", "running", "completed", "failed", "canceled"] as const;
+export const GOAL_ACTION_STATUSES = [
+  "planned",
+  "running",
+  "completed",
+  "failed",
+  "canceled",
+] as const;
 
 export type GoalRunStatus = (typeof GOAL_RUN_STATUSES)[number];
 export type GoalActionKind = (typeof GOAL_ACTION_KINDS)[number];
@@ -157,6 +163,9 @@ export function parseGoalRunReport(value: unknown): GoalRunReport {
     "decision",
   ]);
   if (report.schema_version !== 1) throw new Error("schema_version must be 1");
+  const status = goalRunStatus(report.status);
+  const decision = parseDecision(report.decision);
+  if (status !== decision.status) throw new Error("status must match decision.status");
   return {
     schema_version: 1,
     goal_id: string(report.goal_id, "goal_id"),
@@ -165,13 +174,13 @@ export function parseGoalRunReport(value: unknown): GoalRunReport {
     objective: string(report.objective, "objective"),
     generated_at: string(report.generated_at, "generated_at"),
     resume_token: string(report.resume_token, "resume_token"),
-    status: goalRunStatus(report.status),
+    status,
     verifier_ref: string(report.verifier_ref, "verifier_ref"),
     budget: parseBudget(report.budget),
     usage: parseUsage(report.usage),
     actions: array(report.actions, "actions").map(parseAction),
     verifier_state: parseVerifierState(report.verifier_state),
-    decision: parseDecision(report.decision),
+    decision,
   };
 }
 
@@ -198,16 +207,38 @@ function decideGoalRun(input: {
   decisionId: string;
 }): GoalSupervisorDecision {
   const evidenceRefs = input.verifierState.evidence_refs;
-  if (input.requestedCancel) return stopDecision(input.decisionId, "canceled", "Goal canceled by operator.", evidenceRefs);
+  if (input.requestedCancel)
+    return stopDecision(input.decisionId, "canceled", "Goal canceled by operator.", evidenceRefs);
   if (input.verifierState.verifier_failed)
-    return stopDecision(input.decisionId, "verifier_failed", "Verifier failed before goal completion.", evidenceRefs);
+    return stopDecision(
+      input.decisionId,
+      "verifier_failed",
+      "Verifier failed before goal completion.",
+      evidenceRefs,
+    );
   if (input.verifierState.verified)
-    return stopDecision(input.decisionId, "verified_complete", "Verifier confirmed the goal is complete.", evidenceRefs);
-  if (input.blockedReason) return stopDecision(input.decisionId, "blocked", input.blockedReason, evidenceRefs);
+    return stopDecision(
+      input.decisionId,
+      "verified_complete",
+      "Verifier confirmed the goal is complete.",
+      evidenceRefs,
+    );
+  if (input.blockedReason)
+    return stopDecision(input.decisionId, "blocked", input.blockedReason, evidenceRefs);
   if (budgetExhausted(input.budget, input.usage))
-    return stopDecision(input.decisionId, "budget_exhausted", "Goal budget exhausted before verification.", evidenceRefs);
+    return stopDecision(
+      input.decisionId,
+      "budget_exhausted",
+      "Goal budget exhausted before verification.",
+      evidenceRefs,
+    );
   if (noProgressExhausted(input.budget, input.usage))
-    return stopDecision(input.decisionId, "no_progress", "No-progress limit reached with evidence.", evidenceRefs);
+    return stopDecision(
+      input.decisionId,
+      "no_progress",
+      "No-progress limit reached with evidence.",
+      evidenceRefs,
+    );
   const nextActionKind = input.nextActionKind ?? "mission";
   return {
     decision_id: input.decisionId,
@@ -247,12 +278,21 @@ function budgetExhausted(budget: GoalBudget, usage: GoalUsage): boolean {
 }
 
 function noProgressExhausted(budget: GoalBudget, usage: GoalUsage): boolean {
-  return budget.max_no_progress_iterations !== null && usage.no_progress_count >= budget.max_no_progress_iterations;
+  return (
+    budget.max_no_progress_iterations !== null &&
+    usage.no_progress_count >= budget.max_no_progress_iterations
+  );
 }
 
 function parseBudget(value: unknown): GoalBudget {
   const item = record(value, "goal budget");
-  exact(item, ["max_iterations", "max_actions", "max_seconds", "max_tokens", "max_no_progress_iterations"]);
+  exact(item, [
+    "max_iterations",
+    "max_actions",
+    "max_seconds",
+    "max_tokens",
+    "max_no_progress_iterations",
+  ]);
   return {
     max_iterations: nullableNonNegativeInteger(item.max_iterations, "max_iterations"),
     max_actions: nullableNonNegativeInteger(item.max_actions, "max_actions"),
@@ -299,17 +339,30 @@ function parseAction(value: unknown): GoalActionRecord {
     inner_run_ref: nullableString(item.inner_run_ref, "inner_run_ref"),
     summary: string(item.summary, "summary"),
     evidence_refs: array(item.evidence_refs, "evidence_refs").map(parseEvidenceRef),
-    negative_result_ledger_uri: nullableString(item.negative_result_ledger_uri, "negative_result_ledger_uri"),
+    negative_result_ledger_uri: nullableString(
+      item.negative_result_ledger_uri,
+      "negative_result_ledger_uri",
+    ),
   };
 }
 
 function parseVerifierState(value: unknown): GoalVerifierState {
   const item = record(value, "goal verifier state");
-  exact(item, ["verifier_ref", "verified", "verifier_failed", "confidence", "summary", "evidence_refs"]);
+  exact(item, [
+    "verifier_ref",
+    "verified",
+    "verifier_failed",
+    "confidence",
+    "summary",
+    "evidence_refs",
+  ]);
+  const verified = boolean(item.verified, "verified");
+  const verifierFailed = boolean(item.verifier_failed, "verifier_failed");
+  if (verified && verifierFailed) throw new Error("verified and verifier_failed are mutually exclusive");
   return {
     verifier_ref: string(item.verifier_ref, "verifier_ref"),
-    verified: boolean(item.verified, "verified"),
-    verifier_failed: boolean(item.verifier_failed, "verifier_failed"),
+    verified,
+    verifier_failed: verifierFailed,
     confidence: nullableNumber(item.confidence, "confidence"),
     summary: string(item.summary, "summary"),
     evidence_refs: array(item.evidence_refs, "evidence_refs").map(parseEvidenceRef),
@@ -318,14 +371,32 @@ function parseVerifierState(value: unknown): GoalVerifierState {
 
 function parseDecision(value: unknown): GoalSupervisorDecision {
   const item = record(value, "goal decision");
-  exact(item, ["decision_id", "decision_kind", "status", "next_action_kind", "stop_reason", "rationale", "evidence_refs"]);
+  exact(item, [
+    "decision_id",
+    "decision_kind",
+    "status",
+    "next_action_kind",
+    "stop_reason",
+    "rationale",
+    "evidence_refs",
+  ]);
   const status = goalRunStatus(item.status);
+  const decisionKind = goalDecisionKind(item.decision_kind);
+  const nextActionKind = item.next_action_kind === null ? null : goalActionKind(item.next_action_kind);
+  const stopReason = item.stop_reason === null ? null : goalStopReason(item.stop_reason);
+  if (decisionKind === "continue") {
+    if (status !== "continued" || nextActionKind === null || stopReason !== null) {
+      throw new Error("continue decisions require continued status, next action, and no stop reason");
+    }
+  } else if (status === "continued" || nextActionKind !== null || stopReason !== status) {
+    throw new Error("stop decisions require terminal status, no next action, and matching stop reason");
+  }
   return {
     decision_id: string(item.decision_id, "decision_id"),
-    decision_kind: goalDecisionKind(item.decision_kind),
+    decision_kind: decisionKind,
     status,
-    next_action_kind: item.next_action_kind === null ? null : goalActionKind(item.next_action_kind),
-    stop_reason: item.stop_reason === null ? null : goalStopReason(item.stop_reason),
+    next_action_kind: nextActionKind,
+    stop_reason: stopReason,
     rationale: string(item.rationale, "rationale"),
     evidence_refs: array(item.evidence_refs, "evidence_refs").map(parseEvidenceRef),
   };
@@ -338,7 +409,8 @@ function parseEvidenceRef(value: unknown): GoalEvidenceRef {
 }
 
 function record(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error(`${label} must be an object`);
   return value as Record<string, unknown>;
 }
 
@@ -361,7 +433,8 @@ function nullableString(value: unknown, label: string): string | null {
 }
 
 function number(value: unknown, label: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${label} must be a number`);
+  if (typeof value !== "number" || !Number.isFinite(value))
+    throw new Error(`${label} must be a number`);
   return value;
 }
 
@@ -380,7 +453,8 @@ function nullableNonNegativeNumber(value: unknown, label: string): number | null
 }
 
 function integer(value: unknown, label: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
+  if (typeof value !== "number" || !Number.isInteger(value))
+    throw new Error(`${label} must be an integer`);
   return value;
 }
 
@@ -424,7 +498,8 @@ function goalActionStatus(value: unknown): GoalActionStatus {
 
 function goalDecisionKind(value: unknown): GoalDecisionKind {
   const result = string(value, "decision_kind");
-  if (result !== "continue" && result !== "stop") throw new Error("decision_kind must be continue or stop");
+  if (result !== "continue" && result !== "stop")
+    throw new Error("decision_kind must be continue or stop");
   return result;
 }
 

@@ -80,7 +80,12 @@ def test_goal_run_report_file_store_rejects_path_traversal(tmp_path: Path) -> No
 
     report = GoalRunReport.from_dict(_cases()[0]["expected_report"])
 
-    for goal_id, goal_run_id in [("../../../outside", report.goal_run_id), (report.goal_id, "../../../outside")]:
+    for goal_id, goal_run_id in [
+        ("../../../outside", report.goal_run_id),
+        (report.goal_id, "../../../outside"),
+        ("C:foo", report.goal_run_id),
+        (report.goal_id, "C:foo"),
+    ]:
         try:
             write_goal_run_report(tmp_path / "knowledge", goal_id, goal_run_id, report)
         except ValueError:
@@ -112,3 +117,30 @@ def test_goal_run_report_rejects_schema_invalid_data() -> None:
         except ValueError:
             continue
         raise AssertionError("schema-invalid goal run report was accepted")
+
+
+def test_goal_run_report_rejects_inconsistent_decisions_and_verifier_state() -> None:
+    from autocontext.analytics.goal_run_report import GoalRunReport, build_goal_run_report
+
+    continued = _cases()[0]["expected_report"]
+    terminal = _cases()[1]["expected_report"]
+
+    for payload in [
+        {**continued, "status": "verified_complete"},
+        {**continued, "decision": {**continued["decision"], "next_action_kind": None}},
+        {**terminal, "decision": {**terminal["decision"], "next_action_kind": "mission"}},
+        {**terminal, "decision": {**terminal["decision"], "stop_reason": "blocked"}},
+        {**terminal, "verifier_state": {**terminal["verifier_state"], "verifier_failed": True}},
+    ]:
+        try:
+            GoalRunReport.from_dict(payload)
+        except ValueError:
+            continue
+        raise AssertionError("inconsistent goal run report was accepted")
+
+    bad_input = {**_cases()[1], "verifier_state": {**_cases()[1]["verifier_state"], "verifier_failed": True}}
+    try:
+        build_goal_run_report(**_build_args(bad_input))
+    except ValueError:
+        return
+    raise AssertionError("conflicting verifier booleans were accepted")
