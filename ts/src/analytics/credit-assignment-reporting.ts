@@ -70,7 +70,26 @@ export function formatAttributionForAgent(result: AttributionResult, role: strin
     lines.push(`- ${component}: +${credit.toFixed(4)} (${Math.round(share)}% of improvement)`);
   }
 
+  const spanReport = result.metadata.spanAttribution;
+  if (isSpanReport(spanReport)) {
+    const preferredSources = new Set(preferred.length > 0 ? preferred : Object.keys(result.credits));
+    const spans = [...spanReport.spans]
+      .filter((span) => preferredSources.has(String(span.source)))
+      .sort((left, right) => Number(right.credit) - Number(left.credit))
+      .slice(0, 5);
+    if (spans.length > 0) {
+      lines.push("", "Span attribution (component-correlated, noisy):");
+      for (const span of spans) {
+        lines.push(`- ${span.text}: ${Number(span.credit).toFixed(4)}`);
+      }
+    }
+  }
+
   return lines.join("\n");
+}
+
+function isSpanReport(value: unknown): value is { spans: Array<{ source: string; text: string; credit: number }> } {
+  return typeof value === "object" && value !== null && Array.isArray((value as { spans?: unknown }).spans);
 }
 
 export function summarizeCreditPatterns(
