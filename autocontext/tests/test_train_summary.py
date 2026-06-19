@@ -90,6 +90,64 @@ def test_default_train_steps_distinguishes_from_scratch_vs_adapter() -> None:
         assert train._default_train_steps(adapter) == 100, adapter
 
 
+def test_train_parser_accepts_trl_prompt_count() -> None:
+    args = (
+        _train_module()
+        ._build_parser()
+        .parse_args(
+            [
+                "--scenario",
+                "gsm8k",
+                "--data",
+                "data/gsm8k.jsonl",
+                "--output-dir",
+                "runs/out",
+                "--backend",
+                "trl",
+                "--trl-mode",
+                "gkd",
+                "--n-prompts",
+                "384",
+            ]
+        )
+    )
+
+    assert args.n_prompts == 384
+
+
+def test_trl_backend_receives_prompt_count(monkeypatch, tmp_path) -> None:
+    train = _train_module()
+    trl_backend = importlib.import_module("autocontext.training.autoresearch.trl_backend")
+    captured = {}
+
+    def fake_run_trl_training(**kwargs):
+        captured.update(kwargs)
+        return {
+            "avg_score": 0.0,
+            "valid_rate": 0.0,
+            "training_seconds": 0.0,
+            "peak_memory_mb": 0.0,
+            "num_steps": 1.0,
+            "num_params_m": 0.0,
+            "depth": 0.0,
+        }
+
+    monkeypatch.setattr(train, "_preflight_backend_deps", lambda _backend: None)
+    monkeypatch.setattr(trl_backend, "run_trl_training", fake_run_trl_training)
+
+    train.run_training(
+        scenario_name="gsm8k",
+        data_path=tmp_path / "data.jsonl",
+        output_dir=tmp_path / "out",
+        time_budget=1,
+        memory_limit_mb=1024,
+        backend="trl",
+        n_prompts=384,
+    )
+
+    assert captured["n_prompts"] == 384
+
+
 def test_default_learning_rate_per_backend() -> None:
     train = _train_module()
     assert train._default_learning_rate("mlx") == 1e-3

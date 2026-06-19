@@ -119,6 +119,14 @@ def _peak_memory_mb() -> float:
         return 0.0
 
 
+def _model_parameters(model: Any) -> Any:
+    return model.parameters()
+
+
+def _model_update(model: Any, params: Any) -> None:
+    model.update(params)
+
+
 def _count_params_million(params: Any) -> float:
     if HAS_MLX:
         import mlx.core as mx  # type: ignore[import-not-found]
@@ -288,13 +296,13 @@ def _run_mlx_training(
         x, y, loss_mask, ex_weights = batches[step % len(batches)]
         loss, grads = loss_and_grad(model, x, y, loss_mask, ex_weights)
         optimizer.update(model, grads)
-        mx.eval(model.parameters(), optimizer.state, loss)  # noqa: S307
+        mx.eval(_model_parameters(model), optimizer.state, loss)  # noqa: S307
         steps_completed += 1
         if val_select and val_batches:
             current = _mean_val_loss()
             if current is not None and current < best_val - 1e-6:
                 best_val = current
-                best_params = tree_map(lambda a: mx.array(a), model.parameters())
+                best_params = tree_map(lambda a: mx.array(a), _model_parameters(model))
                 since_improve = 0
             else:
                 since_improve += 1
@@ -303,8 +311,8 @@ def _run_mlx_training(
 
     val_loss: float | None
     if val_select and best_params is not None:
-        model.update(best_params)  # restore the best-by-val-loss checkpoint
-        mx.eval(model.parameters())  # noqa: S307
+        _model_update(model, best_params)  # restore the best-by-val-loss checkpoint
+        mx.eval(_model_parameters(model))  # noqa: S307
         val_loss = best_val
     else:
         val_loss = _mean_val_loss()
@@ -331,7 +339,7 @@ def _run_mlx_training(
         "peak_memory_mb": min(_peak_memory_mb(), float(memory_limit_mb)),
         "num_steps": float(steps_completed),
         "num_records": float(len(train_records)),  # records used after curation
-        "num_params_m": _count_params_million(model.parameters()),
+        "num_params_m": _count_params_million(_model_parameters(model)),
         "depth": float(cfg.depth),
     }
 
@@ -423,6 +431,7 @@ def run_training(
     vocab_size: int = BASE_VOCAB_SIZE,
     base_model: str = "",
     teacher_model: str = "",  # opd backend: distillation teacher (empty = backend default)
+    n_prompts: int = 64,  # trl backend: scenario prompts sampled for matched-compute runs
     trl_mode: str = "gkd",  # trl backend: gkd (on-policy distillation) | grpo (RLVR)
     seed: int = 0,  # trl backend: training seed (for seeded repeats / error bars)
     max_completion_length: int = 512,  # trl grpo: generation cap (>= task answer length; 256 truncates reasoning)
@@ -568,6 +577,7 @@ def run_training(
             output_dir=output_dir,
             student_model=base_model,
             teacher_model=teacher_model,
+            n_prompts=n_prompts,
             learning_rate=learning_rate,
             max_steps=train_steps if train_steps > 0 else -1,  # generic --train-steps -> TRL step cap
             batch_size=batch_size,
@@ -632,6 +642,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vocab-size", type=int, default=BASE_VOCAB_SIZE, help="BPE tokenizer target vocab (mlx/cuda)")
     parser.add_argument("--base-model", default="", help="mlxlm backend: pretrained base model (empty = default)")
     parser.add_argument("--teacher-model", default="", help="opd backend: distillation teacher (empty = default)")
+    parser.add_argument("--n-prompts", type=int, default=64, help="trl backend: scenario prompt count")
     parser.add_argument("--fine-tune-type", choices=("lora", "dora", "full"), default="lora", help="mlxlm backend")
     parser.add_argument("--num-layers", type=int, default=8, help="mlxlm backend: layers to fine-tune")
     return parser
@@ -665,6 +676,7 @@ def main(argv: list[str] | None = None) -> int:
             vocab_size=args.vocab_size,
             base_model=args.base_model,
             teacher_model=args.teacher_model,
+            n_prompts=args.n_prompts,
             trl_mode=args.trl_mode,
             seed=args.seed,
             max_completion_length=args.max_completion_length,
