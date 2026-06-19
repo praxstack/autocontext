@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -197,6 +198,40 @@ class LLMJudge:
         """Warnings from rubric coherence pre-check (empty if not enabled)."""
         return self._rubric_warnings
 
+    def _maybe_heldout(self, task_prompt: str) -> JudgeResult | None:
+        """If a held-out grader is declared via env, score through the C0 gate.
+
+        Env contract (opt-in; all unset => return None => normal LLM judge):
+          AUTOCONTEXT_HELDOUT_GRADER   absolute path to an executable grader OUTSIDE the
+                                       agent's write scope; emits a final 'SCORE: <float>'.
+          AUTOCONTEXT_HELDOUT_WORKDIR  the agent's write scope (the dir it may edit).
+          AUTOCONTEXT_HELDOUT_MIN      pass threshold (default 1.0).
+          AUTOCONTEXT_HELDOUT_BASELINE optional ratchet floor.
+          AUTOCONTEXT_HELDOUT_PIN_SHA  optional pinned sha256 of the grader (C2).
+        """
+        grader = os.environ.get("AUTOCONTEXT_HELDOUT_GRADER")
+        workdir = os.environ.get("AUTOCONTEXT_HELDOUT_WORKDIR")
+        if not grader or not workdir:
+            return None
+        from autocontext.execution.heldout_gate import run_heldout_gate
+
+        res = run_heldout_gate(
+            workdir, grader,
+            min_score=float(os.environ.get("AUTOCONTEXT_HELDOUT_MIN", "1.0")),
+            baseline=(float(os.environ["AUTOCONTEXT_HELDOUT_BASELINE"])
+                      if os.environ.get("AUTOCONTEXT_HELDOUT_BASELINE") else None),
+            pin_sha=os.environ.get("AUTOCONTEXT_HELDOUT_PIN_SHA") or None,
+        )
+        # Structural violation => 0.0, never a silent pass. Otherwise the held-out
+        # score (or 0.0 on a FAIL with no numeric score).
+        score = res.score if (res.score is not None and not res.structural_violation) else 0.0
+        return JudgeResult(
+            score=score,
+            reasoning=f"[C0 held-out gate] {res.reason}",
+            dimension_scores={"heldout": score},
+            parse_method="none",
+        )
+
     def evaluate(
         self,
         task_prompt: str,
@@ -206,7 +241,19 @@ class LLMJudge:
         calibration_examples: Sequence[dict] | None = None,
         pinned_dimensions: Sequence[str] | None = None,
     ) -> JudgeResult:
-        """Evaluate agent output by calling the provider N times and averaging."""
+        """Evaluate agent output by calling the provider N times and averaging.
+
+        C0 HELD-OUT GATE INTERPOSE (grafted from agent-org, 2026-06-19): if a held-out
+        grader is declared via env (AUTOCONTEXT_HELDOUT_GRADER + AUTOCONTEXT_HELDOUT_WORKDIR),
+        score through that execution-based, agent-unreachable gate INSTEAD of the LLM judge
+        below. This closes the gameable "LLM judges its own provider's output" hole on the
+        plain-language-task path. A structural C0 violation is surfaced as score 0.0 with a
+        clear reasoning string — never silently passed. Opt-in: with no env set, behavior is
+        unchanged.
+        """
+        heldout = self._maybe_heldout(task_prompt)
+        if heldout is not None:
+            return heldout
         system_prompt = (
             "You are an expert judge evaluating an AI agent's output. Evaluate the output against the provided rubric. "
         )
