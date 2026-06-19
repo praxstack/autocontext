@@ -267,10 +267,11 @@ Notes:
 ### Token-pressure diagnostics (optional)
 
 `--opd-diagnostics` (or `AUTOCONTEXT_OPD_DIAGNOSTICS=1`) writes
-`token_pressure_diagnostics.json` for `opd` and TRL `gkd` runs. The report summarizes
-teacher-vs-student token logprob margins, positive/negative pressure ratios, position
-hotspots, response lengths, and shock-spike counts for A/B comparisons without changing
-training updates. A positive margin means the teacher assigned the sampled token a higher
+`token_pressure_diagnostics.json` for `opd` and TRL `gkd` runs when budget remains after
+training. Diagnostics sample at most 8 prompts / 64 new tokens so the post-training check stays
+bounded. The report summarizes teacher-vs-student token logprob margins, positive/negative
+pressure ratios, position hotspots, response lengths, and shock-spike counts for A/B comparisons
+without changing training updates. A positive margin means the teacher assigned the sampled token a higher
 log-probability than the student did; a negative margin means the student was more confident
 than the teacher on its own sampled token. High shock-spike counts mark large disagreements.
 

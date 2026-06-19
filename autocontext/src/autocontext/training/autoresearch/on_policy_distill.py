@@ -386,19 +386,25 @@ def run_on_policy_distillation(
 
     if opd_diagnostics:
         token_pressure = import_module("autocontext.training.autoresearch.token_pressure")
-        pressure_report = collect_token_pressure_for_prompts(
-            student,
-            teacher,
+        diag_prompts, diag_tokens = token_pressure.bounded_diagnostic_inputs(
             prompts,
-            max_tokens=max_tokens,
-            sample_temperature=sample_temperature,
-            include_token_text=opd_diagnostics_debug_tokens,
-            tokenizer=tokenizer,
-            backend="opd",
-            mode="opd",
-            seed=seed,
+            max_tokens,
+            remaining_seconds=float(time_budget) - (time.monotonic() - started),
         )
-        token_pressure.write_token_pressure_report(output_dir / "token_pressure_diagnostics.json", pressure_report)
+        if diag_prompts:
+            pressure_report = collect_token_pressure_for_prompts(
+                student,
+                teacher,
+                diag_prompts,
+                max_tokens=diag_tokens,
+                sample_temperature=sample_temperature,
+                include_token_text=opd_diagnostics_debug_tokens,
+                tokenizer=tokenizer,
+                backend="opd",
+                mode="opd",
+                seed=seed,
+            )
+            token_pressure.write_token_pressure_report(output_dir / "token_pressure_diagnostics.json", pressure_report)
 
     adapter_dir = output_dir / "adapters"
     adapter_dir.mkdir(parents=True, exist_ok=True)

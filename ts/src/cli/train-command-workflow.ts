@@ -12,6 +12,7 @@ Options:
   --base-model <id>        Base model for adapter/full fine-tune
   -o, --output <dir>       Output directory
   --opd-diagnostics        Write OPD/GKD token-pressure diagnostics
+  --opd-diagnostics-debug-tokens  Include raw sampled token text in diagnostics
   --json                   Output as JSON
   -h, --help               Show this help
 

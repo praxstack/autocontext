@@ -654,11 +654,49 @@ class TestTrainingLoop:
         assert registry_record["backend"] == "mlx"
         assert registry_record["runtime_types"] == ["provider", "pi"]
         assert registry_record["training_metrics"]["token_pressure_positive_ratio"] == 0.75
+        assert registry_record["metadata"]["opd_diagnostics"] is True
+        assert registry_record["metadata"]["opd_diagnostics_path"] == str(checkpoint_path / "token_pressure_diagnostics.json")
 
         artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
         assert artifact["artifact_type"] == "distilled_model"
         assert artifact["scenario"] == "grid_ctf"
         assert artifact["checkpoint_path"] == str(checkpoint_path)
+
+    def test_build_training_result_does_not_publish_missing_diagnostics_path(self, tmp_path: Path) -> None:
+        cfg = TrainingConfig(
+            scenario="grid_ctf",
+            data_path=tmp_path / "data.jsonl",
+            max_experiments=1,
+            opd_diagnostics=True,
+        )
+        (tmp_path / "data.jsonl").write_text("{}\n", encoding="utf-8")
+        checkpoint_path = tmp_path / "workspace" / "checkpoints" / "exp_0"
+        checkpoint_path.mkdir(parents=True, exist_ok=True)
+        runner = TrainingRunner(cfg, work_dir=tmp_path / "workspace")
+        settings = AppSettings(
+            knowledge_root=tmp_path / "knowledge",
+            runs_root=tmp_path / "runs",
+            skills_root=tmp_path / "skills",
+            claude_skills_path=tmp_path / ".claude" / "skills",
+        )
+        best = ExperimentResult(
+            experiment_index=0,
+            avg_score=0.75,
+            valid_rate=1.0,
+            peak_memory_mb=1024.0,
+            training_seconds=12.0,
+            outcome=ExperimentOutcome.KEPT,
+            checkpoint_path=checkpoint_path,
+            summary_metrics={"num_params_M": 1.25},
+        )
+
+        with patch("autocontext.training.runner.load_settings", return_value=settings):
+            result = runner.build_training_result([best])
+
+        registry_path = settings.knowledge_root / "model_registry" / f"{result.published_model_id}.json"
+        registry_record = json.loads(registry_path.read_text(encoding="utf-8"))
+        assert registry_record["metadata"]["opd_diagnostics"] is False
+        assert registry_record["metadata"]["opd_diagnostics_path"] == ""
 
     def test_build_training_result_respects_selected_backend(self, tmp_path: Path) -> None:
         cfg = TrainingConfig(

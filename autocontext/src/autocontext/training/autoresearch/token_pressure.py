@@ -10,6 +10,9 @@ from pathlib import Path
 from statistics import fmean
 from typing import Any
 
+DEFAULT_DIAGNOSTIC_MAX_PROMPTS = 8
+DEFAULT_DIAGNOSTIC_MAX_TOKENS = 64
+
 
 @dataclass(frozen=True, slots=True)
 class TokenPressureObservation:
@@ -67,6 +70,19 @@ def write_token_pressure_report(path: Path, report: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
+
+
+def bounded_diagnostic_inputs(
+    items: Sequence[Any],
+    max_tokens: int,
+    *,
+    remaining_seconds: float,
+    max_prompts: int = DEFAULT_DIAGNOSTIC_MAX_PROMPTS,
+    max_diagnostic_tokens: int = DEFAULT_DIAGNOSTIC_MAX_TOKENS,
+) -> tuple[list[Any], int]:
+    if remaining_seconds <= 0.0 or max_tokens <= 0:
+        return [], 0
+    return list(items)[:max_prompts], min(max_tokens, max_diagnostic_tokens)
 
 
 def compare_token_pressure_reports(reports: list[dict[str, Any]]) -> dict[str, Any]:
@@ -141,7 +157,10 @@ def _max_run(reports: list[dict[str, Any]], key: str) -> str | None:
 
 
 __all__ = [
+    "DEFAULT_DIAGNOSTIC_MAX_PROMPTS",
+    "DEFAULT_DIAGNOSTIC_MAX_TOKENS",
     "TokenPressureObservation",
+    "bounded_diagnostic_inputs",
     "build_token_pressure_report",
     "compare_token_pressure_reports",
     "write_token_pressure_report",

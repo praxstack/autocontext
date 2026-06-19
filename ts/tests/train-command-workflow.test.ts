@@ -16,6 +16,7 @@ describe("train command workflow", () => {
     expect(TRAIN_HELP_TEXT).toContain("--dataset");
     expect(TRAIN_HELP_TEXT).toContain("--backend");
     expect(TRAIN_HELP_TEXT).toContain("--opd-diagnostics");
+    expect(TRAIN_HELP_TEXT).toContain("--opd-diagnostics-debug-tokens");
   });
 
   it("requires scenario and dataset", () => {
@@ -51,6 +52,7 @@ describe("train command workflow", () => {
           "base-model": "qwen",
           output: "artifacts",
           "opd-diagnostics": true,
+          "opd-diagnostics-debug-tokens": true,
           json: true,
         },
         "/tmp/runs",
@@ -66,7 +68,7 @@ describe("train command workflow", () => {
       trainingMode: "adapter_finetune",
       baseModel: "qwen",
       opdDiagnostics: true,
-      opdDiagnosticsDebugTokens: false,
+      opdDiagnosticsDebugTokens: true,
       json: true,
     });
   });

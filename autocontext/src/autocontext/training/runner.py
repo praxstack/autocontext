@@ -662,6 +662,7 @@ class TrainingRunner:
             if key in best_result.summary_metrics:
                 training_metrics[key] = best_result.summary_metrics[key]
 
+        diagnostics_written = "token_pressure_positive_ratio" in best_result.summary_metrics
         completion = TrainingCompletionOutput(
             run_id=self._training_run_id(),
             checkpoint_path=str(best_result.checkpoint_path),
@@ -686,10 +687,10 @@ class TrainingRunner:
                 # subprocess applies that same default (an empty value is unservable).
                 "base_model": self.config.base_model or self._backend.default_base_model(),
                 "score_conditioned": self.config.score_conditioned,
-                "opd_diagnostics": self.config.opd_diagnostics,
+                "opd_diagnostics": diagnostics_written,
                 "opd_diagnostics_path": (
                     str(best_result.checkpoint_path / "token_pressure_diagnostics.json")
-                    if self.config.opd_diagnostics and best_result.checkpoint_path is not None
+                    if diagnostics_written and best_result.checkpoint_path is not None
                     else ""
                 ),
             },

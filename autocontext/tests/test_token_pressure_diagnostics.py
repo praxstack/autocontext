@@ -83,6 +83,20 @@ def test_token_pressure_report_debug_tokens_are_explicit_opt_in() -> None:
     assert report["shock_spikes"][0]["token_text"] == "debug-token"
 
 
+def test_bounded_diagnostic_inputs_caps_prompt_and_token_budget() -> None:
+    token_pressure = _token_pressure()
+
+    prompts, max_tokens = token_pressure.bounded_diagnostic_inputs(
+        list(range(20)),
+        512,
+        remaining_seconds=1.0,
+    )
+
+    assert prompts == list(range(8))
+    assert max_tokens == 64
+    assert token_pressure.bounded_diagnostic_inputs([1, 2], 512, remaining_seconds=0.0) == ([], 0)
+
+
 def test_compare_token_pressure_reports_orders_runs_for_ab_comparison() -> None:
     token_pressure = _token_pressure()
     comparison = token_pressure.compare_token_pressure_reports(

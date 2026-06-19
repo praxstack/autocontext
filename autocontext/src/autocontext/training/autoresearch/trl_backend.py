@@ -197,6 +197,14 @@ def make_reward_func(scenario: Any) -> Any:
     return _reward
 
 
+def _gkd_diagnostic_prompt_text(tokenizer: Any, row: dict[str, str]) -> str:
+    messages = [{"role": "user", "content": row["prompt"]}]
+    apply_chat_template = getattr(tokenizer, "apply_chat_template", None)
+    if callable(apply_chat_template):
+        return str(apply_chat_template(messages, tokenize=False, add_generation_prompt=True))
+    return row["prompt"]
+
+
 def collect_hf_token_pressure(
     *,
     student_lm: Any,
@@ -217,7 +225,7 @@ def collect_hf_token_pressure(
     device = getattr(student_lm, "device", None)
     teacher_device = getattr(teacher_lm, "device", device)
     for row in prompt_rows:
-        encoded = tokenizer(row["prompt"], return_tensors="pt")
+        encoded = tokenizer(_gkd_diagnostic_prompt_text(tokenizer, row), return_tensors="pt")
         if device is not None:
             encoded = encoded.to(device)
         with torch.no_grad():
@@ -352,17 +360,7 @@ def run_trl_training(
         if isinstance(s_vocab, int) and isinstance(t_vocab, int):
             assert_vocab_compatible(s_vocab, t_vocab)
         prompt_rows = build_prompt_rows(scenario, n_prompts)
-        dataset = Dataset.from_list(
-            [
-                {
-                    "messages": [
-                        {"role": "user", "content": row["prompt"]},
-                        {"role": "assistant", "content": "(on-policy: resampled from the student)"},
-                    ]
-                }
-                for row in prompt_rows
-            ]
-        )
+        dataset = Dataset.from_list(build_chat_dataset_rows(scenario, n_prompts))
         gkd_kwargs: dict[str, Any] = dict(
             output_dir=str(output_dir),
             teacher_model=teacher_model,
@@ -411,16 +409,22 @@ def run_trl_training(
     trainer.save_model(str(output_dir))
     if mode == "gkd" and opd_diagnostics:
         token_pressure = import_module("autocontext.training.autoresearch.token_pressure")
-        pressure_report = collect_hf_token_pressure(
-            student_lm=student_lm,
-            teacher_lm=teacher_lm,
-            tokenizer=tokenizer,
-            prompt_rows=prompt_rows,
-            max_new_tokens=max_completion_length,
-            include_token_text=opd_diagnostics_debug_tokens,
-            seed=seed,
+        diag_rows, diag_tokens = token_pressure.bounded_diagnostic_inputs(
+            prompt_rows,
+            max_completion_length,
+            remaining_seconds=float(time_budget) - (time.monotonic() - started),
         )
-        token_pressure.write_token_pressure_report(output_dir / "token_pressure_diagnostics.json", pressure_report)
+        if diag_rows:
+            pressure_report = collect_hf_token_pressure(
+                student_lm=student_lm,
+                teacher_lm=teacher_lm,
+                tokenizer=tokenizer,
+                prompt_rows=diag_rows,
+                max_new_tokens=diag_tokens,
+                include_token_text=opd_diagnostics_debug_tokens,
+                seed=seed,
+            )
+            token_pressure.write_token_pressure_report(output_dir / "token_pressure_diagnostics.json", pressure_report)
     training_loss = float(getattr(train_output, "training_loss", float("nan")))
     num_steps = float(getattr(getattr(trainer, "state", None), "global_step", 0) or 0)
     # build_trl_metrics gives a FINITE avg_score (negative training loss) so the training
