@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from math import isfinite
+from pathlib import Path
 from statistics import fmean
 from typing import Any
 
@@ -33,6 +35,8 @@ def build_experiment_matrix(
     prompts: int = 384,
     student_model: str = "Qwen/Qwen2.5-1.5B-Instruct",
     teacher_model: str = "Qwen/Qwen2.5-3B-Instruct",
+    data_path: str | Path | None = None,
+    output_root: str | Path = "runs/opd-grpo-mixture",
 ) -> dict[str, Any]:
     runs: list[dict[str, Any]] = []
     for max_steps in steps:
@@ -47,6 +51,8 @@ def build_experiment_matrix(
                         prompts=prompts,
                         student_model=student_model,
                         teacher_model=teacher_model,
+                        data_path=str(data_path or Path("data") / f"{scenario}.jsonl"),
+                        output_dir=str(Path(output_root) / scenario / f"{arm}-seed{seed}-steps{max_steps}"),
                     )
                 )
     return {
@@ -69,19 +75,18 @@ def _run_spec(
     prompts: int,
     student_model: str,
     teacher_model: str,
+    data_path: str,
+    output_dir: str,
 ) -> dict[str, Any]:
     mode = "grpo" if arm == "grpo" else "gkd"
     mixture = "positive_opd=0.5,grpo=0.5" if arm == "mixed_positive_opd_grpo" else ""
     pressure = arm in {"positive_opd", "mixed_positive_opd_grpo"}
     command = (
-        "python -m autocontext.training.autoresearch.trl_backend "
-        f"--mode {mode} --scenario {scenario} --student-model {student_model} "
-        f"--teacher-model {teacher_model} --n-prompts {prompts} --max-steps {max_steps} --seed {seed}"
+        "python -m autocontext.training.autoresearch.train "
+        f"--backend trl --trl-mode {mode} --scenario {scenario} --data {data_path} "
+        f"--output-dir {output_dir} --base-model {student_model} --teacher-model {teacher_model} "
+        f"--n-prompts {prompts} --train-steps {max_steps} --seed {seed}"
     )
-    if pressure:
-        command += " --positive-pressure"
-    if mixture:
-        command += f" --training-mixture {mixture}"
     return {
         "arm": arm,
         "scenario": scenario,
@@ -90,6 +95,8 @@ def _run_spec(
         "n_prompts": prompts,
         "student_model": student_model,
         "teacher_model": teacher_model,
+        "data_path": data_path,
+        "output_dir": output_dir,
         "trl_mode": mode,
         "positive_pressure": pressure,
         "training_mixture": mixture,
@@ -129,11 +136,21 @@ def _promotion_decision(summaries: dict[str, dict[str, Any]], *, min_heldout_del
         return {"promote_mixed": False, "reason": "missing_comparison"}
     if mixed.get("collapse_detected"):
         return {"promote_mixed": False, "reason": "collapse_detected"}
-    mixed_score = float(mixed.get("mean_heldout_score") or 0.0)
-    best_baseline = max(float(summary.get("mean_heldout_score") or 0.0) for summary in baselines)
+    mixed_score = _finite_score(mixed.get("mean_heldout_score"))
+    baseline_scores = [_finite_score(summary.get("mean_heldout_score")) for summary in baselines]
+    if mixed_score is None or any(score is None for score in baseline_scores):
+        return {"promote_mixed": False, "reason": "missing_comparison"}
+    best_baseline = max(score for score in baseline_scores if score is not None)
     if mixed_score >= best_baseline + min_heldout_delta:
         return {"promote_mixed": True, "reason": "heldout_improved_without_collapse"}
     return {"promote_mixed": False, "reason": "heldout_not_improved"}
+
+
+def _finite_score(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    score = float(value)
+    return score if isfinite(score) else None
 
 
 def render_protocol_report(matrix: dict[str, Any]) -> str:

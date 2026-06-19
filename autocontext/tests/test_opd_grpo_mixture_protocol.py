@@ -25,7 +25,12 @@ def test_mixed_arm_has_recipe_but_not_default_promotion() -> None:
     mixed = next(run for run in matrix["runs"] if run["arm"] == "mixed_positive_opd_grpo")
 
     assert mixed["training_mixture"] == "positive_opd=0.5,grpo=0.5"
-    assert "--training-mixture positive_opd=0.5,grpo=0.5" in mixed["command"]
+    assert "autocontext.training.autoresearch.train" in mixed["command"]
+    assert "--backend trl" in mixed["command"]
+    assert "--n-prompts 384" in mixed["command"]
+    assert "--positive-pressure" not in mixed["command"]
+    assert "--training-mixture" not in mixed["command"]
+    assert "trl_backend" not in mixed["command"]
     assert matrix["promotion_policy"] == "Do not promote mixed mode unless held-out score improves without collapse."
 
 
@@ -48,6 +53,32 @@ def test_promotion_gate_requires_heldout_lift_without_collapse() -> None:
     assert collapsed["promotion"]["reason"] == "collapse_detected"
     assert healthy["promotion"]["promote_mixed"] is True
     assert healthy["promotion"]["reason"] == "heldout_improved_without_collapse"
+
+
+def test_promotion_gate_requires_heldout_comparison_metrics() -> None:
+    protocol = _protocol()
+    missing_baseline = protocol.summarize_mixture_results(
+        [
+            {"arm": "grpo", "seed": 0, "entropy": 4.0, "diversity": 0.4},
+            {"arm": "mixed_positive_opd_grpo", "seed": 0, "heldout_score": 0.02, "entropy": 3.0, "diversity": 0.3},
+        ]
+    )
+    missing_mixed = protocol.summarize_mixture_results(
+        [
+            {"arm": "grpo", "seed": 0, "heldout_score": 0.64, "entropy": 4.0, "diversity": 0.4},
+            {"arm": "mixed_positive_opd_grpo", "seed": 0, "entropy": 3.0, "diversity": 0.3},
+        ]
+    )
+    nonfinite_baseline = protocol.summarize_mixture_results(
+        [
+            {"arm": "grpo", "seed": 0, "heldout_score": float("nan"), "entropy": 4.0, "diversity": 0.4},
+            {"arm": "mixed_positive_opd_grpo", "seed": 0, "heldout_score": 0.02, "entropy": 3.0, "diversity": 0.3},
+        ]
+    )
+
+    assert missing_baseline["promotion"] == {"promote_mixed": False, "reason": "missing_comparison"}
+    assert missing_mixed["promotion"] == {"promote_mixed": False, "reason": "missing_comparison"}
+    assert nonfinite_baseline["promotion"] == {"promote_mixed": False, "reason": "missing_comparison"}
 
 
 def test_report_requires_training_diagnostics_fields() -> None:

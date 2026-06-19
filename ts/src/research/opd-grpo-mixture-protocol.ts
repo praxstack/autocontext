@@ -27,6 +27,8 @@ export interface MixtureRunSpec {
   positivePressure: boolean;
   trainingMixture: string;
   command: string;
+  dataPath: string;
+  outputDir: string;
   requiredMetrics: readonly string[];
 }
 
@@ -61,6 +63,8 @@ export function buildExperimentMatrix(opts: {
   prompts?: number;
   studentModel?: string;
   teacherModel?: string;
+  dataPath?: string;
+  outputRoot?: string;
 }): MixtureExperimentMatrix {
   const seeds = opts.seeds ?? [0, 1, 2];
   const steps = opts.steps ?? [1000, 2000];
@@ -75,6 +79,8 @@ export function buildExperimentMatrix(opts: {
           prompts,
           studentModel: opts.studentModel ?? "Qwen/Qwen2.5-1.5B-Instruct",
           teacherModel: opts.teacherModel ?? "Qwen/Qwen2.5-3B-Instruct",
+          dataPath: opts.dataPath ?? `data/${opts.scenario}.jsonl`,
+          outputDir: `${opts.outputRoot ?? "runs/opd-grpo-mixture"}/${opts.scenario}/${arm}-seed${seed}-steps${maxSteps}`,
         }),
       ),
     ),
@@ -99,14 +105,14 @@ function runSpec(
     prompts: number;
     studentModel: string;
     teacherModel: string;
+    dataPath: string;
+    outputDir: string;
   },
 ): MixtureRunSpec {
   const trlMode = arm === "grpo" ? "grpo" : "gkd";
   const positivePressure = arm === "positive_opd" || arm === "mixed_positive_opd_grpo";
   const trainingMixture = arm === "mixed_positive_opd_grpo" ? "positive_opd=0.5,grpo=0.5" : "";
-  let command = `python -m autocontext.training.autoresearch.trl_backend --mode ${trlMode} --scenario ${opts.scenario} --student-model ${opts.studentModel} --teacher-model ${opts.teacherModel} --n-prompts ${opts.prompts} --max-steps ${opts.maxSteps} --seed ${opts.seed}`;
-  if (positivePressure) command += " --positive-pressure";
-  if (trainingMixture) command += ` --training-mixture ${trainingMixture}`;
+  const command = `python -m autocontext.training.autoresearch.train --backend trl --trl-mode ${trlMode} --scenario ${opts.scenario} --data ${opts.dataPath} --output-dir ${opts.outputDir} --base-model ${opts.studentModel} --teacher-model ${opts.teacherModel} --n-prompts ${opts.prompts} --train-steps ${opts.maxSteps} --seed ${opts.seed}`;
   return {
     arm,
     scenario: opts.scenario,
@@ -117,6 +123,8 @@ function runSpec(
     positivePressure,
     trainingMixture,
     command,
+    dataPath: opts.dataPath,
+    outputDir: opts.outputDir,
     requiredMetrics: REQUIRED_MIXTURE_METRICS,
   };
 }
@@ -163,14 +171,22 @@ function promotionDecision(
   if (!mixed || baselines.length === 0)
     return { promoteMixed: false, reason: "missing_comparison" };
   if (mixed.collapseDetected) return { promoteMixed: false, reason: "collapse_detected" };
-  const mixedScore = Number(mixed.meanHeldoutScore ?? 0);
+  const mixedScore = finiteScore(mixed.meanHeldoutScore);
+  const baselineScores = baselines.map((summary) => finiteScore(summary.meanHeldoutScore));
+  if (mixedScore === undefined || baselineScores.some((score) => score === undefined)) {
+    return { promoteMixed: false, reason: "missing_comparison" };
+  }
   const bestBaseline = Math.max(
-    ...baselines.map((summary) => Number(summary.meanHeldoutScore ?? 0)),
+    ...baselineScores.filter((score): score is number => score !== undefined),
   );
   if (mixedScore >= bestBaseline + minHeldoutDelta) {
     return { promoteMixed: true, reason: "heldout_improved_without_collapse" };
   }
   return { promoteMixed: false, reason: "heldout_not_improved" };
+}
+
+function finiteScore(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 export function renderProtocolReport(matrix: MixtureExperimentMatrix): string {
