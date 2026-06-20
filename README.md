@@ -65,10 +65,10 @@ If you already work inside a coding agent, you can wire autocontext in once and 
 **Pi** ships an autocontext skill out of the box. Install the published Pi package and Pi loads natural-language wrappers over live tools such as `autocontext_solve_scenario`, `autocontext_evaluate_output`, `autocontext_run_improvement_loop`, `autocontext_run_status`, and `autocontext_list_scenarios`.
 
 ```bash
-pi install npm:pi-autocontext@0.2.6
+pi install npm:pi-autocontext@0.8.0
 ```
 
-Pi is on a separate package line: `pi-autocontext@0.2.6` depends on `autoctx@^0.7.0`. A follow-up Pi release can move it to `autoctx@^0.8.0` after the core npm package is live.
+Pi is on a separate package line: `pi-autocontext@0.8.0` depends on `autoctx@^0.8.0`, matching the current Python and TypeScript 0.8 runtime line.
 
 Then you just ask:
 
@@ -244,10 +244,10 @@ uv tool install autocontext==0.8.0
 bun add -g autoctx@0.8.0
 
 # Pi extension
-pi install npm:pi-autocontext@0.2.6
+pi install npm:pi-autocontext@0.8.0
 ```
 
-> The PyPI package is `autocontext`. The CLI entrypoint is `autoctx`. The npm packages are `autoctx` and `pi-autocontext` (note: an unrelated package on npm uses the name `autocontext`; that is not this project). `pi-autocontext@0.2.6` still depends on `autoctx@^0.7.0`; a follow-up Pi release can move it to `autoctx@^0.8.0` after the core npm package is live.
+> The PyPI package is `autocontext`. The CLI entrypoint is `autoctx`. The npm packages are `autoctx` and `pi-autocontext` (note: an unrelated package on npm uses the name `autocontext`; that is not this project). `pi-autocontext@0.8.0` depends on `autoctx@^0.8.0`, matching the current TypeScript runtime line.
 
 ## Surfaces
 
