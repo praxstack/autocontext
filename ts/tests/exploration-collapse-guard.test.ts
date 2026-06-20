@@ -51,7 +51,15 @@ function snapshot(
   rollbackRate: number,
   score: number,
 ): ExplorationSnapshot {
-  return { generationIndex, responseLength, diversity, entropy, routeSignature, rollbackRate, score };
+  return {
+    generationIndex,
+    responseLength,
+    diversity,
+    entropy,
+    routeSignature,
+    rollbackRate,
+    score,
+  };
 }
 
 function collapsedRun(): { snapshots: ExplorationSnapshot[]; changes: GuidanceChange[] } {
@@ -91,7 +99,13 @@ describe("exploration collapse guard", () => {
     expect(event.advisoryOnly).toBe(true);
     expect(event.mitigation).toBe("none");
     expect(event.signals.map((signal: { metric: string }) => signal.metric)).toEqual(
-      expect.arrayContaining(["response_length", "diversity", "entropy", "route_repetition", "rollback_rate"]),
+      expect.arrayContaining([
+        "response_length",
+        "diversity",
+        "entropy",
+        "route_repetition",
+        "rollback_rate",
+      ]),
     );
 
     const rendered = renderExplorationCollapseReport(report);
@@ -118,6 +132,51 @@ describe("exploration collapse guard", () => {
     });
   });
 
+  it("ignores JSON null metrics instead of coercing them to zero", async () => {
+    const { detectExplorationCollapse } = await protocol();
+    const snapshots = JSON.parse(
+      JSON.stringify([
+        {
+          generationIndex: 0,
+          responseLength: 100,
+          diversity: 0.8,
+          entropy: 3.2,
+          routeSignature: "wide-a",
+          rollbackRate: 0,
+          score: 0.6,
+        },
+        {
+          generationIndex: 1,
+          responseLength: 100,
+          diversity: 0.7,
+          entropy: 3.0,
+          routeSignature: "wide-b",
+          rollbackRate: 0,
+          score: 0.61,
+        },
+        {
+          generationIndex: 2,
+          responseLength: 100,
+          diversity: null,
+          entropy: null,
+          routeSignature: "wide-c",
+          rollbackRate: 0,
+          score: 0.61,
+        },
+      ]),
+    ) as ExplorationSnapshot[];
+    const changes: GuidanceChange[] = [
+      {
+        changeId: "hint-v2",
+        generationIndex: 2,
+        kind: "hint",
+        sourceComponent: "soft_hints",
+      },
+    ];
+
+    expect(detectExplorationCollapse(snapshots, changes).events).toEqual([]);
+  });
+
   it("does not warn without an exploration drop", async () => {
     const { detectExplorationCollapse } = await protocol();
     const snapshots = [
@@ -127,7 +186,12 @@ describe("exploration collapse guard", () => {
       snapshot(3, 101, 0.5, 2.0, "d", 0.1, 0.53),
     ];
     const changes: GuidanceChange[] = [
-      { changeId: "teacher-v1", generationIndex: 2, kind: "teacher_signal", sourceComponent: "teacher" },
+      {
+        changeId: "teacher-v1",
+        generationIndex: 2,
+        kind: "teacher_signal",
+        sourceComponent: "teacher",
+      },
     ];
 
     expect(detectExplorationCollapse(snapshots, changes).events).toEqual([]);

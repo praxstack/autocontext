@@ -433,10 +433,7 @@ class AppSettings(BaseModel):
         description="Max dead-end entries before oldest are pruned",
     )
     # Research protocol (AR-3)
-    protocol_enabled: bool = Field(
-        default=False,
-        description="Enable research protocol meta-document for architect steering",
-    )
+    protocol_enabled: bool = Field(default=False, description="Enable research protocol meta-document for architect steering")
     # Exploration mode (AR-4)
     exploration_mode: Literal["linear", "rapid", "tree"] = Field(
         default="linear",
@@ -753,6 +750,7 @@ class AppSettings(BaseModel):
         validate_default=True,
         description="Keyword confidence >= this skips LLM classification; ambiguous descriptions call LLM",
     )
+
     @field_validator("cost_budget_limit", mode="before")
     @classmethod
     def _coerce_budget_limit(cls, v: object) -> float | None:

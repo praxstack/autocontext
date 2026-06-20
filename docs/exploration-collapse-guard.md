@@ -2,7 +2,7 @@
 
 AC-799 adds an experimental, opt-in guard for regretful-teacher and anti-exploration collapse.
 
-Enable advisory warnings with:
+Enable generation-end advisory artifacts with:
 
 ```bash
 AUTOCONTEXT_EXPLORATION_COLLAPSE_GUARD=true
@@ -16,7 +16,7 @@ AUTOCONTEXT_EXPLORATION_COLLAPSE_AUTO_MITIGATION=true
 
 ## What it checks
 
-For each hint, playbook update, teacher signal, or pressure-mode change, compare the recent window before the change with the window after it. A warning is emitted when multiple signals move in the collapse direction:
+When enabled, each generation compares recent score/gate snapshots before and after applied hints or playbook guidance. If multiple signals move in the collapse direction, it writes `runs/<run-id>/generations/gen_<n>/exploration_collapse_guard.json`:
 
 - response length drops
 - novelty/diversity drops
@@ -27,7 +27,7 @@ For each hint, playbook update, teacher signal, or pressure-mode change, compare
 
 ## Artifact shape
 
-`persist_exploration_collapse_report()` writes an analytics artifact with operator-visible records:
+The generation loop and `persist_exploration_collapse_report()` write operator-visible records:
 
 ```json
 {

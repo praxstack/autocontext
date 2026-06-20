@@ -271,7 +271,9 @@ function avg(
   items: ExplorationSnapshot[],
   selector: (snapshot: ExplorationSnapshot) => number | undefined,
 ): number | undefined {
-  const values = items.map(selector).filter((value): value is number => value !== undefined);
+  const values = items
+    .map(selector)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   if (values.length === 0) return undefined;
   return round(values.reduce((total, value) => total + value, 0) / values.length);
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from math import isfinite
 from pathlib import Path
 from statistics import mean
 from typing import Any, Literal, Self
@@ -245,7 +246,7 @@ def _append_signal(
 
 
 def _avg(items: list[ExplorationSnapshot], attr: str) -> float | None:
-    values = [float(value) for item in items if (value := getattr(item, attr)) is not None]
+    values = [float(value) for item in items if (value := getattr(item, attr)) is not None and isfinite(float(value))]
     return round(mean(values), 6) if values else None
 
 

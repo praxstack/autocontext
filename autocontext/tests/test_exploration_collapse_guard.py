@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from importlib import import_module
+from types import SimpleNamespace
 from typing import Any
 
 _guard = import_module("autocontext.analytics.exploration_collapse_guard")
@@ -93,6 +94,59 @@ def test_auto_mitigation_is_opt_in_and_report_is_persistable(tmp_path) -> None:
     assert payload["schema_version"] == 1
     assert payload["events"][0]["event_type"] == "exploration_collapse_detected"
     assert payload["events"][0]["payload"]["guidance_change"]["change_id"] == "hint-set-v2"
+
+
+def test_settings_guard_persists_generation_artifact_when_guidance_collapses(tmp_path) -> None:
+    _persist_skill_note = import_module("autocontext.loop.stage_helpers.persistence_helpers")._persist_skill_note
+
+    class Artifacts:
+        def persist_skill_note(self, **_kwargs: Any) -> None:
+            pass
+
+        def append_dead_end(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def generation_dir(self, run_id: str, generation_index: int):
+            return tmp_path / run_id / "generations" / f"gen_{generation_index}"
+
+        def write_json(self, path, payload: dict[str, Any]) -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+    ctx = SimpleNamespace(
+        tournament=SimpleNamespace(best_score=0.54),
+        outputs=SimpleNamespace(coach_lessons="", coach_playbook=""),
+        gate_decision="rollback",
+        gate_delta=-0.08,
+        generation=1,
+        settings=SimpleNamespace(
+            ablation_no_feedback=False,
+            backpressure_min_delta=0.005,
+            dead_end_tracking_enabled=False,
+            exploration_collapse_guard=True,
+            exploration_collapse_auto_mitigation=False,
+        ),
+        current_strategy={"route": "shortcut"},
+        replay_narrative="short repeated answer",
+        attempt=0,
+        require_playbook_approval=False,
+        scenario_name="grid_ctf",
+        run_id="run-guard",
+        score_history=[0.62, 0.54],
+        gate_decision_history=["advance", "rollback"],
+        applied_competitor_hints="Try the shortcut route.",
+        base_playbook="",
+    )
+
+    _persist_skill_note(ctx, artifacts=Artifacts())
+
+    payload = json.loads(
+        (tmp_path / "run-guard" / "generations" / "gen_1" / "exploration_collapse_guard.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["events"][0]["event_type"] == "exploration_collapse_detected"
+    assert payload["events"][0]["payload"]["guidance_change"]["source_component"] == "competitor_hints"
 
 
 def test_no_warning_when_guidance_does_not_reduce_exploration() -> None:
