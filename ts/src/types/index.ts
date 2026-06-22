@@ -13,6 +13,7 @@ export const CompletionResultSchema = z.object({
   model: z.string().nullish(),
   usage: z.record(z.number()).default({}),
   costUsd: z.number().nullish(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 export type CompletionResult = z.infer<typeof CompletionResultSchema>;

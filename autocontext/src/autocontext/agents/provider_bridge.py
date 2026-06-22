@@ -289,6 +289,13 @@ def _provider_api_key(provider_type: str, settings: AppSettings, *, role: str = 
         return settings.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY") or os.getenv("AUTOCONTEXT_ANTHROPIC_API_KEY")
     if provider_type in ("openai", "openai-compatible"):
         return settings.agent_api_key or settings.judge_api_key or os.getenv("OPENAI_API_KEY")
+    if provider_type == "openrouter":
+        return (
+            settings.agent_api_key
+            or settings.judge_api_key
+            or os.getenv("OPENROUTER_API_KEY")
+            or os.getenv("AUTOCONTEXT_OPENROUTER_API_KEY")
+        )
     if provider_type == "vllm":
         return settings.agent_api_key or settings.judge_api_key or "no-key"
     return settings.agent_api_key or settings.judge_api_key
@@ -505,7 +512,7 @@ def create_role_client(
         return RuntimeBridgeClient(HermesCLIRuntime(hermes_config))
 
     # LLMProvider-based providers — use the bridge
-    if provider_type in ("mlx", "openai", "openai-compatible", "ollama", "vllm"):
+    if provider_type in ("mlx", "openai", "openai-compatible", "openrouter", "ollama", "vllm"):
         return _create_provider_bridge(provider_type, settings, model_override=model_override, role=role)
 
     raise ValueError(f"unsupported role provider: {provider_type!r}")

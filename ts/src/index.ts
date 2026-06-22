@@ -34,13 +34,20 @@ export {
 export {
   createAnthropicProvider,
   createOpenAICompatibleProvider,
+  PanelProvider,
+  comparePanelBenchmark,
   createProvider,
+  parsePanelConfigForRole,
   resolveProviderConfig,
 } from "./providers/index.js";
 export type {
   AnthropicProviderOpts,
   OpenAICompatibleProviderOpts,
   CreateProviderOpts,
+  PanelConfig,
+  PanelParticipant,
+  PanelProviderFactory,
+  PanelSettings,
   ProviderConfig,
 } from "./providers/index.js";
 

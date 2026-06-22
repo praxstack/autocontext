@@ -80,6 +80,29 @@ describe("role provider bundle workflow", () => {
     }
   });
 
+  it("wraps configured roles with the experimental panel provider", async () => {
+    saveAndClear();
+
+    const bundle = buildRoleProviderBundle({
+      agentProvider: "deterministic",
+      panelRoles: "analyst",
+      panelParticipants: "analyst=deterministic:fast,deterministic:careful",
+    });
+
+    const result = await bundle.roleProviders.analyst?.complete({
+      systemPrompt: "",
+      userPrompt: "[analyst] review this strategy",
+      model: bundle.roleModels.analyst,
+    });
+
+    expect(bundle.roleProviders.analyst?.name).toBe("panel:analyst");
+    expect(result?.metadata?.panelRuntime).toBe(true);
+    expect(result?.metadata?.panelParticipants).toMatchObject([
+      { provider: "deterministic", model: "fast" },
+      { provider: "deterministic", model: "careful" },
+    ]);
+  });
+
   it("closes each unique provider in a role bundle once", () => {
     const sharedProvider = {
       name: "shared",

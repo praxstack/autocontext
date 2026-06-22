@@ -1901,6 +1901,42 @@
       "env": [
         "AUTOCONTEXT_VALIDITY_MAX_RETRIES"
       ]
+    },
+    {
+      "python": "panel_roles",
+      "typescript": "panelRoles",
+      "type": "string",
+      "default": "",
+      "env": [
+        "AUTOCONTEXT_PANEL_ROLES"
+      ]
+    },
+    {
+      "python": "panel_participants",
+      "typescript": "panelParticipants",
+      "type": "string",
+      "default": "",
+      "env": [
+        "AUTOCONTEXT_PANEL_PARTICIPANTS"
+      ]
+    },
+    {
+      "python": "panel_synthesizer_provider",
+      "typescript": "panelSynthesizerProvider",
+      "type": "string",
+      "default": "",
+      "env": [
+        "AUTOCONTEXT_PANEL_SYNTHESIZER_PROVIDER"
+      ]
+    },
+    {
+      "python": "panel_synthesizer_model",
+      "typescript": "panelSynthesizerModel",
+      "type": "string",
+      "default": "",
+      "env": [
+        "AUTOCONTEXT_PANEL_SYNTHESIZER_MODEL"
+      ]
     }
   ]
 }

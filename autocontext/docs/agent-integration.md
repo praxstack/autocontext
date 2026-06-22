@@ -680,6 +680,30 @@ Key environment variables:
 | `AUTOCONTEXT_LEAN_TOOL_ALLOWLIST`                                    | Comma-separated tool-affordance allowlist exported in the lean profile metadata                                                                                                                                                                                                                     |
 | `AUTOCONTEXT_EXTENSIONS`                                             | Comma-separated Python modules or `.py` files that register runtime hooks                                                                                                                                                                                                                           |
 | `AUTOCONTEXT_EXTENSION_FAIL_FAST`                                    | Stop the run when an extension hook raises instead of recording a non-fatal hook error                                                                                                                                                                                                              |
+| `AUTOCONTEXT_PANEL_ROLES`                                            | Experimental comma-separated roles that run through panel mode, for example `analyst,coach`; disabled by default                                                                                                                                                                                   |
+| `AUTOCONTEXT_PANEL_PARTICIPANTS`                                     | Experimental panel participants as `role=provider:model,provider:model`, with `;` between role specs                                                                                                                                                                                               |
+| `AUTOCONTEXT_PANEL_SYNTHESIZER_PROVIDER`                             | Optional synthesizer provider; falls back to the role provider when blank                                                                                                                                                                                                                           |
+| `AUTOCONTEXT_PANEL_SYNTHESIZER_MODEL`                                | Optional synthesizer model; falls back to the role model when blank                                                                                                                                                                                                                                 |
+
+#### Experimental panel/fusion roles
+
+Panel mode is opt-in. It fans a selected role prompt out to configured participant provider/model pairs, then asks the role provider/model (or optional synthesizer provider/model) for one final role response. Participant and synthesizer metadata include model, content, usage, latency, and estimated cost when the provider reports it.
+
+```bash
+AUTOCONTEXT_PANEL_ROLES=analyst \
+AUTOCONTEXT_PANEL_PARTICIPANTS='analyst=openai-compatible:gpt-4o,anthropic:claude-sonnet-4-5-20250929' \
+AUTOCONTEXT_PANEL_SYNTHESIZER_MODEL=claude-opus-4-6 \
+autoctx run my_task --json
+
+# OpenRouter Fusion can also be tested as a single OpenAI-compatible role model.
+AUTOCONTEXT_AGENT_PROVIDER=openai-compatible \
+AUTOCONTEXT_AGENT_BASE_URL=https://openrouter.ai/api/v1 \
+AUTOCONTEXT_AGENT_API_KEY=$OPENROUTER_API_KEY \
+AUTOCONTEXT_MODEL_ANALYST=openrouter/fusion \
+autoctx run my_task --json
+```
+
+This is an experimental benchmarking surface, not a quality guarantee. Keep participant lists small and compare score/cost/latency against single-model role runs before enabling it broadly.
 
 #### Pi CLI vs Pi RPC
 

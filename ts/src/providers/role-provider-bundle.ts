@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { ProviderError, type LLMProvider } from "../types/index.js";
+import { PanelProvider, parsePanelConfigForRole } from "./panel-runtime.js";
 import { createProvider, type CreateProviderOpts } from "./provider-factory.js";
 import { resolveProviderConfig, type ProviderConfig } from "./provider-config-resolution.js";
 import {
@@ -25,6 +26,10 @@ export type { GenerationRole } from "./role-routing.js";
 export interface RoleProviderSettings extends RoleRoutingSettings {
   agentProvider: string;
   roleRouting?: string;
+  panelRoles?: string;
+  panelParticipants?: string;
+  panelSynthesizerProvider?: string;
+  panelSynthesizerModel?: string;
   competitorProvider?: string;
   analystProvider?: string;
   coachProvider?: string;
@@ -368,16 +373,27 @@ export function buildRoleProviderBundle(
   const defaultProvider = createProvider(
     withRuntimeSession(defaultConfig, settings, runtimeSession, "default"),
   );
+  const providerForConfig = (config: ProviderConfig, role: GenerationRole): LLMProvider => createProvider(
+    withRoutedRuntimeModel(config, withRuntimeSession(config, settings, runtimeSession, role)),
+  );
   const roleProviders = Object.fromEntries(
-    ROUTED_GENERATION_ROLES.map((role) => [
-      role,
-      createProvider(
-        withRoutedRuntimeModel(
-          roleConfigs[role],
-          withRuntimeSession(roleConfigs[role], settings, runtimeSession, role),
-        ),
-      ),
-    ]),
+    ROUTED_GENERATION_ROLES.map((role) => {
+      const provider = providerForConfig(roleConfigs[role], role);
+      const panelConfig = parsePanelConfigForRole(settings, role);
+      if (!panelConfig) return [role, provider];
+      return [
+        role,
+        new PanelProvider({
+          role,
+          baseProvider: provider,
+          config: panelConfig,
+          providerFactory: (providerType, model) => {
+            const config = resolveRoleConfig(defaultConfig, overrides, { providerType, model });
+            return providerForConfig(config, role);
+          },
+        }),
+      ];
+    }),
   ) as Partial<Record<GenerationRole, LLMProvider>>;
   const roleModels = Object.fromEntries(
     ROUTED_GENERATION_ROLES.map((role) => [role, roleConfigs[role].model]),
