@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { LLMProvider } from "../types/index.js";
+import { ProviderError, type LLMProvider } from "../types/index.js";
 import { createProvider, type CreateProviderOpts } from "./provider-factory.js";
 import { resolveProviderConfig, type ProviderConfig } from "./provider-config-resolution.js";
 import {
@@ -11,11 +11,20 @@ import {
 import { RuntimeSession } from "../session/runtime-session.js";
 import { RuntimeSessionEventStore } from "../session/runtime-events.js";
 import type { RuntimeSessionEventSink } from "../session/runtime-session-notifications.js";
+import {
+  ROUTED_GENERATION_ROLES,
+  routeRoleProvider,
+  type GenerationRole,
+  type RoleRoutingContext,
+  type RoleRoutingSettings,
+  type RoutedProviderConfig,
+} from "./role-routing.js";
 
-export type GenerationRole = "competitor" | "analyst" | "coach" | "architect" | "curator";
+export type { GenerationRole } from "./role-routing.js";
 
-export interface RoleProviderSettings {
+export interface RoleProviderSettings extends RoleRoutingSettings {
   agentProvider: string;
+  roleRouting?: string;
   competitorProvider?: string;
   analystProvider?: string;
   coachProvider?: string;
@@ -33,6 +42,11 @@ export interface RoleProviderSettings {
   modelCoach?: string;
   modelArchitect?: string;
   modelCurator?: string;
+  modelTranslator?: string;
+  tierOpusModel?: string;
+  tierSonnetModel?: string;
+  tierHaikuModel?: string;
+  mlxModelPath?: string;
   claudeModel?: string;
   claudeFallbackModel?: string;
   claudeTools?: string | null;
@@ -70,6 +84,7 @@ export interface ProviderRuntimeSessionOpts {
 
 export interface ProviderCompositionOpts {
   runtimeSession?: ProviderRuntimeSessionOpts;
+  routingContext?: RoleRoutingContext;
 }
 
 export interface RoleProviderBundle {
@@ -77,6 +92,7 @@ export interface RoleProviderBundle {
   defaultConfig: ProviderConfig;
   roleProviders: Partial<Record<GenerationRole, LLMProvider>>;
   roleModels: Partial<Record<GenerationRole, string>>;
+  roleRoutes?: Partial<Record<GenerationRole, RoutedProviderConfig>>;
   runtimeSession?: RuntimeSession;
   close?: () => void;
 }
@@ -142,6 +158,19 @@ function withRuntimeSession(
   };
 }
 
+function withRoutedRuntimeModel(
+  config: ProviderConfig,
+  opts: CreateProviderOpts,
+): CreateProviderOpts {
+  if (config.providerType === "claude-cli") {
+    return { ...opts, claudeModel: config.model };
+  }
+  if (config.providerType === "codex") {
+    return { ...opts, codexModel: config.model };
+  }
+  return opts;
+}
+
 interface RoleConfigInput {
   providerType?: string;
   model?: string;
@@ -180,6 +209,76 @@ function resolveRoleConfig(
   );
 }
 
+function roleConfigInputForRole(
+  role: GenerationRole,
+  settings: RoleProviderSettings,
+): RoleConfigInput {
+  switch (role) {
+    case "competitor":
+      return {
+        providerType: settings.competitorProvider,
+        model: settings.modelCompetitor,
+        apiKey: settings.competitorApiKey,
+        baseUrl: settings.competitorBaseUrl,
+      };
+    case "analyst":
+      return {
+        providerType: settings.analystProvider,
+        model: settings.modelAnalyst,
+        apiKey: settings.analystApiKey,
+        baseUrl: settings.analystBaseUrl,
+      };
+    case "coach":
+      return {
+        providerType: settings.coachProvider,
+        model: settings.modelCoach,
+        apiKey: settings.coachApiKey,
+        baseUrl: settings.coachBaseUrl,
+      };
+    case "architect":
+      return {
+        providerType: settings.architectProvider,
+        model: settings.modelArchitect,
+        apiKey: settings.architectApiKey,
+        baseUrl: settings.architectBaseUrl,
+      };
+    case "curator":
+      return {
+        model: settings.modelCurator,
+      };
+    case "translator":
+      return {
+        model: settings.modelTranslator,
+      };
+  }
+}
+
+function assertRoutedProviderIsExecutable(
+  role: GenerationRole,
+  routed: RoutedProviderConfig,
+): void {
+  if (routed.executableInTypeScript) {
+    return;
+  }
+  throw new ProviderError(
+    `${routed.unsupportedReason ?? "TypeScript provider runtime does not support routed provider"} for role ${JSON.stringify(role)}.`,
+  );
+}
+
+function resolveRoutedRoleConfig(
+  defaultConfig: ProviderConfig,
+  overrides: Partial<ProviderConfig>,
+  roleConfig: RoleConfigInput,
+  routed: RoutedProviderConfig,
+): ProviderConfig {
+  return resolveRoleConfig(defaultConfig, overrides, {
+    providerType: routed.providerType,
+    model: routed.model,
+    apiKey: roleConfig.apiKey,
+    baseUrl: roleConfig.baseUrl,
+  });
+}
+
 export function createConfiguredProvider(
   overrides: Partial<ProviderConfig> = {},
   settings: Partial<RoleProviderSettings> = {},
@@ -212,71 +311,83 @@ export function buildRoleProviderBundle(
   overrides: Partial<ProviderConfig> = {},
   opts: ProviderCompositionOpts = {},
 ): RoleProviderBundle {
-  const runtimeSession = createRuntimeSessionProvider(settings, opts.runtimeSession);
   const defaultConfig = resolveProviderConfig({
     ...overrides,
     providerType: overrides.providerType ?? settings.agentProvider,
   });
+  const roleRoutes = Object.fromEntries(
+    ROUTED_GENERATION_ROLES.map((role) => [
+      role,
+      routeRoleProvider(settings, role, opts.routingContext),
+    ]),
+  ) as Record<GenerationRole, RoutedProviderConfig>;
+  for (const role of ROUTED_GENERATION_ROLES) {
+    assertRoutedProviderIsExecutable(role, roleRoutes[role]);
+  }
+
+  const roleConfigs: Record<GenerationRole, ProviderConfig> = {
+    competitor: resolveRoutedRoleConfig(
+      defaultConfig,
+      overrides,
+      roleConfigInputForRole("competitor", settings),
+      roleRoutes.competitor,
+    ),
+    analyst: resolveRoutedRoleConfig(
+      defaultConfig,
+      overrides,
+      roleConfigInputForRole("analyst", settings),
+      roleRoutes.analyst,
+    ),
+    coach: resolveRoutedRoleConfig(
+      defaultConfig,
+      overrides,
+      roleConfigInputForRole("coach", settings),
+      roleRoutes.coach,
+    ),
+    architect: resolveRoutedRoleConfig(
+      defaultConfig,
+      overrides,
+      roleConfigInputForRole("architect", settings),
+      roleRoutes.architect,
+    ),
+    curator: resolveRoutedRoleConfig(
+      defaultConfig,
+      overrides,
+      roleConfigInputForRole("curator", settings),
+      roleRoutes.curator,
+    ),
+    translator: resolveRoutedRoleConfig(
+      defaultConfig,
+      overrides,
+      roleConfigInputForRole("translator", settings),
+      roleRoutes.translator,
+    ),
+  };
+
+  const runtimeSession = createRuntimeSessionProvider(settings, opts.runtimeSession);
   const defaultProvider = createProvider(
     withRuntimeSession(defaultConfig, settings, runtimeSession, "default"),
   );
-
-  const roleConfigs: Record<GenerationRole, ProviderConfig> = {
-    competitor: resolveRoleConfig(defaultConfig, overrides, {
-      providerType: settings.competitorProvider,
-      model: settings.modelCompetitor,
-      apiKey: settings.competitorApiKey,
-      baseUrl: settings.competitorBaseUrl,
-    }),
-    analyst: resolveRoleConfig(defaultConfig, overrides, {
-      providerType: settings.analystProvider,
-      model: settings.modelAnalyst,
-      apiKey: settings.analystApiKey,
-      baseUrl: settings.analystBaseUrl,
-    }),
-    coach: resolveRoleConfig(defaultConfig, overrides, {
-      providerType: settings.coachProvider,
-      model: settings.modelCoach,
-      apiKey: settings.coachApiKey,
-      baseUrl: settings.coachBaseUrl,
-    }),
-    architect: resolveRoleConfig(defaultConfig, overrides, {
-      providerType: settings.architectProvider,
-      model: settings.modelArchitect,
-      apiKey: settings.architectApiKey,
-      baseUrl: settings.architectBaseUrl,
-    }),
-    curator: resolveRoleConfig(defaultConfig, overrides, {
-      model: settings.modelCurator,
-    }),
-  };
-
-  const roleProviders: Partial<Record<GenerationRole, LLMProvider>> = {
-    competitor: createProvider(
-      withRuntimeSession(roleConfigs.competitor, settings, runtimeSession, "competitor"),
-    ),
-    analyst: createProvider(
-      withRuntimeSession(roleConfigs.analyst, settings, runtimeSession, "analyst"),
-    ),
-    coach: createProvider(withRuntimeSession(roleConfigs.coach, settings, runtimeSession, "coach")),
-    architect: createProvider(
-      withRuntimeSession(roleConfigs.architect, settings, runtimeSession, "architect"),
-    ),
-    curator: createProvider(
-      withRuntimeSession(roleConfigs.curator, settings, runtimeSession, "curator"),
-    ),
-  };
+  const roleProviders = Object.fromEntries(
+    ROUTED_GENERATION_ROLES.map((role) => [
+      role,
+      createProvider(
+        withRoutedRuntimeModel(
+          roleConfigs[role],
+          withRuntimeSession(roleConfigs[role], settings, runtimeSession, role),
+        ),
+      ),
+    ]),
+  ) as Partial<Record<GenerationRole, LLMProvider>>;
+  const roleModels = Object.fromEntries(
+    ROUTED_GENERATION_ROLES.map((role) => [role, roleConfigs[role].model]),
+  ) as Partial<Record<GenerationRole, string>>;
   const bundle: RoleProviderBundle = {
     defaultProvider,
     defaultConfig,
     roleProviders,
-    roleModels: {
-      competitor: roleConfigs.competitor.model,
-      analyst: roleConfigs.analyst.model,
-      coach: roleConfigs.coach.model,
-      architect: roleConfigs.architect.model,
-      curator: roleConfigs.curator.model,
-    },
+    roleModels,
+    roleRoutes,
     runtimeSession: runtimeSession?.session,
   };
   let closed = false;
@@ -310,8 +421,8 @@ function createRuntimeSessionProvider(
   const resolvedDbPath = resolve(dbPath);
   mkdirSync(dirname(resolvedDbPath), { recursive: true });
   const eventStore = new RuntimeSessionEventStore(resolvedDbPath);
-  const workspace = opts.workspace
-    ?? createLocalWorkspaceEnv({ root: opts.workspaceRoot ?? process.cwd() });
+  const workspace =
+    opts.workspace ?? createLocalWorkspaceEnv({ root: opts.workspaceRoot ?? process.cwd() });
   const session = RuntimeSession.create({
     sessionId: opts.sessionId,
     goal: opts.goal,
