@@ -78,6 +78,30 @@ assert 'autocontext[primeintellect]' in result['error']
     )
 
 
+def test_primeintellect_execute_strategy_preserves_missing_extra_guidance() -> None:
+    _run_python_with_blocked_imports(
+        ["prime_sandboxes"],
+        """
+from autocontext.integrations.primeintellect.client import PrimeIntellectClient
+
+try:
+    PrimeIntellectClient(api_key='test-key').execute_strategy(
+        scenario_name='grid_ctf',
+        strategy={'aggression': 0.6, 'defense': 0.4, 'path_bias': 0.5},
+        seed=123,
+        timeout_seconds=10.0,
+        max_memory_mb=512,
+        network_access=False,
+        max_retries=0,
+    )
+except RuntimeError as exc:
+    assert 'autocontext[primeintellect]' in str(exc)
+else:
+    raise AssertionError('missing prime-sandboxes was swallowed by fallback')
+""",
+    )
+
+
 def test_browser_feature_reports_missing_extra() -> None:
     _run_python_with_blocked_imports(
         ["httpx", "websockets"],

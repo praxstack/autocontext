@@ -14,6 +14,10 @@ AsyncSandboxClient: Any | None = None
 CreateSandboxRequest: Any | None = None
 
 
+class MissingPrimeIntellectExtraError(RuntimeError):
+    """Raised when the PrimeIntellect optional extra is not installed."""
+
+
 class _CreateSandboxRequestFallback:
     def __init__(self, **kwargs: Any) -> None:
         self.__dict__.update(kwargs)
@@ -26,7 +30,7 @@ def _prime_sandboxes_sdk() -> tuple[Any, Any]:
         from prime_sandboxes import AsyncSandboxClient as client_cls
         from prime_sandboxes import CreateSandboxRequest as request_cls
     except ImportError as exc:
-        raise RuntimeError(
+        raise MissingPrimeIntellectExtraError(
             "PrimeIntellect execution requires the optional prime-sandboxes SDK. "
             "Install it with `pip install 'autocontext[primeintellect]'`."
         ) from exc
@@ -81,6 +85,8 @@ class PrimeIntellectClient:
                         network_access=network_access,
                     )
                 )
+            except MissingPrimeIntellectExtraError:
+                raise
             except Exception:
                 logger.debug("integrations.primeintellect.client: caught Exception", exc_info=True)
                 attempt += 1
