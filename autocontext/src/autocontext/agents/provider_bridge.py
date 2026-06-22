@@ -63,6 +63,9 @@ class ProviderBridgeClient(LanguageModelClient):
         elapsed_ms = int((time.monotonic() - t0) * 1000)
         usage_model = result.model or resolved_model or self._provider.default_model()
 
+        metadata = {}
+        if result.cost_usd is not None:
+            metadata["cost_usd"] = result.cost_usd
         return ModelResponse(
             text=result.text,
             usage=RoleUsage(
@@ -71,6 +74,7 @@ class ProviderBridgeClient(LanguageModelClient):
                 latency_ms=elapsed_ms,
                 model=usage_model,
             ),
+            metadata=metadata,
         )
 
 
@@ -100,6 +104,9 @@ class RuntimeBridgeClient(LanguageModelClient):
         if error:
             raise RuntimeError(format_runtime_failure(self._runtime.name, output.metadata))
         elapsed_ms = int((time.monotonic() - t0) * 1000)
+        metadata = dict(output.metadata)
+        if output.cost_usd is not None:
+            metadata["cost_usd"] = output.cost_usd
         return ModelResponse(
             text=output.text,
             usage=RoleUsage(
@@ -108,7 +115,7 @@ class RuntimeBridgeClient(LanguageModelClient):
                 latency_ms=elapsed_ms,
                 model=output.model or model,
             ),
-            metadata=dict(output.metadata),
+            metadata=metadata,
         )
 
     def close(self) -> None:

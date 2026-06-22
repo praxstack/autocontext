@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from autocontext.agents.panel_runtime import (
@@ -11,6 +13,36 @@ from autocontext.config.settings import AppSettings
 from autocontext.harness.core.llm_client import LanguageModelClient
 from autocontext.harness.core.types import ModelResponse, RoleUsage
 from autocontext.providers.base import CompletionResult, LLMProvider
+from autocontext.runtimes.base import AgentOutput, AgentRuntime
+
+
+class _CostRuntime(AgentRuntime):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    @property
+    def name(self) -> str:
+        return "CostRuntime"
+
+    def generate(
+        self,
+        prompt: str,
+        system: str | None = None,
+        schema: dict | None = None,
+    ) -> AgentOutput:
+        del prompt, system, schema
+        self.calls += 1
+        return AgentOutput(text="runtime participant", model="runtime-model", cost_usd=0.05)
+
+    def revise(
+        self,
+        prompt: str,
+        previous_output: str,
+        feedback: str,
+        system: str | None = None,
+    ) -> AgentOutput:
+        del prompt, previous_output, feedback, system
+        return AgentOutput(text="revised", model="runtime-model")
 
 
 class _FakeProvider(LLMProvider):
@@ -36,6 +68,27 @@ class _FakeProvider(LLMProvider):
 
     def default_model(self) -> str:
         return self.default_model_name
+
+
+class _CostProvider(LLMProvider):
+    def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str | None = None,
+        temperature: float = 0.0,
+        max_tokens: int = 4096,
+    ) -> CompletionResult:
+        del system_prompt, user_prompt, temperature, max_tokens
+        return CompletionResult(
+            text="provider participant",
+            model=model or "provider-model",
+            usage={"input_tokens": 4, "output_tokens": 5},
+            cost_usd=0.42,
+        )
+
+    def default_model(self) -> str:
+        return "provider-model"
 
 
 class _FakeClient(LanguageModelClient):
@@ -135,6 +188,100 @@ def test_panel_language_model_client_preserves_final_output_and_participant_meta
     assert participants[0]["content"] == "openai:gpt-4.1"
     assert response.metadata["panel_synthesizer"]["model"] == "fallback-model"
     assert response.metadata["panel_estimated_cost_usd"] == 0.03
+
+
+def test_panel_counts_provider_bridge_costs() -> None:
+    from autocontext.agents.provider_bridge import ProviderBridgeClient
+
+    config = panel_config_for_role(
+        AppSettings(
+            panel_roles="competitor",
+            panel_participants="competitor=openai:gpt-4.1",
+        ),
+        "competitor",
+    )
+    assert config is not None
+
+    def client_factory(provider: str, _model: str) -> LanguageModelClient:
+        if provider == "openai":
+            return ProviderBridgeClient(_CostProvider())
+        return _FakeClient("unused")
+
+    client = PanelLanguageModelClient(
+        role="competitor",
+        base_client=_FakeClient("synth"),
+        config=config,
+        client_factory=client_factory,
+    )
+
+    response = client.generate(
+        model="fallback-model",
+        prompt="build a strategy",
+        max_tokens=100,
+        temperature=0.2,
+        role="competitor",
+    )
+
+    participant = response.metadata["panel_participants"][0]
+    assert participant["estimated_cost_usd"] == 0.42
+    assert response.metadata["panel_estimated_cost_usd"] == 0.43
+
+
+def test_orchestrator_records_provider_prefixed_panel_runtime_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from autocontext.agents.orchestrator import AgentOrchestrator
+    from autocontext.agents.provider_bridge import RuntimeBridgeClient
+    from autocontext.session import RuntimeSession
+    from autocontext.session.runtime_events import RuntimeSessionEventStore, RuntimeSessionEventType
+    from autocontext.session.runtime_session_ids import runtime_session_id_for_run
+
+    runtime = _CostRuntime()
+    role_client = RuntimeBridgeClient(runtime)
+    monkeypatch.setattr(
+        "autocontext.agents.provider_bridge.create_role_client",
+        lambda *args, **kwargs: role_client,
+    )
+    settings = AppSettings(
+        agent_provider="deterministic",
+        db_path=tmp_path / "events.db",
+        panel_roles="analyst",
+        panel_participants="analyst=pi:participant-model",
+    )
+    orch = AgentOrchestrator(_FakeClient("synth"), settings)
+    store = RuntimeSessionEventStore(settings.db_path)
+    try:
+        object.__setattr__(
+            orch,
+            "_active_runtime_session",
+            RuntimeSession.create(
+                session_id=runtime_session_id_for_run("run-panel"),
+                goal="panel runtime recording",
+                event_store=store,
+            ),
+        )
+        with orch._use_role_runtime("analyst", orch.analyst, generation=1, scenario_name="grid_ctf"):
+            execution = orch.analyst.run("review this strategy")
+        log = store.load(runtime_session_id_for_run("run-panel"))
+    finally:
+        store.close()
+
+    assert runtime.calls == 1
+    assert execution.metadata["panel_participants"][0]["estimated_cost_usd"] == 0.05
+    assert log is not None
+    prompt_roles = [
+        event.payload.get("role")
+        for event in log.events
+        if event.event_type == RuntimeSessionEventType.PROMPT_SUBMITTED
+    ]
+    assert "analyst:panel_participant" in prompt_roles
+    assistant_metadata = [
+        event.payload.get("metadata", {})
+        for event in log.events
+        if event.event_type == RuntimeSessionEventType.ASSISTANT_MESSAGE
+    ]
+    assert assistant_metadata[0]["cost_usd"] == 0.05
 
 
 def test_orchestrator_role_runtime_executes_panel_and_returns_role_output() -> None:

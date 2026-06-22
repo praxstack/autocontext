@@ -485,6 +485,10 @@ class AgentOrchestrator:
             self._active_generation_deadline = previous_deadline
         from autocontext.agents.panel_runtime import panel_client_for_role
 
+        def wrap_panel_client(wrapped: LanguageModelClient, provider_name: str) -> LanguageModelClient:
+            hooked = self._wrap_client(wrapped, provider_name=provider_name)
+            return runtime_session_client_for_role(self, hooked, role)
+
         client = runtime_session_client_for_role(self, resolved_client, role)
         client = panel_client_for_role(
             self.settings,
@@ -492,7 +496,7 @@ class AgentOrchestrator:
             client,
             scenario_name=scenario_name,
             generation_deadline=generation_deadline,
-            wrap_client=lambda wrapped, provider_name: self._wrap_client(wrapped, provider_name=provider_name),
+            wrap_client=wrap_panel_client,
         )
         runner.runtime.client = client
         if model is not None:
