@@ -21,7 +21,7 @@ def create_provider(
 
     Args:
         provider_type: One of ``anthropic``, ``openai``, ``openai-compatible``,
-            ``ollama``, ``vllm``.
+            ``openrouter``, ``ollama``, ``vllm``.
         api_key: API key for the provider.
         base_url: Base URL for OpenAI-compatible endpoints.
         model: Default model name.
@@ -57,6 +57,22 @@ def create_provider(
             kwargs["base_url"] = base_url
         return RetryProvider(OpenAICompatibleProvider(**kwargs))
 
+    if provider_type == "openrouter":
+        from autocontext.providers.openai_compat import OpenAICompatibleProvider
+        from autocontext.providers.retry import RetryProvider
+
+        return RetryProvider(
+            OpenAICompatibleProvider(
+                api_key=(
+                    api_key
+                    or os.getenv("OPENROUTER_API_KEY")
+                    or os.getenv("AUTOCONTEXT_OPENROUTER_API_KEY")
+                ),
+                base_url=base_url or "https://openrouter.ai/api/v1",
+                default_model_name=model or "anthropic/claude-sonnet-4",
+            )
+        )
+
     if provider_type == "ollama":
         from autocontext.providers.openai_compat import OpenAICompatibleProvider
         from autocontext.providers.retry import RetryProvider
@@ -88,9 +104,8 @@ def create_provider(
             raise ProviderError("MLX provider requires a model path (model_path). Set AUTOCONTEXT_MLX_MODEL_PATH.")
         return MLXProvider(model_path=model)
 
-    raise ProviderError(
-        f"Unknown provider type: {provider_type!r}. Supported: anthropic, openai, openai-compatible, ollama, vllm, mlx"
-    )
+    supported = "anthropic, openai, openai-compatible, openrouter, ollama, vllm, mlx"
+    raise ProviderError(f"Unknown provider type: {provider_type!r}. Supported: {supported}")
 
 
 # Agent providers that can be inherited as judge providers without extra

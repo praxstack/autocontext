@@ -483,7 +483,21 @@ class AgentOrchestrator:
             )
         finally:
             self._active_generation_deadline = previous_deadline
+        from autocontext.agents.panel_runtime import panel_client_for_role
+
+        def wrap_panel_client(wrapped: LanguageModelClient, provider_name: str) -> LanguageModelClient:
+            hooked = self._wrap_client(wrapped, provider_name=provider_name)
+            return runtime_session_client_for_role(self, hooked, role)
+
         client = runtime_session_client_for_role(self, resolved_client, role)
+        client = panel_client_for_role(
+            self.settings,
+            role,
+            client,
+            scenario_name=scenario_name,
+            generation_deadline=generation_deadline,
+            wrap_client=wrap_panel_client,
+        )
         runner.runtime.client = client
         if model is not None:
             runner.model = model
@@ -875,8 +889,9 @@ class AgentOrchestrator:
             generation=generation_index,
             scenario_name=scenario_name,
         )
-        if hasattr(competitor_client, "reset_rlm_turns"):
-            competitor_client.reset_rlm_turns()
+        reset_turns = getattr(competitor_client, "reset_rlm_turns", None)
+        if callable(reset_turns):
+            reset_turns()
 
         competitor_ctx = self._rlm_loader.load_for_competitor(
             run_id,
@@ -934,8 +949,9 @@ class AgentOrchestrator:
             generation=generation_index,
             scenario_name=scenario_name,
         )
-        if hasattr(analyst_client, "reset_rlm_turns"):
-            analyst_client.reset_rlm_turns()
+        reset_turns = getattr(analyst_client, "reset_rlm_turns", None)
+        if callable(reset_turns):
+            reset_turns()
 
         # --- Analyst ---
         analyst_ctx = self._rlm_loader.load_for_analyst(
@@ -960,8 +976,9 @@ class AgentOrchestrator:
             generation=generation_index,
             scenario_name=scenario_name,
         )
-        if hasattr(architect_client, "reset_rlm_turns"):
-            architect_client.reset_rlm_turns()
+        reset_turns = getattr(architect_client, "reset_rlm_turns", None)
+        if callable(reset_turns):
+            reset_turns()
 
         # --- Architect ---
         architect_ctx = self._rlm_loader.load_for_architect(

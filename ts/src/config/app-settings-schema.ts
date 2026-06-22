@@ -35,6 +35,10 @@ export const AppSettingsSchema = z.object({
   tierOpusModel: z.string().default("claude-opus-4-6"),
   mlxModelPath: z.string().default(""),
   roleRouting: z.enum(["off", "auto"]).default("off"),
+  panelRoles: z.string().default(""),
+  panelParticipants: z.string().default(""),
+  panelSynthesizerProvider: z.string().default(""),
+  panelSynthesizerModel: z.string().default(""),
 
   // Loop tuning
   architectEveryNGens: z.number().int().min(1).default(3),

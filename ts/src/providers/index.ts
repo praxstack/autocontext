@@ -20,6 +20,16 @@ export {
 } from "./provider-config-resolution.js";
 
 export {
+  PanelProvider,
+  comparePanelBenchmark,
+  parsePanelConfigForRole,
+  type PanelConfig,
+  type PanelParticipant,
+  type PanelProviderFactory,
+  type PanelSettings,
+} from "./panel-runtime.js";
+
+export {
   buildRoleProviderBundle,
   closeProviderBundle,
   createConfiguredProvider,

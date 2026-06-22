@@ -215,9 +215,12 @@ class AppSettings(BaseModel):
     curator_enabled: bool = Field(default=True)
     curator_consolidate_every_n_gens: int = Field(default=3, ge=1)
     skill_max_lessons: int = Field(default=30, ge=1)
-    # Skeptic agent (AC-324)
     skeptic_enabled: bool = Field(default=False, description="Enable skeptic/red-team review before persistence")
     model_skeptic: str = Field(default="claude-opus-4-6")
+    panel_roles: str = ""
+    panel_participants: str = ""
+    panel_synthesizer_provider: str = ""
+    panel_synthesizer_model: str = ""
     skeptic_can_block: bool = Field(default=False, description="Allow skeptic 'block' to prevent advancement")
     agent_sdk_connect_mcp: bool = Field(default=False)
     sandbox_max_generations: int = Field(default=10, ge=1)
@@ -724,14 +727,12 @@ class AppSettings(BaseModel):
     # Authoritative fixture loader (AC-767)
     fixture_loader_enabled: bool = Field(default=False, description="Pre-fetch fixtures from knowledge/<scenario>/fixtures.json")
     fixture_loader_cache_dir: str = Field(default=".fixture-cache", description="Cache directory for fetched fixtures")
-    # Evidence workspace (AC-504)
     evidence_workspace_enabled: bool = Field(default=False, description="Materialize prior-run evidence workspace")
     evidence_workspace_budget_mb: int = Field(default=10, ge=1, description="Evidence workspace budget in MB")
     evidence_workspace_roles: str = Field(
         default="analyst,architect",
         description="Comma-separated roles that receive evidence manifest",
     )
-    # Monitor conditions (AC-209)
     monitor_enabled: bool = Field(default=True, description="Enable monitor condition engine")
     monitor_heartbeat_timeout: float = Field(default=300.0, ge=1.0, description="Default heartbeat timeout (seconds)")
     monitor_max_conditions: int = Field(default=100, ge=1, description="Max active conditions")
@@ -779,8 +780,7 @@ def load_settings() -> AppSettings:
         elif field_name in preset:
             kwargs[field_name] = preset[field_name]
 
-    settings = AppSettings(**kwargs)
-    return validate_harness_mode(settings)
+    return validate_harness_mode(AppSettings(**kwargs))
 
 
 def validate_harness_mode(settings: AppSettings) -> AppSettings:

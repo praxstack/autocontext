@@ -63,6 +63,9 @@ class ProviderBridgeClient(LanguageModelClient):
         elapsed_ms = int((time.monotonic() - t0) * 1000)
         usage_model = result.model or resolved_model or self._provider.default_model()
 
+        metadata = {}
+        if result.cost_usd is not None:
+            metadata["cost_usd"] = result.cost_usd
         return ModelResponse(
             text=result.text,
             usage=RoleUsage(
@@ -71,6 +74,7 @@ class ProviderBridgeClient(LanguageModelClient):
                 latency_ms=elapsed_ms,
                 model=usage_model,
             ),
+            metadata=metadata,
         )
 
 
@@ -100,6 +104,9 @@ class RuntimeBridgeClient(LanguageModelClient):
         if error:
             raise RuntimeError(format_runtime_failure(self._runtime.name, output.metadata))
         elapsed_ms = int((time.monotonic() - t0) * 1000)
+        metadata = dict(output.metadata)
+        if output.cost_usd is not None:
+            metadata["cost_usd"] = output.cost_usd
         return ModelResponse(
             text=output.text,
             usage=RoleUsage(
@@ -108,7 +115,7 @@ class RuntimeBridgeClient(LanguageModelClient):
                 latency_ms=elapsed_ms,
                 model=output.model or model,
             ),
-            metadata=dict(output.metadata),
+            metadata=metadata,
         )
 
     def close(self) -> None:
@@ -289,6 +296,13 @@ def _provider_api_key(provider_type: str, settings: AppSettings, *, role: str = 
         return settings.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY") or os.getenv("AUTOCONTEXT_ANTHROPIC_API_KEY")
     if provider_type in ("openai", "openai-compatible"):
         return settings.agent_api_key or settings.judge_api_key or os.getenv("OPENAI_API_KEY")
+    if provider_type == "openrouter":
+        return (
+            settings.agent_api_key
+            or settings.judge_api_key
+            or os.getenv("OPENROUTER_API_KEY")
+            or os.getenv("AUTOCONTEXT_OPENROUTER_API_KEY")
+        )
     if provider_type == "vllm":
         return settings.agent_api_key or settings.judge_api_key or "no-key"
     return settings.agent_api_key or settings.judge_api_key
@@ -505,7 +519,7 @@ def create_role_client(
         return RuntimeBridgeClient(HermesCLIRuntime(hermes_config))
 
     # LLMProvider-based providers — use the bridge
-    if provider_type in ("mlx", "openai", "openai-compatible", "ollama", "vllm"):
+    if provider_type in ("mlx", "openai", "openai-compatible", "openrouter", "ollama", "vllm"):
         return _create_provider_bridge(provider_type, settings, model_override=model_override, role=role)
 
     raise ValueError(f"unsupported role provider: {provider_type!r}")
