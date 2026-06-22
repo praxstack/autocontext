@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- AC-637 TypeScript role routing now matches Python `role_routing=auto` semantics for role aliases, tier model selection, explicit provider overrides, and local-route unsupported capability reporting.
 - AC-708 Hermes advisor checkpoints preserve MLX/CUDA provenance through `autoctx hermes recommend --advisor`, and local-training docs now point at the shipped `train-advisor` / `recommend` flow.
 
 ## [pi-v0.8.0] - 2026-06-20

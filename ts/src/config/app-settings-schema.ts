@@ -30,6 +30,11 @@ export const AppSettingsSchema = z.object({
   modelTranslator: z.string().default("claude-sonnet-4-5-20250929"),
   modelCurator: z.string().default("claude-opus-4-6"),
   modelSkeptic: z.string().default("claude-opus-4-6"),
+  tierHaikuModel: z.string().default("claude-haiku-4-5-20251001"),
+  tierSonnetModel: z.string().default("claude-sonnet-4-5-20250929"),
+  tierOpusModel: z.string().default("claude-opus-4-6"),
+  mlxModelPath: z.string().default(""),
+  roleRouting: z.enum(["off", "auto"]).default("off"),
 
   // Loop tuning
   architectEveryNGens: z.number().int().min(1).default(3),
