@@ -66,6 +66,7 @@ export interface RunExecutionSettings {
   stagnationPlateauEpsilon: number;
   stagnationDistillTopLessons: number;
   explorationMode: unknown;
+  seedBase?: number;
   experimentalAnnealingEnabled?: boolean;
   experimentalLevyScoutEnabled?: boolean;
   levyScoutAlpha?: number;
@@ -289,6 +290,7 @@ export async function executeRunCommandWorkflow<
     stagnationPlateauEpsilon: number;
     stagnationDistillTopLessons: number;
     explorationMode: unknown;
+    seedBase?: number;
     experimentalAnnealingEnabled?: boolean;
     experimentalLevyScoutEnabled?: boolean;
     levyScoutAlpha?: number;
@@ -332,6 +334,7 @@ export async function executeRunCommandWorkflow<
       stagnationPlateauEpsilon: opts.settings.stagnationPlateauEpsilon,
       stagnationDistillTopLessons: opts.settings.stagnationDistillTopLessons,
       explorationMode: opts.settings.explorationMode,
+      seedBase: opts.settings.seedBase ?? 1000,
       experimentalAnnealingEnabled: opts.settings.experimentalAnnealingEnabled ?? false,
       experimentalLevyScoutEnabled: opts.settings.experimentalLevyScoutEnabled ?? false,
       levyScoutAlpha: opts.settings.levyScoutAlpha ?? 1.5,

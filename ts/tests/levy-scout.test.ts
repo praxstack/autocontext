@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { AppSettingsSchema } from "../src/config/index.js";
+import { executeRunCommandWorkflow } from "../src/cli/run-command-workflow.js";
 import { buildCompetitorPrompt } from "../src/loop/generation-prompts.js";
 import { evaluateLevyScout, renderLevyScoutGuidance } from "../src/loop/index.js";
 
@@ -39,6 +40,58 @@ describe("Levy scout mutation", () => {
       expect(Math.abs(outcome.stepSize - item.step_size)).toBeLessThan(1e-15);
       expect(outcome.intensity).toBe(item.intensity);
     }
+  });
+
+  it("forwards configured seed base through the TS run workflow", async () => {
+    let capturedSeedBase: unknown;
+    const store = { migrate: () => undefined, close: () => undefined };
+
+    await executeRunCommandWorkflow({
+      dbPath: "test.db",
+      migrationsDir: "migrations",
+      runsRoot: "runs",
+      knowledgeRoot: "knowledge",
+      settings: {
+        maxRetries: 0,
+        backpressureMinDelta: 0.005,
+        playbookMaxVersions: 5,
+        contextBudgetTokens: 1000,
+        curatorEnabled: false,
+        curatorConsolidateEveryNGens: 3,
+        softHintsEnabled: false,
+        hintStyle: "default",
+        skillMaxLessons: 30,
+        deadEndTrackingEnabled: false,
+        deadEndMaxEntries: 20,
+        stagnationResetEnabled: false,
+        stagnationRollbackThreshold: 2,
+        stagnationPlateauWindow: 3,
+        stagnationPlateauEpsilon: 0.001,
+        stagnationDistillTopLessons: 5,
+        explorationMode: "linear",
+        seedBase: 42,
+        notifyWebhookUrl: null,
+        notifyOn: "completion",
+      },
+      plan: { scenarioName: "grid_ctf", gens: 1, runId: "run", matches: 1, json: false },
+      providerBundle: {
+        defaultProvider: {},
+        roleProviders: {},
+        roleModels: {},
+        defaultConfig: { providerType: "deterministic" },
+      },
+      ScenarioClass: class {},
+      assertFamilyContract: () => undefined,
+      createStore: () => store,
+      createRunner: (opts) => {
+        capturedSeedBase = opts.seedBase;
+        return {
+          run: async () => ({ runId: "run", generationsCompleted: 1, bestScore: 0, currentElo: 1000 }),
+        };
+      },
+    });
+
+    expect(capturedSeedBase).toBe(42);
   });
 
   it("is default off and visible only in competitor prompts", () => {

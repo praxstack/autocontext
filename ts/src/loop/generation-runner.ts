@@ -435,17 +435,6 @@ export class GenerationRunner {
     const consumedHint = consumeFreshStartHint(this.#runState!);
     this.#runState = consumedHint.state;
     const freshStartHint = consumedHint.hint;
-    const contextComponents = this.applyContextComponentsHook(runId, generation, "competitor", {
-      playbook: this.#artifactStore.readPlaybook(this.#scenario.name),
-      trajectory: new ScoreTrajectoryBuilder(this.#store.getScoreTrajectory(runId)).build(),
-      session_reports: this.#artifactStore.readSessionReports(this.#scenario.name),
-    });
-    const compacted = this.compactPromptComponentsForRun(runId, generation, contextComponents);
-    const trimmed = this.#contextBudget.apply({
-      ...compacted,
-      dead_ends: this.#artifactStore.readDeadEnds(this.#scenario.name),
-    });
-    const injectedHint = this.#controller?.takeHint();
     const scoutHint = renderLevyScoutGuidance({
       enabled: this.#experimentalLevyScoutEnabled,
       seedBase: this.#seedBase,
@@ -453,7 +442,19 @@ export class GenerationRunner {
       alpha: this.#levyScoutAlpha,
       scale: this.#levyScoutScale,
     });
-    const operatorHint = [scoutHint, injectedHint].filter(Boolean).join("\n\n") || null;
+    const contextComponents = this.applyContextComponentsHook(runId, generation, "competitor", {
+      playbook: this.#artifactStore.readPlaybook(this.#scenario.name),
+      trajectory: new ScoreTrajectoryBuilder(this.#store.getScoreTrajectory(runId)).build(),
+      session_reports: this.#artifactStore.readSessionReports(this.#scenario.name),
+      scout_mutation_guidance: scoutHint,
+    });
+    const compacted = this.compactPromptComponentsForRun(runId, generation, contextComponents);
+    const trimmed = this.#contextBudget.apply({
+      ...compacted,
+      dead_ends: this.#artifactStore.readDeadEnds(this.#scenario.name),
+    });
+    const injectedHint = this.#controller?.takeHint();
+    const operatorHint = [trimmed.scout_mutation_guidance, injectedHint].filter(Boolean).join("\n\n") || null;
 
     const competitor = buildCompetitorPrompt({
       scenarioName: this.#scenario.name,
