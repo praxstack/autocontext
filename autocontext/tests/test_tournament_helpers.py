@@ -95,6 +95,50 @@ class TestResolveGateDecision:
         )
         assert result.decision == "rollback"
 
+    def test_annealing_accepts_small_regression_early_only_when_enabled(self) -> None:
+        from autocontext.harness.pipeline.gate import BackpressureGate
+        from autocontext.loop.annealing import AnnealingSchedule
+        from autocontext.loop.tournament_helpers import resolve_gate_decision
+
+        gate = BackpressureGate(min_delta=0.005)
+        early = resolve_gate_decision(
+            tournament_best_score=0.99,
+            tournament_mean_score=0.98,
+            tournament_results=[_make_eval_result(0.99), _make_eval_result(0.97)],
+            previous_best=1.0,
+            gate=gate,
+            score_history=[1.0],
+            gate_decision_history=["advance"],
+            retry_count=0,
+            max_retries=3,
+            use_rapid=False,
+            custom_metrics=None,
+            annealing=AnnealingSchedule(enabled=True, start_temperature=0.1, end_temperature=0.001, generations=10),
+            generation=1,
+            annealing_roll=0.5,
+        )
+        late = resolve_gate_decision(
+            tournament_best_score=0.99,
+            tournament_mean_score=0.98,
+            tournament_results=[_make_eval_result(0.99), _make_eval_result(0.97)],
+            previous_best=1.0,
+            gate=gate,
+            score_history=[1.0],
+            gate_decision_history=["advance"],
+            retry_count=0,
+            max_retries=3,
+            use_rapid=False,
+            custom_metrics=None,
+            annealing=AnnealingSchedule(enabled=True, start_temperature=0.1, end_temperature=0.001, generations=10),
+            generation=10,
+            annealing_roll=0.5,
+        )
+
+        assert early.decision == "advance"
+        assert early.metadata["annealing"]["accepted"] is True
+        assert late.decision != "advance"
+        assert late.metadata["annealing"]["accepted"] is False
+
     def test_standard_gate_advance(self) -> None:
         from autocontext.harness.pipeline.gate import BackpressureGate
         from autocontext.loop.tournament_helpers import resolve_gate_decision

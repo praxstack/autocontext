@@ -10,7 +10,7 @@ export interface GateDecision {
   delta: number;
   threshold: number;
   reason: string;
-  metadata: Record<string, number>;
+  metadata: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------

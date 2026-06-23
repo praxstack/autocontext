@@ -584,8 +584,7 @@ def stage_tournament(
     if ctx.outputs is None:
         raise RuntimeError("stage_agent_generation must run first")
 
-    settings = ctx.settings
-    scenario = ctx.scenario
+    settings, scenario = ctx.settings, ctx.scenario
     current_strategy = dict(ctx.current_strategy)
     attempt = 0
     gate_decision = "rollback"
@@ -770,9 +769,10 @@ def stage_tournament(
             use_rapid=use_rapid,
             custom_metrics=custom_metrics,
             rapid_gate_fn=rapid_gate,
+            annealing_enabled=settings.experimental_annealing_enabled,
+            annealing_seed=settings.seed_base, generation=ctx.generation,
         )
-        gate_decision = gate_result.decision
-        gate_reason = gate_result.reason
+        gate_decision, gate_reason = gate_result.decision, gate_result.reason
         generation_cost_usd = float(ctx.cost_control_metadata.get("generation_cost_usd", 0.0) or 0.0)
         if generation_cost_usd > 0:
             score_delta = max(0.0, tournament.best_score - ctx.previous_best)

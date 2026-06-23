@@ -66,6 +66,7 @@ export interface RunExecutionSettings {
   stagnationPlateauEpsilon: number;
   stagnationDistillTopLessons: number;
   explorationMode: unknown;
+  experimentalAnnealingEnabled?: boolean;
   explorationCollapseGuard?: boolean;
   explorationCollapseAutoMitigation?: boolean;
   notifyWebhookUrl: unknown;
@@ -285,6 +286,7 @@ export async function executeRunCommandWorkflow<
     stagnationPlateauEpsilon: number;
     stagnationDistillTopLessons: number;
     explorationMode: unknown;
+    experimentalAnnealingEnabled?: boolean;
     explorationCollapseGuard?: boolean;
     explorationCollapseAutoMitigation?: boolean;
     notifyWebhookUrl: unknown;
@@ -324,6 +326,7 @@ export async function executeRunCommandWorkflow<
       stagnationPlateauEpsilon: opts.settings.stagnationPlateauEpsilon,
       stagnationDistillTopLessons: opts.settings.stagnationDistillTopLessons,
       explorationMode: opts.settings.explorationMode,
+      experimentalAnnealingEnabled: opts.settings.experimentalAnnealingEnabled ?? false,
       explorationCollapseGuard: opts.settings.explorationCollapseGuard ?? false,
       explorationCollapseAutoMitigation: opts.settings.explorationCollapseAutoMitigation ?? false,
       notifyWebhookUrl: opts.settings.notifyWebhookUrl,

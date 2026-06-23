@@ -135,6 +135,44 @@ describe("BackpressureGate", () => {
   });
 });
 
+describe("Annealing exploration", () => {
+  it("accepts small regressions early and tightens later", async () => {
+    const { applyAnnealingToGateDecision } = await import("../src/loop/index.js");
+    const baseDecision = {
+      decision: "retry" as const,
+      delta: -0.01,
+      threshold: 0.005,
+      reason: "insufficient improvement; retry permitted",
+      metadata: {},
+    };
+
+    const early = applyAnnealingToGateDecision(baseDecision, {
+      enabled: true,
+      generation: 1,
+      randomValue: 0.5,
+      startTemperature: 0.1,
+      endTemperature: 0.001,
+      generations: 10,
+    });
+    const late = applyAnnealingToGateDecision(baseDecision, {
+      enabled: true,
+      generation: 10,
+      randomValue: 0.5,
+      startTemperature: 0.1,
+      endTemperature: 0.001,
+      generations: 10,
+    });
+
+    const earlyAnnealing = early.metadata.annealing as { accepted: boolean };
+    const lateAnnealing = late.metadata.annealing as { accepted: boolean };
+
+    expect(early.decision).toBe("advance");
+    expect(earlyAnnealing.accepted).toBe(true);
+    expect(late.decision).toBe("retry");
+    expect(lateAnnealing.accepted).toBe(false);
+  });
+});
+
 describe("TrendAwareGate", () => {
   it("should be importable", async () => {
     const { TrendAwareGate } = await import("../src/loop/backpressure.js");
@@ -504,7 +542,7 @@ describe("GenerationRunner", () => {
       components: expect.stringContaining("session_reports"),
       ledgerPath,
     });
-    expect(runtimeLog?.events.at(-1)?.eventType).not.toBeUndefined();
+    expect(runtimeLog?.events[runtimeLog.events.length - 1]?.eventType).not.toBeUndefined();
 
     store.close();
   });
@@ -794,7 +832,7 @@ describe("GenerationRunner", () => {
       minDelta: 0.0,
       curatorEnabled: true,
       curatorConsolidateEveryNGens: 1,
-      notifier: new CallbackNotifier((event) => notifications.push(event as Record<string, unknown>)),
+      notifier: new CallbackNotifier((event) => notifications.push(event as unknown as Record<string, unknown>)),
       notifyOn: "threshold_met,completion",
     });
 
