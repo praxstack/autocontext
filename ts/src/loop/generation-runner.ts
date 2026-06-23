@@ -16,6 +16,7 @@ import type { SQLiteStore } from "../storage/index.js";
 import { TournamentRunner } from "../execution/tournament.js";
 import { BackpressureGate } from "./backpressure.js";
 import { applyAnnealingToGateDecision, deterministicAnnealingRandomValue } from "./annealing.js";
+import { renderLevyScoutGuidance } from "./levy-scout.js";
 import { ArtifactStore, EMPTY_PLAYBOOK_SENTINEL } from "../knowledge/artifact-store.js";
 import { PlaybookGuard, PLAYBOOK_MARKERS } from "../knowledge/playbook.js";
 import { effectiveHintStyle } from "../knowledge/soft-hints.js";
@@ -103,6 +104,9 @@ export interface GenerationRunnerOpts {
   stagnationDistillTopLessons?: number;
   explorationMode?: string;
   experimentalAnnealingEnabled?: boolean;
+  experimentalLevyScoutEnabled?: boolean;
+  levyScoutAlpha?: number;
+  levyScoutScale?: number;
   annealingStartTemperature?: number;
   annealingEndTemperature?: number;
   annealingGenerations?: number;
@@ -153,6 +157,9 @@ export class GenerationRunner {
   #stagnationDetector: StagnationDetector;
   #explorationMode: string;
   #experimentalAnnealingEnabled: boolean;
+  #experimentalLevyScoutEnabled: boolean;
+  #levyScoutAlpha: number;
+  #levyScoutScale: number;
   #annealingStartTemperature: number;
   #annealingEndTemperature: number;
   #annealingGenerations: number;
@@ -216,6 +223,9 @@ export class GenerationRunner {
     });
     this.#explorationMode = opts.explorationMode ?? "linear";
     this.#experimentalAnnealingEnabled = opts.experimentalAnnealingEnabled ?? false;
+    this.#experimentalLevyScoutEnabled = opts.experimentalLevyScoutEnabled ?? false;
+    this.#levyScoutAlpha = opts.levyScoutAlpha ?? 1.5;
+    this.#levyScoutScale = opts.levyScoutScale ?? 0.2;
     this.#annealingStartTemperature = opts.annealingStartTemperature ?? 0.05;
     this.#annealingEndTemperature = opts.annealingEndTemperature ?? 0.001;
     this.#annealingGenerations = opts.annealingGenerations ?? 20;
@@ -436,6 +446,14 @@ export class GenerationRunner {
       dead_ends: this.#artifactStore.readDeadEnds(this.#scenario.name),
     });
     const injectedHint = this.#controller?.takeHint();
+    const scoutHint = renderLevyScoutGuidance({
+      enabled: this.#experimentalLevyScoutEnabled,
+      seedBase: this.#seedBase,
+      generation,
+      alpha: this.#levyScoutAlpha,
+      scale: this.#levyScoutScale,
+    });
+    const operatorHint = [scoutHint, injectedHint].filter(Boolean).join("\n\n") || null;
 
     const competitor = buildCompetitorPrompt({
       scenarioName: this.#scenario.name,
@@ -447,7 +465,7 @@ export class GenerationRunner {
       deadEnds: trimmed.dead_ends,
       sessionReports: trimmed.session_reports,
       freshStartHint,
-      operatorHint: injectedHint,
+      operatorHint,
     });
     return this.applyContextHook(runId, generation, { competitor }).competitor ?? competitor;
   }
