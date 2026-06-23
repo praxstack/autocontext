@@ -21,7 +21,7 @@ export const CorpusProfileSchema = z.object({
 
 export const RubricScaleSchema = z.object({
   id: z.string(),
-  kind: z.enum(["numeric", "binary"]).default("numeric"),
+  kind: z.enum(["numeric", "binary"]),
   min_score: z.number().default(0),
   max_score: z.number().default(1),
   pass_score: z.number().optional(),
@@ -31,7 +31,7 @@ export const RubricScaleSchema = z.object({
 export const RubricCriterionSchema = z.object({
   id: z.string(),
   description: z.string(),
-  scale_id: z.string().default("score"),
+  scale_id: z.string(),
   weight: z.number().default(1),
   scope: RubricScopeSchema.optional(),
   evidence_requirements: z.array(z.string()).default([]),

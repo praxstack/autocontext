@@ -96,6 +96,19 @@ def test_lint_reports_invalid_rubric_before_live_judge_calls() -> None:
         compile_rubric_spec(spec)
 
 
+def test_runtime_validation_matches_source_schema_required_scale_fields() -> None:
+    fixtures = _fixtures()
+    missing_scale_id = json.loads(json.dumps(fixtures["fixtures"]["multi_criterion_numeric"]))
+    del missing_scale_id["criteria"][0]["scale_id"]
+    bad_scale_kind = json.loads(json.dumps(fixtures["fixtures"]["multi_criterion_numeric"]))
+    bad_scale_kind["scales"][0]["kind"] = "ordinal"
+
+    with pytest.raises(ValueError, match="scale_id"):
+        RubricSpec.model_validate(missing_scale_id)
+    with pytest.raises(ValueError, match="scale kind"):
+        RubricSpec.model_validate(bad_scale_kind)
+
+
 def test_llm_judge_uses_typed_criterion_ids_as_dimensions() -> None:
     fixtures = _fixtures()
     spec = RubricSpec.model_validate(fixtures["fixtures"]["multi_criterion_numeric"])

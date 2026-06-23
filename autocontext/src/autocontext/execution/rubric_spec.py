@@ -4,7 +4,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from statistics import mean
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 RUBRIC_SPEC_SCHEMA_VERSION = 1
 _FINDING_SEVERITY = Literal["warning", "error"]
@@ -56,10 +56,12 @@ class RubricScale:
 
     @classmethod
     def model_validate(cls, data: dict[str, Any]) -> RubricScale:
-        kind = str(data.get("kind", "numeric"))
+        kind = data.get("kind")
+        if kind not in ("numeric", "binary"):
+            raise ValueError("scale kind must be 'numeric' or 'binary'")
         return cls(
             id=str(data["id"]),
-            kind="binary" if kind == "binary" else "numeric",
+            kind=cast(_SCALE_KIND, kind),
             min_score=float(data.get("min_score", 0.0)),
             max_score=float(data.get("max_score", 1.0)),
             pass_score=_optional_float(data.get("pass_score")),
@@ -78,10 +80,12 @@ class RubricCriterion:
 
     @classmethod
     def model_validate(cls, data: dict[str, Any]) -> RubricCriterion:
+        if "scale_id" not in data:
+            raise ValueError("criterion scale_id is required")
         return cls(
             id=str(data["id"]),
             description=str(data["description"]),
-            scale_id=str(data.get("scale_id", "score")),
+            scale_id=str(data["scale_id"]),
             weight=float(data.get("weight", 1.0)),
             scope=RubricScope.model_validate(_optional_dict(data.get("scope"))),
             evidence_requirements=_string_list(data.get("evidence_requirements")),

@@ -81,6 +81,20 @@ describe("RubricSpec contract", () => {
     expect(() => compileRubricSpec(spec)).toThrow(/invalid rubric/);
   });
 
+  it("rejects source-schema invalid missing scale fields", () => {
+    const missingScaleId = JSON.parse(JSON.stringify(fixtures.fixtures.multi_criterion_numeric)) as {
+      criteria: Array<Record<string, unknown>>;
+    };
+    delete missingScaleId.criteria[0].scale_id;
+    const badScaleKind = JSON.parse(JSON.stringify(fixtures.fixtures.multi_criterion_numeric)) as {
+      scales: Array<Record<string, unknown>>;
+    };
+    badScaleKind.scales[0].kind = "ordinal";
+
+    expect(() => RubricSpecSchema.parse(missingScaleId)).toThrow(/scale_id/);
+    expect(() => RubricSpecSchema.parse(badScaleKind)).toThrow(/kind/);
+  });
+
   it("uses typed criterion ids as judge dimensions", async () => {
     const spec = RubricSpecSchema.parse(fixtures.fixtures.multi_criterion_numeric);
     const provider = new MockProvider(
