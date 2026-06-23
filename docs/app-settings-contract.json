@@ -831,6 +831,15 @@
       ]
     },
     {
+      "python": "experimental_annealing_enabled",
+      "typescript": "experimentalAnnealingEnabled",
+      "type": "boolean",
+      "default": false,
+      "env": [
+        "AUTOCONTEXT_EXPERIMENTAL_ANNEALING_ENABLED"
+      ]
+    },
+    {
       "python": "generation_phase_budget_rollover_enabled",
       "typescript": "generationPhaseBudgetRolloverEnabled",
       "type": "boolean",

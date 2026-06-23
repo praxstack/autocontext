@@ -58,6 +58,7 @@ export function finalizeGenerationAttemptDecision(
     attempt: GenerationAttempt;
     delta: number;
     threshold: number;
+    metadata?: Record<string, unknown>;
   },
 ): GenerationAttemptOrchestration {
   let next = withPhaseState(
@@ -85,6 +86,7 @@ export function finalizeGenerationAttemptDecision(
         opts.attempt.gateDecision,
         opts.delta,
         opts.threshold,
+        opts.metadata,
       ),
     },
   };

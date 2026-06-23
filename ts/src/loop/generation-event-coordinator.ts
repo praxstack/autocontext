@@ -127,6 +127,7 @@ export function buildGateDecidedPayload(
   decision: GenerationGateDecision,
   delta: number,
   threshold: number,
+  metadata: Record<string, unknown> = {},
 ): GateDecidedPayload {
   return {
     run_id: runId,
@@ -134,6 +135,7 @@ export function buildGateDecidedPayload(
     decision,
     delta,
     threshold,
+    ...metadata,
   };
 }
 

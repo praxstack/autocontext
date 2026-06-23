@@ -12,6 +12,13 @@ export { LoopController } from "./controller.js";
 
 export { BackpressureGate, TrendAwareGate } from "./backpressure.js";
 export type { GateDecision, ScoreHistory, TrendAwareGateOpts } from "./backpressure.js";
+export {
+  annealingTemperature,
+  applyAnnealingToGateDecision,
+  deterministicAnnealingRandomValue,
+  evaluateAnnealing,
+} from "./annealing.js";
+export type { AnnealingOptions, AnnealingOutcome } from "./annealing.js";
 
 export { GenerationRunner } from "./generation-runner.js";
 export type { GenerationRunnerOpts, RunResult } from "./generation-runner.js";

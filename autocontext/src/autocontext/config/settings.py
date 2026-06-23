@@ -444,11 +444,8 @@ class AppSettings(BaseModel):
     )
     exploration_collapse_guard: bool = Field(default=False, description="Warn when guidance reduces exploration quality")
     exploration_collapse_auto_mitigation: bool = Field(default=False, description="Allow opt-in guidance demotion")
-    rapid_gens: int = Field(
-        default=0,
-        ge=0,
-        description="Auto-transition from rapid to linear after N gens (0=manual)",
-    )
+    rapid_gens: int = Field(default=0, ge=0, description="Auto-transition from rapid to linear after N gens (0=manual)")
+    experimental_annealing_enabled: bool = Field(default=False, description="Experimental annealing gate")
     novelty_enabled: bool = Field(
         default=True,
         description="Apply a small novelty bonus to gate-time score comparisons",

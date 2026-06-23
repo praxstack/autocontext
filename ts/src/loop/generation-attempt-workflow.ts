@@ -39,6 +39,7 @@ export interface GenerationAttemptWorkflow {
     gateDecision: GenerationGateDecision;
     delta: number;
     threshold: number;
+    metadata?: Record<string, unknown>;
   };
 }
 
@@ -107,6 +108,7 @@ export async function runGenerationAttemptWorkflow(
       attempt,
       delta: gateDecision.delta,
       threshold: gateDecision.threshold,
+      metadata: gateDecision.metadata,
     },
   );
 

@@ -20,6 +20,7 @@ from autocontext.harness.pipeline.gate import BackpressureGate
 from autocontext.harness.pipeline.trend_gate import ScoreHistory, TrendAwareGate
 from autocontext.knowledge.harness_quality import compute_harness_quality
 from autocontext.knowledge.rapid_gate import rapid_gate
+from autocontext.loop.annealing import AnnealingSchedule, annealing_random_value, evaluate_annealing
 
 
 @dataclass(slots=True)
@@ -86,6 +87,11 @@ def resolve_gate_decision(
     use_rapid: bool,
     custom_metrics: dict[str, float] | None = None,
     rapid_gate_fn: Callable[[float, float], Any] | None = None,
+    annealing: AnnealingSchedule | None = None,
+    annealing_enabled: bool = False,
+    annealing_seed: int = 0,
+    generation: int = 1,
+    annealing_roll: float | None = None,
 ) -> GateDecisionResult:
     """Select gate mode (rapid/trend-aware/standard) and evaluate decision.
 
@@ -94,22 +100,39 @@ def resolve_gate_decision(
     """
     delta = round(tournament_best_score - previous_best, 6)
 
+    def with_annealing(result: GateDecisionResult) -> GateDecisionResult:
+        schedule = annealing or AnnealingSchedule(enabled=annealing_enabled)
+        if not schedule.enabled:
+            return result
+        roll = annealing_roll if annealing_roll is not None else annealing_random_value(annealing_seed, generation, retry_count)
+        outcome = evaluate_annealing(result.delta, schedule, generation, roll)
+        metadata = {**result.metadata, "annealing": outcome.model_dump()}
+        if result.decision == "advance" or not outcome.accepted:
+            return GateDecisionResult(result.decision, result.delta, result.reason, result.is_rapid, metadata)
+        return GateDecisionResult(
+            "advance",
+            result.delta,
+            f"{result.reason}; annealing accepted regression",
+            result.is_rapid,
+            metadata,
+        )
+
     if use_rapid:
         result = (rapid_gate_fn or rapid_gate)(tournament_best_score, previous_best)
-        return GateDecisionResult(
+        return with_annealing(GateDecisionResult(
             decision=result.decision,
             delta=result.delta,
             reason=result.reason,
             is_rapid=True,
-        )
+        ))
 
     if gate is None:
-        return GateDecisionResult(
+        return with_annealing(GateDecisionResult(
             decision="rollback",
             delta=delta,
             reason="no gate configured",
             is_rapid=False,
-        )
+        ))
 
     if isinstance(gate, TrendAwareGate):
         threshold_probe = gate.evaluate(
@@ -135,12 +158,12 @@ def resolve_gate_decision(
     if not isinstance(threshold, (int, float)):
         compatibility_decision = getattr(threshold_probe, "decision", None)
         if compatibility_decision in {"advance", "retry", "rollback"}:
-            return GateDecisionResult(
+            return with_annealing(GateDecisionResult(
                 decision=compatibility_decision,
                 delta=delta,
                 reason=str(getattr(threshold_probe, "reason", "gate decision")),
                 is_rapid=False,
-            )
+            ))
         raw_min_delta = getattr(gate, "min_delta", 0.005)
         threshold = float(raw_min_delta) if isinstance(raw_min_delta, (int, float)) else 0.005
 
@@ -158,7 +181,7 @@ def resolve_gate_decision(
         retry_count=retry_count,
     )
 
-    return GateDecisionResult(
+    return with_annealing(GateDecisionResult(
         decision=rationale.decision,
         delta=advancement_metrics.delta,
         reason=rationale.reason,
@@ -167,7 +190,7 @@ def resolve_gate_decision(
             "threshold": threshold,
             "advancement_rationale": rationale.to_dict(),
         },
-    )
+    ))
 
 
 def build_retry_prompt(

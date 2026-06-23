@@ -15,6 +15,7 @@ import type { ScenarioInterface } from "../scenarios/game-interface.js";
 import type { SQLiteStore } from "../storage/index.js";
 import { TournamentRunner } from "../execution/tournament.js";
 import { BackpressureGate } from "./backpressure.js";
+import { applyAnnealingToGateDecision, deterministicAnnealingRandomValue } from "./annealing.js";
 import { ArtifactStore, EMPTY_PLAYBOOK_SENTINEL } from "../knowledge/artifact-store.js";
 import { PlaybookGuard, PLAYBOOK_MARKERS } from "../knowledge/playbook.js";
 import { effectiveHintStyle } from "../knowledge/soft-hints.js";
@@ -101,6 +102,10 @@ export interface GenerationRunnerOpts {
   stagnationPlateauEpsilon?: number;
   stagnationDistillTopLessons?: number;
   explorationMode?: string;
+  experimentalAnnealingEnabled?: boolean;
+  annealingStartTemperature?: number;
+  annealingEndTemperature?: number;
+  annealingGenerations?: number;
   explorationCollapseGuard?: boolean;
   explorationCollapseAutoMitigation?: boolean;
   notifyWebhookUrl?: string | null;
@@ -147,6 +152,10 @@ export class GenerationRunner {
   #stagnationDistillTopLessons: number;
   #stagnationDetector: StagnationDetector;
   #explorationMode: string;
+  #experimentalAnnealingEnabled: boolean;
+  #annealingStartTemperature: number;
+  #annealingEndTemperature: number;
+  #annealingGenerations: number;
   #explorationCollapseGuard: boolean;
   #explorationCollapseAutoMitigation: boolean;
   #notifier: Notifier | null;
@@ -206,6 +215,10 @@ export class GenerationRunner {
       stagnationDetector: this.#stagnationDetector,
     });
     this.#explorationMode = opts.explorationMode ?? "linear";
+    this.#experimentalAnnealingEnabled = opts.experimentalAnnealingEnabled ?? false;
+    this.#annealingStartTemperature = opts.annealingStartTemperature ?? 0.05;
+    this.#annealingEndTemperature = opts.annealingEndTemperature ?? 0.001;
+    this.#annealingGenerations = opts.annealingGenerations ?? 20;
     this.#explorationCollapseGuard = opts.explorationCollapseGuard ?? false;
     this.#explorationCollapseAutoMitigation = opts.explorationCollapseAutoMitigation ?? false;
     this.#notifyOn = parseNotificationFilter(opts.notifyOn);
@@ -278,17 +291,27 @@ export class GenerationRunner {
                     executeTournament: ({ strategy: nextStrategy, tournamentOptions }) =>
                       new TournamentRunner(this.#scenario, tournamentOptions).run(nextStrategy),
                     decideGate: ({ attemptOrchestration: currentAttemptOrchestration, tournamentResult }) => {
-                      const decision = this.#gate.evaluate(
+                      const retryCount = currentAttemptOrchestration.phaseState.attemptState.retryCount;
+                      const baseDecision = this.#gate.evaluate(
                         currentAttemptOrchestration.orchestration.cycleState.previousBestOverall,
                         tournamentResult.bestScore,
-                        currentAttemptOrchestration.phaseState.attemptState.retryCount,
+                        retryCount,
                         this.#maxRetries,
                       );
+                      const decision = applyAnnealingToGateDecision(baseDecision, {
+                        enabled: this.#experimentalAnnealingEnabled,
+                        generation,
+                        randomValue: deterministicAnnealingRandomValue(this.#seedBase, generation, retryCount),
+                        startTemperature: this.#annealingStartTemperature,
+                        endTemperature: this.#annealingEndTemperature,
+                        generations: this.#annealingGenerations,
+                      });
                       const gateDecision = this.#controller?.takeGateOverride() as GenerationAttempt["gateDecision"] | null ?? decision.decision;
                       return {
                         gateDecision,
                         delta: decision.delta,
                         threshold: decision.threshold,
+                        metadata: decision.metadata,
                       };
                     },
                   }),
