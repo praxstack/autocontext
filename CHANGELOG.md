@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-24
+
+### Added
+
+- AC-835 adds opt-in larger-model training plans for CUDA/TRL: QLoRA 7B RLVR, sharded 32B/72B distillation, multi-device sharding metadata, per-device/global memory budgets, quantization/parameter metadata, and deployment VRAM registry gating across Python and TypeScript.
+
+### Fixed
+
+- The TypeScript `autoctx train --scale-profile ...` path now preserves profile backend, base model, and adapter-finetune mode through real CLI parsing, and train help lists all scale-related flags.
+
 ## [0.9.0] - 2026-06-23
 
 ### Added
@@ -562,7 +572,8 @@ A new cross-runtime parity audit (`test_cli_contract_parity.py` + `cli-contract-
 - FastAPI dashboard with WebSocket events.
 - CLI via Typer (Python) and `parseArgs` (TypeScript).
 
-[Unreleased]: https://github.com/greyhaven-ai/autocontext/compare/py-v0.9.0...HEAD
+[Unreleased]: https://github.com/greyhaven-ai/autocontext/compare/py-v0.10.0...HEAD
+[0.10.0]: https://github.com/greyhaven-ai/autocontext/compare/py-v0.9.0...py-v0.10.0
 [0.9.0]: https://github.com/greyhaven-ai/autocontext/compare/pi-v0.8.0...py-v0.9.0
 [pi-v0.8.0]: https://github.com/greyhaven-ai/autocontext/compare/py-v0.8.0...pi-v0.8.0
 [0.8.0]: https://github.com/greyhaven-ai/autocontext/compare/pi-v0.2.6...py-v0.8.0
