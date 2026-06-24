@@ -28,7 +28,7 @@ autocontext is a harness. You point it at a goal in plain language. It iterates 
 The fastest path uses our **Pi runtime**, a local coding agent that handles its own auth. No API key plumbing, no provider config: install Pi, install autocontext, point one at the other.
 
 ```bash
-uv tool install autocontext==0.9.0
+uv tool install autocontext==0.10.0
 
 AUTOCONTEXT_AGENT_PROVIDER=pi \
 AUTOCONTEXT_PI_COMMAND=pi \
@@ -42,7 +42,7 @@ Pi runs locally as a subprocess and emits live traces back into the harness. For
 Prefer TypeScript? Same surface, same command:
 
 ```bash
-bun add -g autoctx@0.9.0
+bun add -g autoctx@0.10.0
 AUTOCONTEXT_AGENT_PROVIDER=pi bunx autoctx solve \
   "improve customer-support replies for billing disputes" \
   --iterations 5 --json
@@ -68,7 +68,7 @@ If you already work inside a coding agent, you can wire autocontext in once and 
 pi install npm:pi-autocontext@0.8.0
 ```
 
-Pi is on a separate package line: `pi-autocontext@0.8.0` depends on `autoctx@^0.8.0`. A follow-up Pi release can move it to `autoctx@^0.9.0` after the core npm package is live.
+Pi is on a separate package line: `pi-autocontext@0.8.0` depends on `autoctx@^0.8.0`. A follow-up Pi release can move it to a newer `autoctx` line after the core npm package is live.
 
 Then you just ask:
 
@@ -217,11 +217,11 @@ uv run autoctx train --scenario support_triage --data training/billing.jsonl --t
 ```
 
 <!-- autocontext-whats-new:start -->
-## What's New in 0.9.0
+## What's New in 0.10.0
 
-- **Exploration controls** add default-off panel/fusion roles, annealing gates, and Lévy scout prompt mutations across Python and TypeScript.
-- **Judge and training research parity** adds OPD pressure modes, typed rubric contracts, and human-anchor rubric patch proposals.
-- **Runtime compatibility fixes** align role routing, strategy-package import side effects, and Hermes advisor checkpoint provenance across supported runtimes.
+- **Scaled training plans** add default-off CUDA/TRL profiles for 7B QLoRA RLVR and sharded 32B/72B distillation across Python and TypeScript.
+- **Training scale metadata** records device count, sharding, memory budgets, quantization, parameter count, and deployment VRAM for registry gating.
+- **TypeScript CLI parity** makes `--scale-profile` preserve profile backend/base/mode and documents every scale-related train flag.
 <!-- autocontext-whats-new:end -->
 
 ## Choose Your Package
@@ -236,17 +236,17 @@ uv run autoctx train --scenario support_triage --data training/billing.jsonl --t
 
 ```bash
 # Python: library or CLI tool
-uv pip install autocontext==0.9.0
-uv tool install autocontext==0.9.0
+uv pip install autocontext==0.10.0
+uv tool install autocontext==0.10.0
 
 # TypeScript
-bun add -g autoctx@0.9.0
+bun add -g autoctx@0.10.0
 
 # Pi extension
 pi install npm:pi-autocontext@0.8.0
 ```
 
-> The PyPI package is `autocontext`. The CLI entrypoint is `autoctx`. The npm packages are `autoctx` and `pi-autocontext` (note: an unrelated package on npm uses the name `autocontext`; that is not this project). `pi-autocontext@0.8.0` still depends on `autoctx@^0.8.0`; a follow-up Pi release can move it to `autoctx@^0.9.0` after the core npm package is live.
+> The PyPI package is `autocontext`. The CLI entrypoint is `autoctx`. The npm packages are `autoctx` and `pi-autocontext` (note: an unrelated package on npm uses the name `autocontext`; that is not this project). `pi-autocontext@0.8.0` still depends on `autoctx@^0.8.0`; a follow-up Pi release can move it to a newer `autoctx` line after the core npm package is live.
 
 ## Surfaces
 
