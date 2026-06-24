@@ -7,6 +7,7 @@ import {
   countJsonlRecords,
   resolveTrainingConfig,
 } from "../src/training/training-config-workflow.js";
+import { resolveTrainingScaleMetadata } from "../src/training/training-scale.js";
 import type { TrainingConfig } from "../src/training/training-types.js";
 
 describe("training config workflow", () => {
@@ -41,6 +42,26 @@ describe("training config workflow", () => {
     expect(resolution.heldOutSize).toBe(1);
     expect(resolution.resolvedConfig.baseModel).toBeTruthy();
     expect(resolution.resolvedConfig.adapterType).toBeTruthy();
+    expect(resolveTrainingScaleMetadata(resolution.resolvedConfig)).toMatchObject({
+      deviceCount: 1,
+      shardingStrategy: "none",
+      memoryLimitMb: 16_384,
+    });
+  });
+
+  it("rejects invalid training scale fields", () => {
+    const config: TrainingConfig = {
+      scenario: "bad-scale",
+      family: "agent_task",
+      datasetPath: join(dir, "train.jsonl"),
+      outputDir: join(dir, "output"),
+      backend: "cuda",
+      trainingMode: "adapter_finetune",
+      deviceCount: 0,
+    };
+    writeFileSync(config.datasetPath, '{"a":1}\n', "utf-8");
+
+    expect(resolveTrainingConfig(config).error).toBe("deviceCount must be >= 1");
   });
 
   it("returns stable errors for missing datasets and invalid base models", () => {

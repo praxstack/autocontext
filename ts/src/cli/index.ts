@@ -1266,7 +1266,13 @@ async function cmdStatus(dbPath: string): Promise<void> {
   const runtimeSession = await loadRuntimeSessionSummaryForRun(dbPath, runId);
   const progressReport = await loadProgressReportForRun(run);
   console.log(
-    renderRunStatus(run, store.getGenerations(runId), !!values.json, runtimeSession, progressReport),
+    renderRunStatus(
+      run,
+      store.getGenerations(runId),
+      !!values.json,
+      runtimeSession,
+      progressReport,
+    ),
   );
   store.close();
 }
@@ -1655,7 +1661,12 @@ async function loadProgressReportForRun(run: { run_id: string; scenario: string 
   const { loadSettings } = await import("../config/index.js");
   const { parseRunProgressReport } = await import("../analytics/progress-report.js");
   const settings = loadSettings();
-  const path = join(resolve(settings.knowledgeRoot), run.scenario, "progress_reports", `${run.run_id}.json`);
+  const path = join(
+    resolve(settings.knowledgeRoot),
+    run.scenario,
+    "progress_reports",
+    `${run.run_id}.json`,
+  );
   if (!existsSync(path)) return null;
   try {
     return parseRunProgressReport(JSON.parse(readFileSync(path, "utf-8")) as unknown);
@@ -3338,10 +3349,19 @@ async function cmdTrain(): Promise<void> {
       backend: { type: "string", default: "cuda" },
       mode: { type: "string", default: "from_scratch" },
       "base-model": { type: "string" },
+      "teacher-model": { type: "string" },
+      "scale-profile": { type: "string" },
+      "memory-limit": { type: "string" },
       output: { type: "string", short: "o" },
       "opd-diagnostics": { type: "boolean" },
       "opd-diagnostics-debug-tokens": { type: "boolean" },
       "opd-pressure-mode": { type: "string" },
+      "device-count": { type: "string" },
+      "sharding-strategy": { type: "string" },
+      "per-device-memory-limit": { type: "string" },
+      "base-model-parameters": { type: "string" },
+      "base-model-quantization": { type: "string" },
+      "deployment-target-vram": { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
