@@ -28,7 +28,7 @@ autocontext is a harness. You point it at a goal in plain language. It iterates 
 The fastest path uses our **Pi runtime**, a local coding agent that handles its own auth. No API key plumbing, no provider config: install Pi, install autocontext, point one at the other.
 
 ```bash
-uv tool install autocontext==0.8.0
+uv tool install autocontext==0.9.0
 
 AUTOCONTEXT_AGENT_PROVIDER=pi \
 AUTOCONTEXT_PI_COMMAND=pi \
@@ -42,7 +42,7 @@ Pi runs locally as a subprocess and emits live traces back into the harness. For
 Prefer TypeScript? Same surface, same command:
 
 ```bash
-bun add -g autoctx@0.8.0
+bun add -g autoctx@0.9.0
 AUTOCONTEXT_AGENT_PROVIDER=pi bunx autoctx solve \
   "improve customer-support replies for billing disputes" \
   --iterations 5 --json
@@ -68,7 +68,7 @@ If you already work inside a coding agent, you can wire autocontext in once and 
 pi install npm:pi-autocontext@0.8.0
 ```
 
-Pi is on a separate package line: `pi-autocontext@0.8.0` depends on `autoctx@^0.8.0`, matching the current Python and TypeScript 0.8 runtime line.
+Pi is on a separate package line: `pi-autocontext@0.8.0` depends on `autoctx@^0.8.0`. A follow-up Pi release can move it to `autoctx@^0.9.0` after the core npm package is live.
 
 Then you just ask:
 
@@ -217,12 +217,11 @@ uv run autoctx train --scenario support_triage --data training/billing.jsonl --t
 ```
 
 <!-- autocontext-whats-new:start -->
-## What's New in 0.8.0
+## What's New in 0.9.0
 
-- **Scenario contracts and run reports** add shared Python/TypeScript environment hooks plus progress, utilization, campaign, goal-run, and negative-result artifacts.
-- **Knowledge governance** adds approval-gated playbooks, markdown-backed lesson lifecycle curation, soft structural hints, and span-level credit attribution.
-- **Training research controls** add token-pressure diagnostics and a matched-compute OPD/GKD + GRPO mixture experiment protocol with conservative promotion gates.
-- **Public package polish** keeps the open-source runtime contracts, docs, and parity checks aligned for the 0.8.0 Python and TypeScript release line.
+- **Exploration controls** add default-off panel/fusion roles, annealing gates, and Lévy scout prompt mutations across Python and TypeScript.
+- **Judge and training research parity** adds OPD pressure modes, typed rubric contracts, and human-anchor rubric patch proposals.
+- **Runtime compatibility fixes** align role routing, strategy-package import side effects, and Hermes advisor checkpoint provenance across supported runtimes.
 <!-- autocontext-whats-new:end -->
 
 ## Choose Your Package
@@ -237,17 +236,17 @@ uv run autoctx train --scenario support_triage --data training/billing.jsonl --t
 
 ```bash
 # Python: library or CLI tool
-uv pip install autocontext==0.8.0
-uv tool install autocontext==0.8.0
+uv pip install autocontext==0.9.0
+uv tool install autocontext==0.9.0
 
 # TypeScript
-bun add -g autoctx@0.8.0
+bun add -g autoctx@0.9.0
 
 # Pi extension
 pi install npm:pi-autocontext@0.8.0
 ```
 
-> The PyPI package is `autocontext`. The CLI entrypoint is `autoctx`. The npm packages are `autoctx` and `pi-autocontext` (note: an unrelated package on npm uses the name `autocontext`; that is not this project). `pi-autocontext@0.8.0` depends on `autoctx@^0.8.0`, matching the current TypeScript runtime line.
+> The PyPI package is `autocontext`. The CLI entrypoint is `autoctx`. The npm packages are `autoctx` and `pi-autocontext` (note: an unrelated package on npm uses the name `autocontext`; that is not this project). `pi-autocontext@0.8.0` still depends on `autoctx@^0.8.0`; a follow-up Pi release can move it to `autoctx@^0.9.0` after the core npm package is live.
 
 ## Surfaces
 

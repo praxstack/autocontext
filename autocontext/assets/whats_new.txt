@@ -1,4 +1,3 @@
-**Scenario contracts and run reports** add shared Python/TypeScript environment hooks plus progress, utilization, campaign, goal-run, and negative-result artifacts.
-**Knowledge governance** adds approval-gated playbooks, markdown-backed lesson lifecycle curation, soft structural hints, and span-level credit attribution.
-**Training research controls** add token-pressure diagnostics and a matched-compute OPD/GKD + GRPO mixture experiment protocol with conservative promotion gates.
-**Public package polish** keeps the open-source runtime contracts, docs, and parity checks aligned for the 0.8.0 Python and TypeScript release line.
+**Exploration controls** add default-off panel/fusion roles, annealing gates, and Lévy scout prompt mutations across Python and TypeScript.
+**Judge and training research parity** adds OPD pressure modes, typed rubric contracts, and human-anchor rubric patch proposals.
+**Runtime compatibility fixes** align role routing, strategy-package import side effects, and Hermes advisor checkpoint provenance across supported runtimes.
