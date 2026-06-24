@@ -32,7 +32,7 @@ from autocontext.training.autoresearch.model import (  # noqa: F401
 from autocontext.training.autoresearch.opd_pressure import OPD_PRESSURE_MODE_CODES, normalize_opd_pressure_mode
 from autocontext.training.autoresearch.prepare import BASE_VOCAB_SIZE
 from autocontext.training.autoresearch.sequence_format import NUM_QUALITY_BUCKETS
-from autocontext.training.model_defaults import get_model_scale_profile, list_model_scale_profiles
+from autocontext.training.model_defaults import get_model_scale_profile
 
 logger = logging.getLogger(__name__)
 
@@ -685,17 +685,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--time-budget", type=int, default=300)
     parser.add_argument("--memory-limit", type=int, default=16384)
-    parser.add_argument(
-        "--scale-profile",
-        default="",
-        help=f"opt-in larger-model profile: {', '.join(list_model_scale_profiles())}",
-    )
+    parser.add_argument("--scale-profile", default="", help="opt-in larger-model profile")
     parser.add_argument("--device-count", type=int, default=1, help="trl backend: planned accelerator count")
     parser.add_argument(
-        "--sharding-strategy",
-        choices=("none", "fsdp", "deepspeed_zero3"),
-        default="none",
-        help="trl backend: sharded training strategy",
+        "--sharding-strategy", choices=("none", "fsdp", "deepspeed_zero3"), default="none", help="trl backend sharding"
     )
     parser.add_argument("--per-device-memory-limit", type=int, default=0, help="trl backend: per-device memory cap in MB")
     parser.add_argument("--base-model-quantization", default="", help="trl backend: QLoRA quantization (nf4/int4/4bit)")
