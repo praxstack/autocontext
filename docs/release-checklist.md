@@ -10,12 +10,19 @@ Use this checklist when preparing a tagged release such as `py-v0.4.9`, `ts-v0.4
 
 ## 2. Sync Version Metadata
 
-Update every version surface that should ship together:
+Update package versions that should ship together:
 
 - `autocontext/pyproject.toml`
 - `autocontext/src/autocontext/__init__.py`
 - `ts/package.json`
 - `pi/package.json`
+
+Then update `docs/release-manifest.json` and sync public release copy:
+
+```bash
+python scripts/sync_release_surfaces.py
+python scripts/sync_release_surfaces.py --check
+```
 
 If one package is intentionally not being released, note that clearly in the PR.
 
@@ -73,6 +80,7 @@ npm pack --dry-run
 - Confirm `.github/workflows/publish-python.yml`, `.github/workflows/publish-ts.yml`, and `.github/workflows/publish-pi-autocontext.yml` still match the intended publish surfaces.
 - Treat `.github/workflows/publish-python.yml`, `.github/workflows/publish-ts.yml`, and `.github/workflows/publish-pi-autocontext.yml` as the supported release workflows. Do not add a parallel publish path without updating the trusted publisher configuration first.
 - Confirm release notes in `CHANGELOG.md` reflect the tagged version.
+- Confirm `python scripts/sync_release_surfaces.py --check` passes.
 - Confirm any install commands in the READMEs still match the package names and binaries.
 
 ## 6. Publish
