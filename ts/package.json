@@ -135,6 +135,8 @@
     "build": "tsc && npm run build:cli-contract && npm run build:production-traces-sdk-cjs",
     "build:browser-contract-types": "node scripts/generate-browser-contract-types.mjs",
     "build:cli-contract": "node scripts/copy-cli-contract.mjs",
+    "generate:root-index": "node scripts/generate-root-index.mjs",
+    "check:root-index": "node scripts/generate-root-index.mjs --check",
     "build:production-traces-sdk-cjs": "node scripts/build-production-traces-sdk-cjs.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
