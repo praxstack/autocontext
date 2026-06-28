@@ -16,9 +16,9 @@ MAX_LINES = 800
 
 GRANDFATHERED: dict[str, int] = {
     # These are large but not yet split — tracked for future refactoring
-    "storage/sqlite_store.py": 1650,
+    "storage/sqlite_store.py": 1250,
     "storage/artifacts.py": 1300,
-    "cli.py": 1600,
+    "cli.py": 1300,
     "mcp/tools.py": 1500,
     "loop/generation_runner.py": 1410,
     "loop/stages.py": 1400,  # 8 cohesive stage functions; helpers extracted to stage_helpers/
